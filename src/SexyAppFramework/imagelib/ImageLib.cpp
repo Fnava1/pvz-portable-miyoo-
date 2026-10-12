@@ -26,7 +26,11 @@
 
 #include "Common.h"
 #include "ImageLib.h"
+#if __has_include(<libpng16/png.h>)
+#include <libpng16/png.h>
+#else
 #include "png.h"
+#endif
 #include <math.h>
 #include <algorithm>
 #include <array>
@@ -133,6 +137,7 @@ Image* GetPNGImage(const std::string& theFileName)
 		delete[] (png_bytep*)row_pointers;
 		delete[] (uint32_t*)aBits;
 		/* If we get here, we had a problem reading the file */
+		Sexy::LogErrorLn("GetPNGImage: libpng error decoding '{}'", theFileName);
 		return nullptr;
 	}
 

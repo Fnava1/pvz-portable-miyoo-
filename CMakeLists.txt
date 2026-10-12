@@ -24,6 +24,8 @@ endif()
 
 # Global includes
 include_directories(
+    /opt/miyoomini-toolchain/arm-linux-gnueabihf/libc/usr/include/libpng16
+    ${CMAKE_SYSROOT}/usr/include/libpng16
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/SexyAppFramework
     ${CMAKE_CURRENT_SOURCE_DIR}/src/SexyAppFramework/sound/SDL-Mixer-X/include
