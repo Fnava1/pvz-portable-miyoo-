@@ -44,37 +44,58 @@ endif()
 add_executable(PvZ ${ENGINE_SOURCES})
 
 # ---------------------------------------------------------------------------
-# Target 2: Setup Utility (setup_miyoo)
+# Target 2: Setup Utility (setup_miyoo) & Setup Core Library
 # ---------------------------------------------------------------------------
-file(GLOB_RECURSE SETUP_SOURCES
-    "src/setup/*.c"
-    "src/setup/*.cpp"
+set(SETUP_LIB_SOURCES
+    "src/setup/setup_converter.c"
+    "src/setup/fb_progress.c"
+    "src/setup/stb_impl.c"
 )
 
-if(NOT SETUP_SOURCES)
-    # Temporary scaffolding stub until setup modules are populated
-    set(SETUP_STUB "${CMAKE_CURRENT_BINARY_DIR}/stub_setup.c")
-    file(WRITE "${SETUP_STUB}" "int main(int argc, char* argv[]) { (void)argc; (void)argv; return 0; }\n")
-    set(SETUP_SOURCES "${SETUP_STUB}")
+# Filter existing files
+set(VALID_SETUP_LIB_SOURCES "")
+foreach(SRC ${SETUP_LIB_SOURCES})
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${SRC}")
+        list(APPEND VALID_SETUP_LIB_SOURCES "${SRC}")
+    endif()
+endforeach()
+
+if(VALID_SETUP_LIB_SOURCES)
+    add_library(setup_core STATIC ${VALID_SETUP_LIB_SOURCES})
+    target_link_libraries(setup_core PUBLIC m)
+else()
+    # Stub library if implementation files not created yet
+    set(SETUP_LIB_STUB "${CMAKE_CURRENT_BINARY_DIR}/stub_setup_lib.c")
+    file(WRITE "${SETUP_LIB_STUB}" "/* stub */\n")
+    add_library(setup_core STATIC "${SETUP_LIB_STUB}")
 endif()
 
-add_executable(setup_miyoo ${SETUP_SOURCES})
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/setup/setup_miyoo.c")
+    add_executable(setup_miyoo "src/setup/setup_miyoo.c")
+    target_link_libraries(setup_miyoo setup_core m)
+else()
+    set(SETUP_STUB "${CMAKE_CURRENT_BINARY_DIR}/stub_setup.c")
+    file(WRITE "${SETUP_STUB}" "int main(int argc, char* argv[]) { (void)argc; (void)argv; return 0; }\n")
+    add_executable(setup_miyoo "${SETUP_STUB}")
+endif()
 
 # ---------------------------------------------------------------------------
-# Target 3: Test Suite / Dummy ARM Target (test_arm)
+# Target 3: Test Suite (test_setup_conversion and test_arm)
 # ---------------------------------------------------------------------------
 enable_testing()
 
-file(GLOB_RECURSE TEST_SOURCES
-    "tests/*.cpp"
-    "tests/*.c"
-)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_setup_conversion.cpp")
+    add_executable(test_setup_conversion "tests/test_setup_conversion.cpp")
+    target_link_libraries(test_setup_conversion setup_core m)
+    add_test(NAME test_setup_conversion COMMAND test_setup_conversion)
 
-if(NOT TEST_SOURCES)
+    # test_arm target for Miyoo Mini ARM verification compatibility
+    add_executable(test_arm "tests/test_setup_conversion.cpp")
+    target_link_libraries(test_arm setup_core m)
+    add_test(NAME test_arm COMMAND test_arm)
+else()
     set(TEST_ARM_STUB "${CMAKE_CURRENT_BINARY_DIR}/test_arm.c")
     file(WRITE "${TEST_ARM_STUB}" "/* Miyoo Mini Plus ARM verification target */\nint main(void) { return 0; }\n")
-    set(TEST_SOURCES "${TEST_ARM_STUB}")
+    add_executable(test_arm "${TEST_ARM_STUB}")
+    add_test(NAME test_arm COMMAND test_arm)
 endif()
-
-add_executable(test_arm ${TEST_SOURCES})
-add_test(NAME test_arm COMMAND test_arm)
