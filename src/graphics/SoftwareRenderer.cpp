@@ -365,7 +365,7 @@ Matrix3 SoftwareRenderer::GetCurrentTransform() const {
 }
 
 void SoftwareRenderer::Clear(const Color& color) {
-    if (!mCurrentTarget) return;
+    if (!mCurrentTarget || mCurrentTarget->mBytesPerPixel != 4) return;
 
     if (mPhysClipRect.x == 0 && mPhysClipRect.y == 0 &&
         mPhysClipRect.w == mCurrentTarget->mWidth &&
@@ -378,7 +378,7 @@ void SoftwareRenderer::Clear(const Color& color) {
 }
 
 void SoftwareRenderer::DrawPoint(int x, int y) {
-    if (!mCurrentTarget || mPhysClipRect.IsEmpty()) return;
+    if (!mCurrentTarget || mCurrentTarget->mBytesPerPixel != 4 || mPhysClipRect.IsEmpty()) return;
 
     Matrix3 composite = mViewport.ApplyTo(GetCurrentTransform());
     Point2D pt = composite.Transform(static_cast<float>(x), static_cast<float>(y));
@@ -402,7 +402,7 @@ void SoftwareRenderer::DrawPoint(int x, int y) {
 }
 
 void SoftwareRenderer::DrawLine(int start_x, int start_y, int end_x, int end_y) {
-    if (!mCurrentTarget || mPhysClipRect.IsEmpty()) return;
+    if (!mCurrentTarget || mCurrentTarget->mBytesPerPixel != 4 || mPhysClipRect.IsEmpty()) return;
 
     Matrix3 composite = mViewport.ApplyTo(GetCurrentTransform());
     Point2D p0 = composite.Transform(static_cast<float>(start_x), static_cast<float>(start_y));
@@ -458,7 +458,7 @@ void SoftwareRenderer::DrawRect(int x, int y, int w, int h) {
 }
 
 void SoftwareRenderer::FillRect(int x, int y, int w, int h) {
-    if (!mCurrentTarget || w <= 0 || h <= 0 || mPhysClipRect.IsEmpty()) return;
+    if (!mCurrentTarget || mCurrentTarget->mBytesPerPixel != 4 || w <= 0 || h <= 0 || mPhysClipRect.IsEmpty()) return;
 
     Matrix3 composite = mViewport.ApplyTo(GetCurrentTransform());
     Point2D tl = composite.Transform(static_cast<float>(x), static_cast<float>(y));
@@ -477,30 +477,25 @@ void SoftwareRenderer::FillRect(int x, int y, int w, int h) {
     BlitMode mode = (mDrawMode == DRAWMODE_ADDITIVE) ? BLIT_ADDITIVE :
                     (mCurrentColor.a == 255) ? BLIT_COPY : BLIT_ALPHA;
 
-    std::vector<uint32_t> span_buf(clipped.w, c);
+    alignas(8) uint32_t span_buf[640];
+    int span_len = std::min(clipped.w, 640);
+    if (mode != BLIT_COPY) {
+        for (int i = 0; i < span_len; ++i) {
+            span_buf[i] = c;
+        }
+    }
 
     for (int j = clipped.y; j < clipped.y + clipped.h; ++j) {
-        if (mCurrentTarget->mBytesPerPixel == 4) {
-            uint32_t* dst_row = reinterpret_cast<uint32_t*>(
-                mCurrentTarget->mPixels + j * mCurrentTarget->mPitch
-            ) + clipped.x;
+        uint32_t* dst_row = reinterpret_cast<uint32_t*>(
+            mCurrentTarget->mPixels + j * mCurrentTarget->mPitch
+        ) + clipped.x;
 
-            if (mode == BLIT_COPY) {
-                NeonBlit_Fill_ARGB(dst_row, clipped.w, c);
-            } else if (mode == BLIT_ALPHA) {
-                NeonBlit_AlphaBlend_ARGB(dst_row, span_buf.data(), clipped.w);
-            } else {
-                NeonBlit_AdditiveBlend_ARGB(dst_row, span_buf.data(), clipped.w);
-            }
-        } else if (mCurrentTarget->mBytesPerPixel == 2) {
-            uint16_t* dst_row = reinterpret_cast<uint16_t*>(
-                mCurrentTarget->mPixels + j * mCurrentTarget->mPitch
-            ) + clipped.x;
-            uint8_t r = mCurrentColor.r;
-            uint8_t g = mCurrentColor.g;
-            uint8_t b = mCurrentColor.b;
-            uint16_t c16 = static_cast<uint16_t>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
-            std::fill(dst_row, dst_row + clipped.w, c16);
+        if (mode == BLIT_COPY) {
+            NeonBlit_Fill_ARGB(dst_row, span_len, c);
+        } else if (mode == BLIT_ALPHA) {
+            NeonBlit_AlphaBlend_ARGB(dst_row, span_buf, span_len);
+        } else {
+            NeonBlit_AdditiveBlend_ARGB(dst_row, span_buf, span_len);
         }
     }
 }
@@ -521,7 +516,8 @@ void SoftwareRenderer::DrawImage(SoftwareSurface* image, int x, int y, const Rec
 }
 
 void SoftwareRenderer::DrawImage(SoftwareSurface* image, const Rect& dst_rect, const Rect& src_rect) {
-    if (!mCurrentTarget || !image || dst_rect.IsEmpty() || src_rect.IsEmpty() || mPhysClipRect.IsEmpty()) return;
+    if (!mCurrentTarget || !image || mCurrentTarget->mBytesPerPixel != 4 || image->mBytesPerPixel != 4 ||
+        dst_rect.IsEmpty() || src_rect.IsEmpty() || mPhysClipRect.IsEmpty()) return;
 
     Matrix3 composite = mViewport.ApplyTo(GetCurrentTransform());
     Point2D tl = composite.Transform(static_cast<float>(dst_rect.x), static_cast<float>(dst_rect.y));
@@ -563,8 +559,9 @@ void SoftwareRenderer::DrawImage(SoftwareSurface* image, const Rect& dst_rect, c
         return;
     }
 
-    // Scaling Path: Bilinear/nearest sampling
-    std::vector<uint32_t> span_buf(clipped.w);
+    // Scaling Path: Bilinear/nearest sampling with stack buffer (zero heap allocation)
+    alignas(8) uint32_t span_buf[640];
+    int span_len = std::min(clipped.w, 640);
     float u_scale = static_cast<float>(src_rect.w) / static_cast<float>(pw);
     float v_scale = static_cast<float>(src_rect.h) / static_cast<float>(ph);
 
@@ -574,7 +571,7 @@ void SoftwareRenderer::DrawImage(SoftwareSurface* image, const Rect& dst_rect, c
         int sy = std::clamp(static_cast<int>(v_sample), 0, image->mHeight - 1);
         const uint32_t* src_row = reinterpret_cast<const uint32_t*>(image->mPixels + sy * image->mPitch);
 
-        for (int col = 0; col < clipped.w; ++col) {
+        for (int col = 0; col < span_len; ++col) {
             float u_sample = src_rect.x + (clipped.x + col - phys.x) * u_scale;
             int sx = std::clamp(static_cast<int>(u_sample), 0, image->mWidth - 1);
             span_buf[col] = src_row[sx];
@@ -584,7 +581,7 @@ void SoftwareRenderer::DrawImage(SoftwareSurface* image, const Rect& dst_rect, c
             mCurrentTarget->mPixels + dy * mCurrentTarget->mPitch
         ) + clipped.x;
 
-        NeonBlit_Span(dst_ptr, span_buf.data(), clipped.w, mode, tint);
+        NeonBlit_Span(dst_ptr, span_buf, span_len, mode, tint);
     }
 }
 
@@ -601,7 +598,8 @@ void SoftwareRenderer::DrawImageColor(SoftwareSurface* image, int x, int y, cons
 void SoftwareRenderer::DrawQuad(SoftwareSurface* texture,
                                 const Vertex2D& v0, const Vertex2D& v1,
                                 const Vertex2D& v2, const Vertex2D& v3) {
-    if (!mCurrentTarget || !texture || mPhysClipRect.IsEmpty()) return;
+    if (!mCurrentTarget || !texture || mCurrentTarget->mBytesPerPixel != 4 || texture->mBytesPerPixel != 4 ||
+        mPhysClipRect.IsEmpty()) return;
 
     Matrix3 composite = mViewport.ApplyTo(GetCurrentTransform());
     Point2D p0 = composite.Transform(v0.x, v0.y);
@@ -634,7 +632,8 @@ void SoftwareRenderer::DrawQuad(SoftwareSurface* texture,
 
 void SoftwareRenderer::DrawTriangleTex(SoftwareSurface* texture,
                                        const Vertex2D& v0, const Vertex2D& v1, const Vertex2D& v2) {
-    if (!mCurrentTarget || !texture || mPhysClipRect.IsEmpty()) return;
+    if (!mCurrentTarget || !texture || mCurrentTarget->mBytesPerPixel != 4 || texture->mBytesPerPixel != 4 ||
+        mPhysClipRect.IsEmpty()) return;
 
     Matrix3 composite = mViewport.ApplyTo(GetCurrentTransform());
     Point2D p0 = composite.Transform(v0.x, v0.y);
@@ -662,6 +661,9 @@ void SoftwareRenderer::RasterizeTriangleSpan(SoftwareSurface* texture,
                                             float x1, float y1, float u1, float v1,
                                             float x2, float y2, float u2, float v2,
                                             uint32_t tint_color) {
+    if (!mCurrentTarget || !texture || mCurrentTarget->mBytesPerPixel != 4 || texture->mBytesPerPixel != 4 ||
+        mPhysClipRect.IsEmpty()) return;
+
     // Sort vertices by Y: y0 <= y1 <= y2
     if (y1 < y0) {
         std::swap(x0, x1); std::swap(y0, y1);
@@ -684,6 +686,8 @@ void SoftwareRenderer::RasterizeTriangleSpan(SoftwareSurface* texture,
     if (std::abs(total_height) < 1e-4f) return;
 
     BlitMode mode = (mDrawMode == DRAWMODE_ADDITIVE) ? BLIT_ADDITIVE : BLIT_ALPHA;
+
+    alignas(8) uint32_t span_pixels[640];
 
     for (int y = start_y; y <= end_y; ++y) {
         bool second_half = y > y1 || std::abs(y1 - y0) < 1e-4f;
@@ -712,31 +716,31 @@ void SoftwareRenderer::RasterizeTriangleSpan(SoftwareSurface* texture,
         if (scan_x0 > scan_x1) continue;
 
         int span_len = scan_x1 - scan_x0 + 1;
-        std::vector<uint32_t> span_pixels(span_len);
+        if (span_len > 640) span_len = 640;
 
         float span_w = (xb - xa > 1e-4f) ? (xb - xa) : 1.0f;
 
-        for (int x = scan_x0; x <= scan_x1; ++x) {
-            float t = (static_cast<float>(x) - xa) / span_w;
+        for (int x = 0; x < span_len; ++x) {
+            float t = static_cast<float>(scan_x0 + x - xa) / span_w;
             float u = ua + (ub - ua) * t;
             float v = va + (vb - va) * t;
 
-            // UV can be normalized [0..1] or pixel coordinates
-            int tex_x = (u <= 1.0f && u >= 0.0f) ?
-                        std::clamp(static_cast<int>(u * (texture->mWidth - 1)), 0, texture->mWidth - 1) :
-                        std::clamp(static_cast<int>(u), 0, texture->mWidth - 1);
-            int tex_y = (v <= 1.0f && v >= 0.0f) ?
-                        std::clamp(static_cast<int>(v * (texture->mHeight - 1)), 0, texture->mHeight - 1) :
-                        std::clamp(static_cast<int>(v), 0, texture->mHeight - 1);
+            // UV sampling without discontinuity on edge overshoot
+            int tex_x = (u > 1.5f) ?
+                        std::clamp(static_cast<int>(u), 0, texture->mWidth - 1) :
+                        std::clamp(static_cast<int>(u * texture->mWidth), 0, texture->mWidth - 1);
+            int tex_y = (v > 1.5f) ?
+                        std::clamp(static_cast<int>(v), 0, texture->mHeight - 1) :
+                        std::clamp(static_cast<int>(v * texture->mHeight), 0, texture->mHeight - 1);
 
-            span_pixels[x - scan_x0] = texture->GetPixel(tex_x, tex_y);
+            span_pixels[x] = texture->GetPixel(tex_x, tex_y);
         }
 
         uint32_t* dst_ptr = reinterpret_cast<uint32_t*>(
             mCurrentTarget->mPixels + y * mCurrentTarget->mPitch
         ) + scan_x0;
 
-        NeonBlit_Span(dst_ptr, span_pixels.data(), span_len, mode, tint_color);
+        NeonBlit_Span(dst_ptr, span_pixels, span_len, mode, tint_color);
     }
 }
 

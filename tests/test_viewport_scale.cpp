@@ -365,6 +365,29 @@ static void test_software_renderer_e2e() {
     assert(quad_inside == 0xFF0000FFu);
     assert(quad_outside == 0xFF000000u);
 
+    // 4. Test UV sampling overshoot clamping (u = 1.00002f)
+    Vertex2D vo0 = {100.0f, 100.0f, 0.0f, 0.0f, Color(255, 255, 255, 255)};
+    Vertex2D vo1 = {200.0f, 100.0f, 1.00002f, 0.0f, Color(255, 255, 255, 255)};
+    Vertex2D vo2 = {200.0f, 200.0f, 1.00002f, 1.00005f, Color(255, 255, 255, 255)};
+    Vertex2D vo3 = {100.0f, 200.0f, 0.0f, 1.00005f, Color(255, 255, 255, 255)};
+    renderer.DrawQuad(&tex, vo0, vo1, vo2, vo3);
+    // Transformed: (100, 100, 100, 100) * 0.8 = (80, 80, 80, 80)
+    uint32_t sample_overshoot = pixels[100 * 640 + 100];
+    assert(sample_overshoot == 0xFF0000FFu);
+
+    // 5. Test Target Surface Format Safety (non-32-bit validation)
+    SoftwareSurface surf16(640, 480, 16);
+    SoftwareRenderer renderer16;
+    renderer16.Initialize(640, 480);
+    renderer16.SetTarget(&surf16);
+
+    // Renderer must safely ignore/return without corrupting memory
+    renderer16.Clear(Color(255, 0, 0, 255));
+    renderer16.FillRect(0, 0, 100, 100);
+    renderer16.DrawPoint(50, 50);
+    renderer16.DrawLine(0, 0, 100, 100);
+    renderer16.DrawQuad(&tex, v0, v1, v2, v3);
+
     std::cout << "  -> PASS: End-to-end software renderer renders accurately onto 640x480 surface" << std::endl;
 }
 
