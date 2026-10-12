@@ -320,7 +320,12 @@ class TestPakLib(unittest.TestCase):
 
         # 3. Optimize and pack
         out_mmp_pak = os.path.join(self.temp_dir, "main_mmp.pak")
-        stats = optimize_assets(stage_src, out_mmp_pak)
+        stats = optimize_assets(
+            stage_src,
+            out_mmp_pak,
+            progress_cb=lambda *_: None,
+            log_cb=lambda _: None,
+        )
 
         self.assertTrue(os.path.isfile(out_mmp_pak))
         self.assertEqual(stats["images_optimized"], 1)
@@ -361,7 +366,7 @@ class TestPakLib(unittest.TestCase):
         with open(new_file, "w") as f:
             f.write("new_content")
 
-        copy_tree_merge(src, dst)
+        copy_tree_merge(src, dst, log_fn=lambda _: None)
 
         self.assertTrue(os.path.isfile(pre_existing))
         with open(pre_existing, "r") as f:
@@ -389,7 +394,12 @@ class TestPakLib(unittest.TestCase):
         PakArchive.create_from_entries(entries, os.path.join(pc_src, "main.pak"))
 
         out_dir = os.path.join(self.temp_dir, "release_out")
-        target_zip, final_dir = build_package(source=pc_src, output_dir=out_dir)
+        target_zip, final_dir = build_package(
+            source=pc_src,
+            output_dir=out_dir,
+            progress_cb=lambda *_: None,
+            log_cb=lambda _: None,
+        )
 
         self.assertTrue(os.path.isfile(target_zip))
         self.assertEqual(final_dir, os.path.abspath(out_dir))
@@ -413,17 +423,23 @@ class TestPakLib(unittest.TestCase):
             self.assertIn("Roms/PORTS/Games/Plants vs. Zombies/launch.sh", namelist)
             self.assertIn("Roms/PORTS/Shortcuts/Strategy/Plants vs. Zombies.port", namelist)
 
-            # Check POSIX 0755 permissions for scripts/binaries
+            # Check UNIX system code (create_system == 3)
             launch_info = z.getinfo("Roms/PORTS/Games/Plants vs. Zombies/launch.sh")
+            port_info = z.getinfo("Roms/PORTS/Shortcuts/Strategy/Plants vs. Zombies.port")
+            asset_info = z.getinfo("Roms/PORTS/Games/Plants vs. Zombies/main_mmp.pak")
+
+            self.assertEqual(launch_info.create_system, 3)
+            self.assertEqual(port_info.create_system, 3)
+            self.assertEqual(asset_info.create_system, 3)
+
+            # Check POSIX 0755 permissions for scripts/binaries
             mode = (launch_info.external_attr >> 16) & 0o777
             self.assertEqual(mode, 0o755)
 
-            port_info = z.getinfo("Roms/PORTS/Shortcuts/Strategy/Plants vs. Zombies.port")
             mode_port = (port_info.external_attr >> 16) & 0o777
             self.assertEqual(mode_port, 0o755)
 
             # Check POSIX 0644 permissions for assets
-            asset_info = z.getinfo("Roms/PORTS/Games/Plants vs. Zombies/main_mmp.pak")
             mode_asset = (asset_info.external_attr >> 16) & 0o777
             self.assertEqual(mode_asset, 0o644)
 

@@ -15,6 +15,7 @@ SAFETY GUARANTEES:
 
 import os
 import sys
+import stat
 import shutil
 import time
 import zipfile
@@ -323,6 +324,7 @@ def build_package(
                         continue
                     rel_path = os.path.relpath(full_path, staging_dir)
                     zipinfo = zipfile.ZipInfo(rel_path.replace("\\", "/"))
+                    zipinfo.create_system = 3  # UNIX system code so Info-ZIP unzip preserves attributes
 
                     # POSIX permissions: 0755 for binaries/scripts, 0644 for assets
                     if (
@@ -331,9 +333,9 @@ def build_package(
                         or file.endswith(".so")
                         or ".so." in file
                     ):
-                        zipinfo.external_attr = 0o755 << 16
+                        zipinfo.external_attr = (stat.S_IFREG | 0o755) << 16
                     else:
-                        zipinfo.external_attr = 0o644 << 16
+                        zipinfo.external_attr = (stat.S_IFREG | 0o644) << 16
 
                     with open(full_path, "rb") as f:
                         zipf.writestr(zipinfo, f.read())
