@@ -8,10 +8,12 @@
 extern "C" {
 #endif
 
-#define POP_PAK_MAGIC    0xBAC04AC0
-#define POP_PAK_VERSION  0x00000000
-#define POP_PAK_XOR_KEY  0xF7
-#define POP_PAK_FLAG_END 0x80
+#define POP_PAK_MAGIC           0xBAC04AC0
+#define POP_PAK_MAGIC_ENCRYPTED 0x4D37BD37
+#define POP_PAK_VERSION         0x00000000
+#define POP_PAK_XOR_KEY         0xF7
+#define POP_PAK_FLAG_END        0x80
+
 
 typedef struct {
     char name[256];

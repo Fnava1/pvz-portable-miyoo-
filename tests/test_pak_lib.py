@@ -443,6 +443,46 @@ class TestPakLib(unittest.TestCase):
             mode_asset = (asset_info.external_attr >> 16) & 0o777
             self.assertEqual(mode_asset, 0o644)
 
+    def test_encrypted_header_pak_archive(self):
+        """Verify reading a PAK where magic and record table are XOR-encrypted (Steam PC GOTY)."""
+        pak_path = os.path.join(self.temp_dir, "encrypted_header.pak")
+        file_entries = [
+            ("properties/resources.xml", b"<xml>resources</xml>"),
+            ("data/test.txt", b"Hello from Steam GOTY!"),
+        ]
+
+        std_pak = os.path.join(self.temp_dir, "temp_std.pak")
+
+        PakArchive.create_from_entries(file_entries, std_pak)
+
+        with open(std_pak, "rb") as f:
+            std_bytes = f.read()
+
+        pos = 8
+        while pos < len(std_bytes):
+            flag = std_bytes[pos]
+            pos += 1
+            if flag & 0x80:
+                break
+            nlen = std_bytes[pos]
+            pos += 1 + nlen + 12
+
+        header_and_table = std_bytes[:pos]
+        payload = std_bytes[pos:]
+
+        enc_header_table = bytes(b ^ 0xF7 for b in header_and_table)
+        with open(pak_path, "wb") as f:
+            f.write(enc_header_table + payload)
+
+        with PakArchive(pak_path) as archive:
+            files = archive.list_files()
+            self.assertEqual(len(files), 2)
+            self.assertIn("properties\\resources.xml", files)
+            self.assertEqual(archive.read_file("properties/resources.xml"), b"<xml>resources</xml>")
+
+            self.assertEqual(archive.read_file("data/test.txt"), b"Hello from Steam GOTY!")
+
 
 if __name__ == "__main__":
     unittest.main()
+

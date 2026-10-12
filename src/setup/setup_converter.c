@@ -359,6 +359,13 @@ int convert_pak_streaming(const char *in_pak_path, const char *out_pak_path,
         return -1;
     }
 
+    int encrypted_header = 0;
+    if (magic == POP_PAK_MAGIC_ENCRYPTED) {
+        magic ^= 0xF7F7F7F7;
+        version ^= 0xF7F7F7F7;
+        encrypted_header = 1;
+    }
+
     if (magic != POP_PAK_MAGIC || version != POP_PAK_VERSION) {
         fprintf(stderr, "[SETUP] Error: Invalid PAK magic (0x%08X) or version (%u)\n", magic, version);
         fclose(in_fp);
@@ -377,6 +384,7 @@ int convert_pak_streaming(const char *in_pak_path, const char *out_pak_path,
     while (1) {
         uint8_t flags = 0;
         if (fread(&flags, 1, 1, in_fp) != 1) break;
+        if (encrypted_header) flags ^= POP_PAK_XOR_KEY;
         if (flags & POP_PAK_FLAG_END) break;
 
         uint8_t name_len = 0;
@@ -385,6 +393,7 @@ int convert_pak_streaming(const char *in_pak_path, const char *out_pak_path,
             fclose(in_fp);
             return -1;
         }
+        if (encrypted_header) name_len ^= POP_PAK_XOR_KEY;
 
         if (count_entries >= cap_entries) {
             cap_entries *= 2;
@@ -406,15 +415,27 @@ int convert_pak_streaming(const char *in_pak_path, const char *out_pak_path,
             fclose(in_fp);
             return -1;
         }
+        if (encrypted_header) {
+            for (uint8_t k = 0; k < name_len; ++k) {
+                entry->name[k] ^= POP_PAK_XOR_KEY;
+            }
+        }
         entry->name[name_len] = '\0';
 
-        if (fread(&entry->orig_size, 4, 1, in_fp) != 1 ||
-            fread(&entry->low_time, 4, 1, in_fp) != 1 ||
-            fread(&entry->high_time, 4, 1, in_fp) != 1) {
+        uint8_t meta_bytes[12];
+        if (fread(meta_bytes, 1, 12, in_fp) != 12) {
             free(entries);
             fclose(in_fp);
             return -1;
         }
+        if (encrypted_header) {
+            for (int k = 0; k < 12; ++k) {
+                meta_bytes[k] ^= POP_PAK_XOR_KEY;
+            }
+        }
+        memcpy(&entry->orig_size, meta_bytes, 4);
+        memcpy(&entry->low_time, meta_bytes + 4, 4);
+        memcpy(&entry->high_time, meta_bytes + 8, 4);
 
         entry->new_size = entry->orig_size;
         count_entries++;
@@ -436,9 +457,12 @@ int convert_pak_streaming(const char *in_pak_path, const char *out_pak_path,
         return -1;
     }
 
-    // Write output header
-    fwrite(&magic, 4, 1, out_fp);
-    fwrite(&version, 4, 1, out_fp);
+    // Write output header (always standard unencrypted header in output)
+    uint32_t out_magic = POP_PAK_MAGIC;
+    uint32_t out_version = POP_PAK_VERSION;
+    fwrite(&out_magic, 4, 1, out_fp);
+    fwrite(&out_version, 4, 1, out_fp);
+
 
     // Write placeholder record table (records exact name lengths, dummy sizes)
     for (size_t i = 0; i < count_entries; ++i) {

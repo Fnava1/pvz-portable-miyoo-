@@ -14,9 +14,11 @@ import os
 import sys
 import threading
 import platform
+import traceback
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
+
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 TOOLS_DIR = os.path.join(SCRIPT_DIR, "tools")
@@ -280,13 +282,18 @@ class PvZLauncherGUI(tk.Tk):
             self.after(0, _on_success)
 
         except Exception as e:
-            def _on_error():
+            err_msg = str(e)
+            tb_str = traceback.format_exc()
+
+            def _on_error(msg=err_msg, tb=tb_str):
                 self.is_building = False
                 self.set_ui_state(True)
-                self.set_progress(0, f"Error: {e}")
-                self.log(f"\n[ERROR] Build failed: {e}\n")
-                messagebox.showerror("Build Error", f"An error occurred during packaging:\n\n{e}")
+                self.set_progress(0, f"Error: {msg}")
+                self.log(f"\n[ERROR] Build failed: {msg}\n{tb}\n")
+                messagebox.showerror("Build Error", f"An error occurred during packaging:\n\n{msg}\n\nDetails:\n{tb}")
+
             self.after(0, _on_error)
+
 
 
 def main():

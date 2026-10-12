@@ -28,10 +28,12 @@ import struct
 from typing import List, Dict, Tuple, Optional, Union
 
 POP_PAK_MAGIC = 0xBAC04AC0
+POP_PAK_MAGIC_ENCRYPTED = 0x4D37BD37  # 0xBAC04AC0 ^ 0xF7F7F7F7 (e.g. Steam PC GOTY)
 POP_PAK_VERSION = 0
 FILEFLAGS_END = 0x80
 XOR_KEY = 0xF7
 _XOR_TABLE = bytes(i ^ XOR_KEY for i in range(256))
+
 
 
 
@@ -105,10 +107,16 @@ class PakArchive:
                 raise PakError(f"Unexpected EOF reading PAK header from {self.pak_path}")
 
             magic, version = struct.unpack("<II", header)
+            encrypted_headers = False
+            if magic == POP_PAK_MAGIC_ENCRYPTED:
+                magic ^= 0xF7F7F7F7
+                version ^= 0xF7F7F7F7
+                encrypted_headers = True
+
             if magic != POP_PAK_MAGIC:
                 raise PakError(
                     f"Invalid PAK magic 0x{magic:08X} in {self.pak_path} "
-                    f"(expected 0x{POP_PAK_MAGIC:08X})"
+                    f"(expected 0x{POP_PAK_MAGIC:08X} or 0x{POP_PAK_MAGIC_ENCRYPTED:08X})"
                 )
             if version != POP_PAK_VERSION:
                 raise PakError(
@@ -122,25 +130,30 @@ class PakArchive:
                 flag_bytes = self._fp.read(1)
                 if not flag_bytes:
                     break
-                flags = flag_bytes[0]
+                flags = (flag_bytes[0] ^ XOR_KEY) if encrypted_headers else flag_bytes[0]
                 if flags & FILEFLAGS_END:
                     break
 
                 name_len_byte = self._fp.read(1)
                 if not name_len_byte:
                     raise PakError("Unexpected EOF reading record name length")
-                name_len = name_len_byte[0]
+                name_len = (name_len_byte[0] ^ XOR_KEY) if encrypted_headers else name_len_byte[0]
 
                 name_bytes = self._fp.read(name_len)
                 if len(name_bytes) < name_len:
                     raise PakError("Unexpected EOF reading record filename")
+                if encrypted_headers:
+                    name_bytes = name_bytes.translate(_XOR_TABLE)
                 rel_name = name_bytes.decode("latin-1")
 
                 meta = self._fp.read(12)
                 if len(meta) < 12:
                     raise PakError("Unexpected EOF reading record metadata")
+                if encrypted_headers:
+                    meta = meta.translate(_XOR_TABLE)
                 size, low_time, high_time = struct.unpack("<iII", meta)
                 parsed_entries.append((flags, rel_name, size, (low_time, high_time)))
+
 
             # 3. Calculate absolute file offsets in payload block
             current_offset = self._fp.tell()
