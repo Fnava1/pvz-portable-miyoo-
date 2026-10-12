@@ -1,0 +1,35 @@
+# Build and distribution directories
+/build/
+/dist/
+build/
+dist/
+
+# Distribution anti-virus and clean-room asset rules
+*.exe
+*.pak
+*.dat
+
+# Object files and compiled libraries
+*.o
+*.obj
+*.a
+*.so*
+*.dylib
+*.dll
+
+# Explicit tracking exceptions for scripts and CMake configuration
+!*.sh
+!*.cmake
+!CMakeLists.txt
+
+# Editor / IDE artifacts
+.vscode/
+.idea/
+*.swp
+*~
+compile_commands.json
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
