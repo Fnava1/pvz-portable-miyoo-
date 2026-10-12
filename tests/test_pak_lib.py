@@ -318,7 +318,16 @@ class TestPakLib(unittest.TestCase):
             w_file.setframerate(44100)
             w_file.writeframes(struct.pack("<40h", *([500, -500] * 20)))
 
-        # 3. Optimize and pack
+        # 3. Write a 50x50 font PNG in data/ (which MUST NOT be downscaled)
+        data_dir = os.path.join(stage_src, "data")
+        os.makedirs(data_dir, exist_ok=True)
+        with open(os.path.join(data_dir, "_BrianneTod32Outline.png"), "wb") as f:
+            f.write(b"\x89PNG\r\n\x1a\n")
+            f.write(struct.pack(">I", 13) + b"IHDR" + ihdr + ihdr_crc)
+            f.write(idat_len + b"IDAT" + compressed + idat_crc)
+            f.write(struct.pack(">I", 0) + b"IEND" + struct.pack(">I", zlib.crc32(b"IEND") & 0xFFFFFFFF))
+
+        # 4. Optimize and pack
         out_mmp_pak = os.path.join(self.temp_dir, "main_mmp.pak")
         stats = optimize_assets(
             stage_src,
@@ -331,17 +340,24 @@ class TestPakLib(unittest.TestCase):
         self.assertEqual(stats["images_optimized"], 1)
         self.assertEqual(stats["audio_optimized"], 1)
 
-        # 4. Verify main_mmp.pak contents
+        # 5. Verify main_mmp.pak contents
         with PakArchive(out_mmp_pak) as archive:
             files = archive.list_files()
             self.assertIn("images\\Peashooter.png", files)
             self.assertIn("sounds\\splat.wav", files)
+            self.assertIn("data\\_BrianneTod32Outline.png", files)
 
             # Check that Peashooter was downscaled to 40x40
             pea_data = archive.read_file("images\\Peashooter.png")
             new_w, new_h = struct.unpack(">II", pea_data[16:24])
             self.assertEqual(new_w, 40)
             self.assertEqual(new_h, 40)
+
+            # Check that font texture was preserved at 1:1 original 50x50
+            font_data = archive.read_file("data\\_BrianneTod32Outline.png")
+            font_w, font_h = struct.unpack(">II", font_data[16:24])
+            self.assertEqual(font_w, 50)
+            self.assertEqual(font_h, 50)
 
             # Check that splat.wav was downsampled to 22.05 kHz mono
             wav_data = archive.read_file("sounds\\splat.wav")

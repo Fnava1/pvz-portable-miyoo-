@@ -55,6 +55,32 @@ static int str_ends_with_case_insensitive(const char *str, const char *suffix) {
     return 1;
 }
 
+static int is_font_asset(const char *path) {
+    if (!path) return 0;
+    // Check if path starts with data/ or data\ (standard PopCap font directory)
+    if (strlen(path) >= 5) {
+        if ((path[0] == 'd' || path[0] == 'D') &&
+            (path[1] == 'a' || path[1] == 'A') &&
+            (path[2] == 't' || path[2] == 'T') &&
+            (path[3] == 'a' || path[3] == 'A') &&
+            (path[4] == '/' || path[4] == '\\')) {
+            return 1;
+        }
+    }
+    // Check for "font" anywhere in path (case-insensitive)
+    const char *p = path;
+    while (*p) {
+        if ((p[0] == 'f' || p[0] == 'F') &&
+            (p[1] == 'o' || p[1] == 'O') &&
+            (p[2] == 'n' || p[2] == 'N') &&
+            (p[3] == 't' || p[3] == 'T')) {
+            return 1;
+        }
+        p++;
+    }
+    return 0;
+}
+
 int convert_image_buffer(const uint8_t *in_data, size_t in_size, const char *filename,
                          uint8_t **out_data, size_t *out_size) {
     if (!in_data || in_size == 0 || !out_data || !out_size) {
@@ -526,9 +552,10 @@ int convert_pak_streaming(const char *in_pak_path, const char *out_pak_path,
         size_t file_mem = peak_memory + orig_sz;
 
         const char *fname = entries[i].name;
-        if (str_ends_with_case_insensitive(fname, ".png") ||
-            str_ends_with_case_insensitive(fname, ".jpg") ||
-            str_ends_with_case_insensitive(fname, ".jpeg")) {
+        if (!is_font_asset(fname) &&
+            (str_ends_with_case_insensitive(fname, ".png") ||
+             str_ends_with_case_insensitive(fname, ".jpg") ||
+             str_ends_with_case_insensitive(fname, ".jpeg"))) {
             uint8_t *scaled_data = NULL;
             size_t scaled_sz = 0;
             if (convert_image_buffer(in_buf, orig_sz, fname, &scaled_data, &scaled_sz) == 0 && scaled_data) {

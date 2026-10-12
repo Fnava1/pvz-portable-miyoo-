@@ -465,8 +465,18 @@ def optimize_assets(
         orig_len = len(data)
         orig_total_bytes += orig_len
         lower_path = rel_path.lower()
+        norm_path = lower_path.replace("\\", "/")
 
-        if downscale_textures and (lower_path.endswith(".png") or lower_path.endswith(".jpg") or lower_path.endswith(".jpeg")):
+        # Preserve font sprite sheets and data/ assets at 1:1 original resolution
+        # Bitmap font descriptors (.txt) rely on exact pixel bounding rectangles.
+        is_font_asset = (
+            norm_path.startswith("data/") or
+            norm_path.startswith("fonts/") or
+            "/fonts/" in norm_path or
+            "font" in os.path.basename(norm_path)
+        )
+
+        if downscale_textures and not is_font_asset and (lower_path.endswith(".png") or lower_path.endswith(".jpg") or lower_path.endswith(".jpeg")):
             new_data = downscale_image(data, scale_factor=scale_factor)
             images_count += 1
         elif resample_audio and lower_path.endswith(".wav"):

@@ -811,6 +811,28 @@ bool FontData::HandleCommand(const ListDataElement& theParams)
 						int anImageWidth = aLayer->mImage->GetWidth();
 						int anImageHeight = aLayer->mImage->GetHeight();
 
+						// Determine max coordinate bounds across all glyph descriptors
+						int maxReqWidth = 0;
+						int maxReqHeight = 0;
+						for (uint32_t i = 0; i < aCharsVector.size(); i++)
+						{
+							std::vector<int> aRectElement;
+							if ((DataToIntVector(aRectList.mElementVector[i].get(), &aRectElement)) &&
+								(aRectElement.size() == 4))
+							{
+								maxReqWidth = std::max(maxReqWidth, aRectElement[0] + aRectElement[2]);
+								maxReqHeight = std::max(maxReqHeight, aRectElement[1] + aRectElement[3]);
+							}
+						}
+
+						// Detect if font image has been downscaled (e.g. 0.8x asset reduction)
+						double scaleX = 1.0;
+						double scaleY = 1.0;
+						if (anImageWidth > 0 && maxReqWidth > anImageWidth)
+							scaleX = (double)anImageWidth / (double)maxReqWidth;
+						if (anImageHeight > 0 && maxReqHeight > anImageHeight)
+							scaleY = (double)anImageHeight / (double)maxReqHeight;
+
 						for (uint32_t i = 0; i < aCharsVector.size(); i++)
 						{
 							std::vector<int> aRectElement;
@@ -818,17 +840,29 @@ bool FontData::HandleCommand(const ListDataElement& theParams)
 
 							if ((DataToIntVector(aRectList.mElementVector[i].get(), &aRectElement)) &&
 								(aRectElement.size() == 4))
-
 							{
-								Rect aRect = Rect(aRectElement[0], aRectElement[1], aRectElement[2], aRectElement[3]);
+								int rx = aRectElement[0];
+								int ry = aRectElement[1];
+								int rw = aRectElement[2];
+								int rh = aRectElement[3];
 
-								if ((aRect.mX < 0) || (aRect.mY < 0) ||
-									(aRect.mX + aRect.mWidth > anImageWidth) || (aRect.mY + aRect.mHeight > anImageHeight))
+								if (scaleX < 1.0 || scaleY < 1.0)
 								{
-									Error("Image rectangle out of bounds " + std::to_string(aRect.mX) + " " + std::to_string(aRect.mY) + " " + std::to_string(aRect.mWidth) + " " + std::to_string(aRect.mHeight) + " - " + std::to_string(anImageWidth) + " " + std::to_string(anImageHeight));
-									return false;
+									rx = (int)std::round(rx * scaleX);
+									ry = (int)std::round(ry * scaleY);
+									rw = (int)std::round(rw * scaleX);
+									rh = (int)std::round(rh * scaleY);
 								}
 
+								// Safe bounds clamping to avoid crashes or out-of-bounds asserts
+								if (rx < 0) rx = 0;
+								if (ry < 0) ry = 0;
+								if (rx + rw > anImageWidth)
+									rw = std::max(0, anImageWidth - rx);
+								if (ry + rh > anImageHeight)
+									rh = std::max(0, anImageHeight - ry);
+
+								Rect aRect = Rect(rx, ry, rw, rh);
 								aLayer->GetCharData(first_char)->mImageRect = aRect;
 							}
 							else
@@ -840,6 +874,11 @@ bool FontData::HandleCommand(const ListDataElement& theParams)
 						{
 							CharData& aCharData = anItr->second;
 							aLayer->mDefaultHeight = std::max(aLayer->mDefaultHeight, aCharData.mImageRect.mHeight + aCharData.mOffset.mY);
+						}
+						// If the texture was downscaled, restore logical default line height
+						if (scaleY < 1.0 && scaleY > 0.0)
+						{
+							aLayer->mDefaultHeight = (int)std::round(aLayer->mDefaultHeight / scaleY);
 						}
 					}
 					else

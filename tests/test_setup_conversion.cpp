@@ -202,6 +202,7 @@ static void test_pak_streaming_conversion_and_peak_memory() {
     std::vector<PakTestFile> test_entries;
     test_entries.push_back({"images/peashooter.png", create_dummy_png(120, 100)});
     test_entries.push_back({"sounds/groan.wav", create_dummy_wav(44100, 2, 16, 2205)});
+    test_entries.push_back({"data/_BrianneTod32Outline.png", create_dummy_png(50, 50)});
     std::string text_data = "ZOMBIES_ARE_COMING_TO_MIYOO_MINI";
     test_entries.push_back({"properties/lawn.txt", std::vector<uint8_t>(text_data.begin(), text_data.end())});
 
@@ -213,11 +214,11 @@ static void test_pak_streaming_conversion_and_peak_memory() {
     assert(rc == 0);
     assert(file_exists(out_pak));
 
-    assert(stats.total_files == 3);
-    assert(stats.processed_files == 3);
+    assert(stats.total_files == 4);
+    assert(stats.processed_files == 4);
     assert(stats.images_scaled == 1);
     assert(stats.audio_resampled == 1);
-    assert(stats.passthrough_files == 1);
+    assert(stats.passthrough_files == 2);
 
     // Peak memory MUST stay <= 10 MB
     std::cout << "  Peak conversion memory: " << (stats.peak_memory_bytes / 1024) << " KB" << std::endl;
@@ -256,7 +257,7 @@ static void test_pak_streaming_conversion_and_peak_memory() {
         out_records.push_back({std::string(name_buf.data()), size});
     }
 
-    assert(out_records.size() == 3);
+    assert(out_records.size() == 4);
 
     // Read payloads and verify content
     for (const auto& rec : out_records) {
@@ -272,6 +273,13 @@ static void test_pak_streaming_conversion_and_peak_memory() {
             assert(dec != nullptr);
             assert(w == 96); // 120 * 0.8
             assert(h == 80); // 100 * 0.8
+            stbi_image_free(dec);
+        } else if (rec.name == "data/_BrianneTod32Outline.png") {
+            int w = 0, h = 0, ch = 0;
+            uint8_t* dec = stbi_load_from_memory(payload.data(), static_cast<int>(payload.size()), &w, &h, &ch, 0);
+            assert(dec != nullptr);
+            assert(w == 50); // Unaltered 1:1 original
+            assert(h == 50);
             stbi_image_free(dec);
         } else if (rec.name == "sounds/groan.wav") {
             uint16_t ch = *reinterpret_cast<uint16_t*>(payload.data() + 22);
