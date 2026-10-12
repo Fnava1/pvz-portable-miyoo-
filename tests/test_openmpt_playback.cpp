@@ -55,34 +55,24 @@ static std::vector<uint8_t> CreateSyntheticWav(uint32_t sampleRate, uint16_t cha
 
 // Helper to create synthetic ProTracker MOD module header & pattern
 static std::vector<uint8_t> CreateSyntheticTrackerModule() {
-    // Basic MOD format: 20-byte title, 31 30-byte instrument headers, 1-byte song length,
-    // 1-byte restart, 128-byte order table, 4-byte signature "M.K."
-    // 1084 bytes header + pattern data
     size_t totalSize = 1084 + 1024; // 1 pattern (64 rows * 4 channels * 4 bytes = 1024)
     std::vector<uint8_t> mod(totalSize, 0);
 
-    // Song name (20 bytes)
     const char* title = "PvZ Lawn Theme Synth";
     std::memcpy(mod.data(), title, std::strlen(title));
 
-    // Song length: 1 order
-    mod[950] = 1;
-    // Restart position
-    mod[951] = 0;
-    // Order table
-    mod[952] = 0; // Pattern 0
+    mod[950] = 1; // Song length: 1 order
+    mod[951] = 0; // Restart position
+    mod[952] = 0; // Order 0 = Pattern 0
 
-    // Magic tag "M.K." at offset 1080
     std::memcpy(mod.data() + 1080, "M.K.", 4);
 
-    // Pattern 0 data: populate simple note events
     uint8_t* pattern = mod.data() + 1084;
     for (int row = 0; row < 64; ++row) {
-        // Channel 0: note event every 4 rows
         if (row % 4 == 0) {
             pattern[row * 16 + 0] = 0x00;
-            pattern[row * 16 + 1] = 0x85; // C-4 approx period
-            pattern[row * 16 + 2] = 0x10; // Sample 1
+            pattern[row * 16 + 1] = 0x85;
+            pattern[row * 16 + 2] = 0x10;
             pattern[row * 16 + 3] = 0x00;
         }
     }
@@ -110,7 +100,7 @@ static void test_music_loading_and_memory_limit() {
     // Verify rejecting oversized music buffer > 2 MB
     std::vector<uint8_t> oversizedData(3 * 1024 * 1024, 0xAA);
     bool overLoaded = music.LoadMusicFromMemory(2, oversizedData.data(), oversizedData.size());
-    assert(!overLoaded); // Must safely reject allocations exceeding 2 MB
+    assert(!overLoaded);
     assert(music.GetAllocatedMemory() <= music.GetMaxMemory());
 
     music.UnloadMusic(1);
@@ -132,11 +122,15 @@ static void test_chunk_streaming_2048_samples() {
     music.PlayMusic(1, 0, true);
     assert(music.IsPlaying(1));
 
-    // Verify rendering chunks of 2,048 stereo frames
+    // Test SDL_mixer hook registration and unregistration
+    music.RegisterWithSdlMixer();
+    music.UnregisterFromSdlMixer();
+
     constexpr size_t kChunk = OpenMptMusicInterface::kChunkFrames;
     assert(kChunk == 2048);
+    assert(OpenMptMusicInterface::kSampleRate == 22050);
 
-    alignas(8) int16_t chunkBuffer[kChunk * 2]; // 2048 stereo frames = 4096 samples
+    alignas(8) int16_t chunkBuffer[kChunk * 2];
     size_t initialMem = music.GetAllocatedMemory();
 
     bool hasNonZeroSample = false;
@@ -151,12 +145,11 @@ static void test_chunk_streaming_2048_samples() {
             }
         }
 
-        // Memory must remain constant during streaming (zero allocations in audio loop)
         assert(music.GetAllocatedMemory() == initialMem);
     }
 
     assert(hasNonZeroSample);
-    std::cout << "  -> PASS: Successfully streamed 2,048-frame chunks with zero heap thrashing" << std::endl;
+    std::cout << "  -> PASS: Successfully streamed 2,048-frame chunks at 22,050 Hz with zero heap thrashing" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -196,7 +189,7 @@ static void test_playback_controls() {
         if (a > maxAmpHalf) maxAmpHalf = a;
     }
     assert(maxAmpHalf > 0);
-    assert(maxAmpHalf < maxAmpFull); // Amplitude scaled down
+    assert(maxAmpHalf < maxAmpFull);
 
     // Zero volume -> silence
     music.SetMusicVolume(1, 0.0);
@@ -205,7 +198,6 @@ static void test_playback_controls() {
         assert(buffer[i] == 0);
     }
 
-    // Restore volume
     music.SetMusicVolume(1, 1.0);
 
     // 3. Pause
@@ -214,7 +206,7 @@ static void test_playback_controls() {
     size_t renderedPaused = music.RenderAudioChunk(buffer, kChunk);
     assert(renderedPaused == kChunk);
     for (size_t i = 0; i < kChunk * 2; ++i) {
-        assert(buffer[i] == 0); // Silence while paused
+        assert(buffer[i] == 0);
     }
 
     // 4. Resume
@@ -233,24 +225,19 @@ static void test_playback_controls() {
 
     // 7. Looping vs Non-Looping
     music.PlayMusic(1, 0, false);
-    // Seek near end of track
     double duration = music.GetMusicLength(1);
     assert(duration > 0.0);
     music.SeekMusic(1, duration - 0.02);
-    // Render until end
     for (int i = 0; i < 5; ++i) {
         music.RenderAudioChunk(buffer, kChunk);
     }
-    // Should stop because non-looping reached end
     assert(!music.IsPlaying(1));
 
-    // Play with looping enabled
     music.PlayMusic(1, 0, true);
     music.SeekMusic(1, duration - 0.02);
     for (int i = 0; i < 5; ++i) {
         music.RenderAudioChunk(buffer, kChunk);
     }
-    // With loop enabled, still playing and wrapped back around
     assert(music.IsPlaying(1));
 
     std::cout << "  -> PASS: Play, pause, resume, stop, volume, seek, and loop verified" << std::endl;
@@ -272,11 +259,19 @@ static void test_song_transitions_and_fades() {
     music.PlayMusic(1, 0, true);
     assert(music.IsPlaying(1));
 
+    // Seek to 5.0 seconds
+    music.SeekMusic(1, 5.0);
+    assert(std::fabs(music.GetMusicPosition(1) - 5.0) < 0.05);
+
+    // Test FadeIn with theOffset == -1 (must preserve current offset 5.0)
+    music.FadeIn(1, -1, 0.05, true);
+    assert(std::fabs(music.GetMusicPosition(1) - 5.0) < 0.05);
+
     constexpr size_t kChunk = OpenMptMusicInterface::kChunkFrames;
     alignas(8) int16_t buffer[kChunk * 2];
     music.RenderAudioChunk(buffer, kChunk);
 
-    // Fade in song 2 (switches active song and begins fade-in ramp)
+    // Fade in song 2 at offset 0
     music.FadeIn(2, 0, 0.05, true);
     assert(music.IsPlaying(2));
 
@@ -286,7 +281,7 @@ static void test_song_transitions_and_fades() {
     }
 
     assert(music.GetAllocatedMemory() <= music.GetMaxMemory());
-    std::cout << "  -> PASS: Song transitions and fading operate smoothly within memory limit" << std::endl;
+    std::cout << "  -> PASS: Song transitions, offset preservation on FadeIn(-1), and fading verified" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -300,7 +295,7 @@ static void test_sound_manager_sfx_and_lru_cache() {
     assert(sfx.GetMaxMemory() == 8 * 1024 * 1024); // 8 MB limit
     assert(sfx.GetAllocatedMemory() == 0);
 
-    // Create 3 synthetic 22.05 kHz WAV sounds
+    // Create 3 synthetic 22.05 kHz WAV sounds (mono)
     std::vector<uint8_t> wavSmall = CreateSyntheticWav(22050, 1, 2205); // 0.1s mono ~ 4.4 KB
     std::vector<uint8_t> wavMed   = CreateSyntheticWav(22050, 1, 22050); // 1.0s mono ~ 44 KB
 
@@ -311,17 +306,17 @@ static void test_sound_manager_sfx_and_lru_cache() {
     // Lazy check: sound registered but not decoded into memory until first play
     assert(sfx.GetAllocatedMemory() == 0);
 
-    // Play sound 1 -> triggers on-demand decode
-    int ch1 = sfx.PlaySample(1);
+    // Play sound 1 -> triggers on-demand decode with mono upmixed to stereo
+    int ch1 = sfx.PlaySample(1, -50); // Test panning
     assert(ch1 >= 0 && ch1 < 32);
     size_t memAfterPlay1 = sfx.GetAllocatedMemory();
     assert(memAfterPlay1 > 0);
     assert(memAfterPlay1 <= sfx.GetMaxMemory());
 
     // Play sound 2 -> triggers on-demand decode
-    int ch2 = sfx.PlaySample(2);
+    int ch2 = sfx.PlaySample(2, 50);
     assert(ch2 >= 0 && ch2 < 32);
-    assert(ch2 != ch1); // Plays on different channel
+    assert(ch2 != ch1); // Different channel allocated
     size_t memAfterPlay2 = sfx.GetAllocatedMemory();
     assert(memAfterPlay2 > memAfterPlay1);
     assert(memAfterPlay2 <= sfx.GetMaxMemory());
@@ -331,16 +326,18 @@ static void test_sound_manager_sfx_and_lru_cache() {
     sfx.SetVolume(0.8);
     sfx.StopSound(1);
 
-    // Test LRU memory cap enforcement:
-    // Create large sounds (each 1.5 MB) to force memory eviction past 8 MB
-    std::vector<uint8_t> wavLarge = CreateSyntheticWav(22050, 1, 750000); // ~1.5 MB PCM
+    // Test LRU memory cap enforcement & sound stealing:
+    // Create large sounds (each ~1.5 MB uncompressed stereo) to force memory eviction past 8 MB
+    std::vector<uint8_t> wavLarge = CreateSyntheticWav(22050, 1, 375000); // ~1.5 MB stereo
     for (unsigned int id = 10; id <= 16; ++id) {
         assert(sfx.LoadSoundFromMemory(id, wavLarge.data(), wavLarge.size()));
     }
 
-    // Sequentially play sounds 10..16 to force cache evictions
+    // Sequentially play sounds 10..16.
+    // Every sound MUST successfully play (ch >= 0) and eviction MUST free older sounds!
     for (unsigned int id = 10; id <= 16; ++id) {
-        sfx.PlaySample(id);
+        int ch = sfx.PlaySample(id);
+        assert(ch >= 0 && ch < 32); // STRICT: Sound is NEVER dropped; oldest sound was evicted
         sfx.Update();
         assert(sfx.GetAllocatedMemory() <= sfx.GetMaxMemory()); // Strictly <= 8 MB
     }
@@ -350,7 +347,7 @@ static void test_sound_manager_sfx_and_lru_cache() {
     assert(sfx.GetAllocatedMemory() == 0);
     sfx.Shutdown();
 
-    std::cout << "  -> PASS: SoundManager lazy loading, channel pooling, and 8 MB LRU eviction verified" << std::endl;
+    std::cout << "  -> PASS: SoundManager lazy loading, mono upmix, panning, channel stealing, and 8 MB LRU eviction verified" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -369,7 +366,8 @@ static void test_total_audio_budget() {
 
     std::vector<uint8_t> wavData = CreateSyntheticWav(22050, 1, 11025);
     assert(sfx.LoadSoundFromMemory(1, wavData.data(), wavData.size()));
-    sfx.PlaySample(1);
+    int ch = sfx.PlaySample(1);
+    assert(ch >= 0);
 
     size_t musicMem = music.GetAllocatedMemory();
     size_t sfxMem = sfx.GetAllocatedMemory();

@@ -7,6 +7,7 @@
 #include <vector>
 #include <unordered_map>
 #include <memory>
+#include <mutex>
 
 namespace Sexy {
 
@@ -107,7 +108,7 @@ struct SongEntry {
 class OpenMptMusicInterface : public MusicInterface {
 public:
     static constexpr size_t kChunkFrames = 2048;
-    static constexpr size_t kSampleRate = 44100;
+    static constexpr size_t kSampleRate = 22050;
     static constexpr size_t kNumChannels = 2;
     static constexpr size_t kMaxMusicMemory = 2 * 1024 * 1024; // 2 MB limit
 
@@ -142,8 +143,14 @@ public:
     bool IsOpenMptLoaded() const { return mOpenMptAvailable; }
 
     /**
+     * Connects or disconnects OpenMptMusicInterface directly to SDL_mixer's music hook.
+     */
+    void RegisterWithSdlMixer();
+    void UnregisterFromSdlMixer();
+
+    /**
      * Renders exactly `frameCount` stereo sample frames (2 * frameCount int16_t samples).
-     * Guaranteed zero dynamic heap allocations.
+     * Guaranteed zero dynamic heap allocations. Thread-safe.
      */
     size_t RenderAudioChunk(int16_t* interleavedStereoOutput, size_t frameCount);
 
@@ -152,8 +159,10 @@ private:
     void InitFallbackState(FallbackTrackerState& state, const uint8_t* data, size_t size);
     void RenderFallbackAudio(FallbackTrackerState& state, int16_t* output, size_t frameCount, double vol);
 
+    mutable std::recursive_mutex mMutex;
     void* mLibHandle = nullptr;
     bool mOpenMptAvailable = false;
+    bool mRegisteredWithMixer = false;
 
     // Dynamic OpenMPT symbols
     openmpt_module_create_from_memory2_fn mFnCreateFromMemory = nullptr;

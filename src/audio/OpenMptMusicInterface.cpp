@@ -7,6 +7,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <mutex>
 
 #if defined(__has_include)
   #if __has_include(<SDL/SDL_mixer.h>)
@@ -37,6 +38,29 @@ namespace Audio {
 static constexpr float kPi = 3.14159265358979323846f;
 static constexpr float kTwoPi = 2.0f * kPi;
 
+// Safe little-endian byte readers to prevent unaligned memory faults (SIGBUS on ARMv7)
+static inline uint32_t ReadLE32(const uint8_t* p) {
+    return static_cast<uint32_t>(p[0]) |
+          (static_cast<uint32_t>(p[1]) << 8) |
+          (static_cast<uint32_t>(p[2]) << 16) |
+          (static_cast<uint32_t>(p[3]) << 24);
+}
+
+static inline uint16_t ReadLE16(const uint8_t* p) {
+    return static_cast<uint16_t>(p[0]) |
+          (static_cast<uint16_t>(p[1]) << 8);
+}
+
+#if PVZ_HAVE_SDL_MIXER
+static void SdlMusicCallback(void* udata, Uint8* stream, int len) {
+    auto* self = static_cast<OpenMptMusicInterface*>(udata);
+    if (!self || !stream || len <= 0) return;
+    size_t frameCount = static_cast<size_t>(len) / (OpenMptMusicInterface::kNumChannels * sizeof(int16_t));
+    int16_t* out = reinterpret_cast<int16_t*>(stream);
+    self->RenderAudioChunk(out, frameCount);
+}
+#endif
+
 // ============================================================================
 // OpenMptMusicInterface Implementation
 // ============================================================================
@@ -47,6 +71,7 @@ OpenMptMusicInterface::OpenMptMusicInterface() {
 }
 
 OpenMptMusicInterface::~OpenMptMusicInterface() {
+    UnregisterFromSdlMixer();
     UnloadAllMusic();
 
     if (mLibHandle) {
@@ -57,6 +82,24 @@ OpenMptMusicInterface::~OpenMptMusicInterface() {
 #endif
         mLibHandle = nullptr;
     }
+}
+
+void OpenMptMusicInterface::RegisterWithSdlMixer() {
+#if PVZ_HAVE_SDL_MIXER
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
+    Mix_HookMusic(SdlMusicCallback, this);
+    mRegisteredWithMixer = true;
+#endif
+}
+
+void OpenMptMusicInterface::UnregisterFromSdlMixer() {
+#if PVZ_HAVE_SDL_MIXER
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
+    if (mRegisteredWithMixer) {
+        Mix_HookMusic(nullptr, nullptr);
+        mRegisteredWithMixer = false;
+    }
+#endif
 }
 
 void OpenMptMusicInterface::TryLoadOpenMptSymbols() {
@@ -115,6 +158,7 @@ void OpenMptMusicInterface::TryLoadOpenMptSymbols() {
 }
 
 size_t OpenMptMusicInterface::GetAllocatedMemory() const {
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
     size_t total = 0;
     for (const auto& pair : mSongs) {
         total += pair.second.buffer.size();
@@ -141,6 +185,7 @@ bool OpenMptMusicInterface::LoadMusic(int theSongId, const std::string& theFileN
 
     bool res = LoadMusicFromMemory(theSongId, data.data(), data.size());
     if (res) {
+        std::lock_guard<std::recursive_mutex> lock(mMutex);
         mSongs[theSongId].fileName = theFileName;
     }
     return res;
@@ -151,10 +196,14 @@ bool OpenMptMusicInterface::LoadMusicFromMemory(int theSongId, const void* theDa
         return false;
     }
 
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
+
     // Enforce strict <= 2 MB memory limit
-    size_t currentMem = GetAllocatedMemory();
-    if (mSongs.find(theSongId) != mSongs.end()) {
-        currentMem -= mSongs[theSongId].buffer.size();
+    size_t currentMem = 0;
+    for (const auto& pair : mSongs) {
+        if (pair.first != theSongId) {
+            currentMem += pair.second.buffer.size();
+        }
     }
 
     if (currentMem + theSize > kMaxMusicMemory) {
@@ -210,35 +259,35 @@ void OpenMptMusicInterface::InitFallbackState(FallbackTrackerState& state, const
 
     // Detect basic MOD/XM signatures
     if (size >= 1084 && std::memcmp(data + 1080, "M.K.", 4) == 0) {
-        state.durationSeconds = 64.0; // Standard 1-pattern or short tracker loop
+        state.durationSeconds = 64.0;
     } else if (size >= 17 && std::memcmp(data, "Extended Module:", 16) == 0) {
         state.durationSeconds = 90.0;
     }
 
     // Configure 4 synthetic voices matching PvZ music aesthetic (Laura Shigihara style)
-    // Voice 0: Bass
+    // Voice 0: Bass (Triangle)
     state.voices[0].phase = 0.0f;
-    state.voices[0].frequency = 110.0f; // A2
+    state.voices[0].frequency = 110.0f;
     state.voices[0].amplitude = 0.35f;
-    state.voices[0].waveform = 1; // Triangle
+    state.voices[0].waveform = 1;
 
-    // Voice 1: Harmony / Chord Pad
+    // Voice 1: Harmony / Chord Pad (Sine)
     state.voices[1].phase = 0.0f;
-    state.voices[1].frequency = 220.0f; // A3
+    state.voices[1].frequency = 220.0f;
     state.voices[1].amplitude = 0.25f;
-    state.voices[1].waveform = 0; // Sine
+    state.voices[1].waveform = 0;
 
-    // Voice 2: Melody Lead
+    // Voice 2: Melody Lead (Square)
     state.voices[2].phase = 0.0f;
-    state.voices[2].frequency = 440.0f; // A4
+    state.voices[2].frequency = 440.0f;
     state.voices[2].amplitude = 0.30f;
-    state.voices[2].waveform = 2; // Square
+    state.voices[2].waveform = 2;
 
     // Voice 3: Percussive noise
     state.voices[3].phase = 0.0f;
     state.voices[3].frequency = 1000.0f;
     state.voices[3].amplitude = 0.15f;
-    state.voices[3].waveform = 3; // Noise
+    state.voices[3].waveform = 3;
 }
 
 void OpenMptMusicInterface::RenderFallbackAudio(FallbackTrackerState& state, int16_t* output,
@@ -249,9 +298,8 @@ void OpenMptMusicInterface::RenderFallbackAudio(FallbackTrackerState& state, int
     }
 
     const float sampleRateF = static_cast<float>(kSampleRate);
-    const float samplesPerRow = (sampleRateF * 60.0f) / (state.tempoBpm * 4.0f); // 16th note rows
+    const float samplesPerRow = (sampleRateF * 60.0f) / (state.tempoBpm * 4.0f);
 
-    // Harmonic minor note frequencies for dynamic musical progression
     static const float kNoteTable[16] = {
         220.00f, 246.94f, 261.63f, 293.66f, 329.63f, 349.23f, 415.30f, 440.00f,
         493.88f, 523.25f, 587.33f, 659.25f, 698.46f, 830.61f, 880.00f, 987.77f
@@ -265,7 +313,6 @@ void OpenMptMusicInterface::RenderFallbackAudio(FallbackTrackerState& state, int
             state.sampleAccumulator -= samplesPerRow;
             state.currentPatternRow = (state.currentPatternRow + 1) % 64;
 
-            // Pattern sequencer: update note pitches
             int leadIdx = (state.currentPatternRow * 3) % 16;
             int bassIdx = ((state.currentPatternRow / 4) * 2) % 6;
             state.voices[0].frequency = kNoteTable[bassIdx] * 0.5f;
@@ -288,7 +335,7 @@ void OpenMptMusicInterface::RenderFallbackAudio(FallbackTrackerState& state, int
         if (state.voices[1].phase >= kTwoPi) state.voices[1].phase -= kTwoPi;
         float sinVal = std::sin(state.voices[1].phase);
         mixLeft  += sinVal * state.voices[1].amplitude * 0.8f;
-        mixRight += sinVal * state.voices[1].amplitude * 1.2f; // Slight stereo spread
+        mixRight += sinVal * state.voices[1].amplitude * 1.2f;
 
         // Voice 2: Melody (Square)
         state.voices[2].phase += (state.voices[2].frequency * kTwoPi) / sampleRateF;
@@ -297,17 +344,16 @@ void OpenMptMusicInterface::RenderFallbackAudio(FallbackTrackerState& state, int
         mixLeft  += sqr * state.voices[2].amplitude * 1.2f;
         mixRight += sqr * state.voices[2].amplitude * 0.8f;
 
-        // Voice 3: Percussion (Noise burst every 4 rows)
-        if (state.currentPatternRow % 4 == 0 && state.sampleAccumulator < 800.0f) {
+        // Voice 3: Percussion
+        if (state.currentPatternRow % 4 == 0 && state.sampleAccumulator < 400.0f) {
             sNoiseSeed = sNoiseSeed * 1664525u + 1013904223u;
             float noise = static_cast<float>(static_cast<int32_t>(sNoiseSeed)) / 2147483648.0f;
-            float decay = 1.0f - (state.sampleAccumulator / 800.0f);
+            float decay = 1.0f - (state.sampleAccumulator / 400.0f);
             float nSample = noise * state.voices[3].amplitude * decay;
             mixLeft  += nSample;
             mixRight += nSample;
         }
 
-        // Apply volume and clamp to 16-bit integer
         float finalL = mixLeft * static_cast<float>(vol) * 16000.0f;
         float finalR = mixRight * static_cast<float>(vol) * 16000.0f;
 
@@ -322,6 +368,7 @@ void OpenMptMusicInterface::RenderFallbackAudio(FallbackTrackerState& state, int
 }
 
 void OpenMptMusicInterface::PlayMusic(int theSongId, int theOffset, bool theLoop) {
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
     auto it = mSongs.find(theSongId);
     if (it == mSongs.end()) {
         return;
@@ -335,14 +382,14 @@ void OpenMptMusicInterface::PlayMusic(int theSongId, int theOffset, bool theLoop
     song.fadeVolume = 1.0;
     song.fading = false;
 
-    if (theOffset > 0) {
+    if (theOffset >= 0) {
         SeekMusic(theSongId, static_cast<double>(theOffset));
     } else {
-        song.currentPosition = 0.0;
+        // When theOffset == -1, preserve current playback position
         if (song.openmptMod && mFnSetPosition) {
-            mFnSetPosition(song.openmptMod, 0.0);
+            mFnSetPosition(song.openmptMod, song.currentPosition);
         }
-        song.fallbackState.positionSeconds = 0.0;
+        song.fallbackState.positionSeconds = song.currentPosition;
     }
 
     if (song.openmptMod && mFnSetRepeatCount) {
@@ -351,6 +398,7 @@ void OpenMptMusicInterface::PlayMusic(int theSongId, int theOffset, bool theLoop
 }
 
 void OpenMptMusicInterface::StopMusic(int theSongId) {
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
     auto it = mSongs.find(theSongId);
     if (it != mSongs.end()) {
         it->second.isPlaying = false;
@@ -368,6 +416,7 @@ void OpenMptMusicInterface::StopMusic(int theSongId) {
 }
 
 void OpenMptMusicInterface::PauseMusic(int theSongId) {
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
     auto it = mSongs.find(theSongId);
     if (it != mSongs.end()) {
         it->second.isPaused = true;
@@ -375,6 +424,7 @@ void OpenMptMusicInterface::PauseMusic(int theSongId) {
 }
 
 void OpenMptMusicInterface::ResumeMusic(int theSongId) {
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
     auto it = mSongs.find(theSongId);
     if (it != mSongs.end() && it->second.isPlaying) {
         it->second.isPaused = false;
@@ -382,6 +432,7 @@ void OpenMptMusicInterface::ResumeMusic(int theSongId) {
 }
 
 void OpenMptMusicInterface::StopAllMusic() {
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
     for (auto& pair : mSongs) {
         pair.second.isPlaying = false;
         pair.second.isPaused = false;
@@ -391,6 +442,7 @@ void OpenMptMusicInterface::StopAllMusic() {
 }
 
 void OpenMptMusicInterface::UnloadMusic(int theSongId) {
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
     auto it = mSongs.find(theSongId);
     if (it != mSongs.end()) {
         if (it->second.openmptMod && mFnDestroy) {
@@ -405,6 +457,7 @@ void OpenMptMusicInterface::UnloadMusic(int theSongId) {
 }
 
 void OpenMptMusicInterface::UnloadAllMusic() {
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
     for (auto& pair : mSongs) {
         if (pair.second.openmptMod && mFnDestroy) {
             mFnDestroy(pair.second.openmptMod);
@@ -416,10 +469,12 @@ void OpenMptMusicInterface::UnloadAllMusic() {
 }
 
 void OpenMptMusicInterface::SetVolume(double theVolume) {
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
     mMasterVolume = std::clamp(theVolume, 0.0, 1.0);
 }
 
 void OpenMptMusicInterface::SetMusicVolume(int theSongId, double theVolume) {
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
     auto it = mSongs.find(theSongId);
     if (it != mSongs.end()) {
         it->second.volume = std::clamp(theVolume, 0.0, 1.0);
@@ -427,6 +482,7 @@ void OpenMptMusicInterface::SetMusicVolume(int theSongId, double theVolume) {
 }
 
 double OpenMptMusicInterface::GetMusicVolume(int theSongId) {
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
     auto it = mSongs.find(theSongId);
     if (it != mSongs.end()) {
         return it->second.volume;
@@ -435,6 +491,7 @@ double OpenMptMusicInterface::GetMusicVolume(int theSongId) {
 }
 
 bool OpenMptMusicInterface::IsPlaying(int theSongId) {
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
     auto it = mSongs.find(theSongId);
     if (it != mSongs.end()) {
         return it->second.isPlaying && !it->second.isPaused;
@@ -443,6 +500,7 @@ bool OpenMptMusicInterface::IsPlaying(int theSongId) {
 }
 
 bool OpenMptMusicInterface::IsPaused(int theSongId) {
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
     auto it = mSongs.find(theSongId);
     if (it != mSongs.end()) {
         return it->second.isPlaying && it->second.isPaused;
@@ -451,6 +509,7 @@ bool OpenMptMusicInterface::IsPaused(int theSongId) {
 }
 
 void OpenMptMusicInterface::FadeIn(int theSongId, int theOffset, double theSpeed, bool theLoop) {
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
     PlayMusic(theSongId, theOffset, theLoop);
     auto it = mSongs.find(theSongId);
     if (it != mSongs.end()) {
@@ -462,6 +521,7 @@ void OpenMptMusicInterface::FadeIn(int theSongId, int theOffset, double theSpeed
 }
 
 void OpenMptMusicInterface::FadeOut(int theSongId, bool theStop, double theSpeed) {
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
     auto it = mSongs.find(theSongId);
     if (it != mSongs.end() && it->second.isPlaying) {
         it->second.fadeSpeed = -std::max(0.0001, theSpeed);
@@ -471,6 +531,7 @@ void OpenMptMusicInterface::FadeOut(int theSongId, bool theStop, double theSpeed
 }
 
 void OpenMptMusicInterface::SeekMusic(int theSongId, double thePositionSeconds) {
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
     auto it = mSongs.find(theSongId);
     if (it != mSongs.end()) {
         SongEntry& song = it->second;
@@ -483,6 +544,7 @@ void OpenMptMusicInterface::SeekMusic(int theSongId, double thePositionSeconds) 
 }
 
 double OpenMptMusicInterface::GetMusicPosition(int theSongId) {
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
     auto it = mSongs.find(theSongId);
     if (it != mSongs.end()) {
         SongEntry& song = it->second;
@@ -495,6 +557,7 @@ double OpenMptMusicInterface::GetMusicPosition(int theSongId) {
 }
 
 double OpenMptMusicInterface::GetMusicLength(int theSongId) {
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
     auto it = mSongs.find(theSongId);
     if (it != mSongs.end()) {
         return it->second.duration;
@@ -503,6 +566,7 @@ double OpenMptMusicInterface::GetMusicLength(int theSongId) {
 }
 
 void OpenMptMusicInterface::Update() {
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
     for (auto& pair : mSongs) {
         SongEntry& song = pair.second;
         if (song.fading) {
@@ -526,7 +590,8 @@ size_t OpenMptMusicInterface::RenderAudioChunk(int16_t* interleavedStereoOutput,
         return 0;
     }
 
-    // Default to silence
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
+
     std::memset(interleavedStereoOutput, 0, frameCount * kNumChannels * sizeof(int16_t));
 
     if (mActiveSongId < 0) {
@@ -547,7 +612,6 @@ size_t OpenMptMusicInterface::RenderAudioChunk(int16_t* interleavedStereoOutput,
     totalVolume = std::clamp(totalVolume, 0.0, 1.0);
 
     if (totalVolume <= 0.0001) {
-        // Zero volume -> silence, advance position without rendering
         double deltaSec = static_cast<double>(frameCount) / static_cast<double>(kSampleRate);
         song.currentPosition += deltaSec;
         if (song.currentPosition >= song.duration) {
@@ -560,7 +624,6 @@ size_t OpenMptMusicInterface::RenderAudioChunk(int16_t* interleavedStereoOutput,
         return frameCount;
     }
 
-    // Render from OpenMPT module if active
     if (song.openmptMod && mFnReadStereo) {
         size_t readFrames = mFnReadStereo(song.openmptMod, static_cast<int32_t>(kSampleRate),
                                           frameCount, interleavedStereoOutput);
@@ -568,7 +631,6 @@ size_t OpenMptMusicInterface::RenderAudioChunk(int16_t* interleavedStereoOutput,
             song.isPlaying = false;
         }
 
-        // Apply volume scaling
         if (totalVolume < 0.999) {
             for (size_t i = 0; i < frameCount * kNumChannels; ++i) {
                 interleavedStereoOutput[i] = static_cast<int16_t>(
@@ -580,7 +642,6 @@ size_t OpenMptMusicInterface::RenderAudioChunk(int16_t* interleavedStereoOutput,
             song.currentPosition = mFnGetPosition(song.openmptMod);
         }
     } else {
-        // Render from procedural fallback generator
         RenderFallbackAudio(song.fallbackState, interleavedStereoOutput, frameCount, totalVolume);
         song.currentPosition = song.fallbackState.positionSeconds;
 
@@ -622,7 +683,6 @@ bool SoundManager::Initialize(int mixChannels) {
     }
 
 #if PVZ_HAVE_SDL_MIXER
-    // Initialize SDL_mixer if available and not yet opened
     if (Mix_OpenAudio(22050, AUDIO_S16SYS, 2, 2048) >= 0) {
         Mix_AllocateChannels(mNumChannels);
         mSdlMixerOpen = true;
@@ -687,26 +747,21 @@ bool SoundManager::DecodeWav(const uint8_t* wavBytes, size_t size, SoundAsset& a
         return false;
     }
 
-    // Find "fmt " and "data" chunks
     size_t offset = 12;
     uint32_t sampleRate = 22050;
     uint16_t channels = 1;
-    uint16_t bitsPerSample = 16;
     const uint8_t* pcmSource = nullptr;
     uint32_t pcmSizeBytes = 0;
 
     while (offset + 8 <= size) {
         char chunkId[5] = {0};
         std::memcpy(chunkId, wavBytes + offset, 4);
-        uint32_t chunkSize = *reinterpret_cast<const uint32_t*>(wavBytes + offset + 4);
+        uint32_t chunkSize = ReadLE32(wavBytes + offset + 4);
         offset += 8;
 
         if (std::strcmp(chunkId, "fmt ") == 0 && offset + 16 <= size) {
-            uint16_t formatTag = *reinterpret_cast<const uint16_t*>(wavBytes + offset);
-            (void)formatTag;
-            channels = *reinterpret_cast<const uint16_t*>(wavBytes + offset + 2);
-            sampleRate = *reinterpret_cast<const uint32_t*>(wavBytes + offset + 4);
-            bitsPerSample = *reinterpret_cast<const uint16_t*>(wavBytes + offset + 14);
+            channels = ReadLE16(wavBytes + offset + 2);
+            sampleRate = ReadLE32(wavBytes + offset + 4);
         } else if (std::strcmp(chunkId, "data") == 0) {
             pcmSource = wavBytes + offset;
             pcmSizeBytes = std::min<uint32_t>(chunkSize, static_cast<uint32_t>(size - offset));
@@ -721,17 +776,30 @@ bool SoundManager::DecodeWav(const uint8_t* wavBytes, size_t size, SoundAsset& a
     }
 
     asset.sampleRate = sampleRate;
-    asset.channels = channels;
-    asset.dataSizeBytes = pcmSizeBytes;
 
-    // Convert/store PCM samples
-    size_t numSamples = pcmSizeBytes / sizeof(int16_t);
-    asset.pcmData.resize(numSamples);
-    std::memcpy(asset.pcmData.data(), pcmSource, numSamples * sizeof(int16_t));
+    // Convert/store PCM samples:
+    // If input is mono (channels == 1), upmix to 2-channel stereo (duplicate L=R)
+    // so SDL_mixer's 2-channel device does not play mono audio at 2x speed / +1 octave pitch.
+    size_t numInputSamples = pcmSizeBytes / sizeof(int16_t);
+    if (channels == 1) {
+        asset.channels = 2;
+        asset.pcmData.resize(numInputSamples * 2);
+        for (size_t i = 0; i < numInputSamples; ++i) {
+            int16_t s;
+            std::memcpy(&s, pcmSource + i * sizeof(int16_t), sizeof(int16_t));
+            asset.pcmData[i * 2 + 0] = s;
+            asset.pcmData[i * 2 + 1] = s;
+        }
+        asset.dataSizeBytes = numInputSamples * 2 * sizeof(int16_t);
+    } else {
+        asset.channels = channels;
+        asset.pcmData.resize(numInputSamples);
+        std::memcpy(asset.pcmData.data(), pcmSource, numInputSamples * sizeof(int16_t));
+        asset.dataSizeBytes = pcmSizeBytes;
+    }
 
 #if PVZ_HAVE_SDL_MIXER
     if (mSdlMixerOpen) {
-        // QuickLoad raw PCM chunk into SDL_mixer
         asset.mixChunk = Mix_QuickLoad_RAW(reinterpret_cast<Uint8*>(asset.pcmData.data()),
                                            static_cast<Uint32>(asset.pcmData.size() * sizeof(int16_t)));
     }
@@ -741,25 +809,13 @@ bool SoundManager::DecodeWav(const uint8_t* wavBytes, size_t size, SoundAsset& a
 }
 
 void SoundManager::EvictLruUntilFits(size_t requiredBytes) {
-    while (mAllocatedSfxMemory + requiredBytes > kMaxSfxMemory) {
-        // Identify active sounds currently playing on channels
-        std::vector<unsigned int> playingSounds;
-        for (const auto& ch : mChannels) {
-            if (ch.active) {
-                playingSounds.push_back(ch.soundId);
-            }
-        }
-
-        // Find candidate sound with oldest lastUsedTick that is not playing
+    while (mAllocatedSfxMemory + requiredBytes > kMaxSfxMemory && !mSounds.empty()) {
         unsigned int lruId = 0;
         uint64_t oldestTick = UINT64_MAX;
         bool foundCandidate = false;
 
         for (const auto& pair : mSounds) {
             if (!pair.second.isLoaded) continue;
-            if (std::find(playingSounds.begin(), playingSounds.end(), pair.first) != playingSounds.end()) {
-                continue; // Skip currently playing sounds
-            }
 
             if (pair.second.lastUsedTick < oldestTick) {
                 oldestTick = pair.second.lastUsedTick;
@@ -769,8 +825,20 @@ void SoundManager::EvictLruUntilFits(size_t requiredBytes) {
         }
 
         if (!foundCandidate) {
-            // If all loaded sounds are currently playing, break to avoid infinite loop
             break;
+        }
+
+        // If LRU sound is currently playing on an active channel, stop that channel
+        // so the sound can be successfully evicted and memory freed.
+        for (int i = 0; i < mNumChannels; ++i) {
+            if (mChannels[i].active && mChannels[i].soundId == lruId) {
+                mChannels[i].active = false;
+#if PVZ_HAVE_SDL_MIXER
+                if (mSdlMixerOpen) {
+                    Mix_HaltChannel(i);
+                }
+#endif
+            }
         }
 
         // Evict LRU sound from cache
@@ -806,7 +874,6 @@ bool SoundManager::EnsureLoaded(unsigned int theSoundId) {
         return true;
     }
 
-    // Load from memory buffer or read file
     std::vector<uint8_t> fileBytes;
     const uint8_t* wavPtr = nullptr;
     size_t wavSize = 0;
@@ -832,13 +899,10 @@ bool SoundManager::EnsureLoaded(unsigned int theSoundId) {
         return false;
     }
 
-    // Estimate decoded PCM size from WAV header
-    uint32_t estimatedPcmBytes = 0;
-    if (wavSize > 44) {
-        estimatedPcmBytes = static_cast<uint32_t>(wavSize - 44);
-    }
+    // Estimate uncompressed PCM size in stereo: if mono, 2x PCM bytes
+    uint32_t estimatedPcmBytes = static_cast<uint32_t>((wavSize - 44) * 2);
 
-    // Enforce 8 MB LRU eviction
+    // Evict LRU sounds (stopping active channels if necessary) until it fits
     EvictLruUntilFits(estimatedPcmBytes);
 
     if (mAllocatedSfxMemory + estimatedPcmBytes > kMaxSfxMemory) {
@@ -862,7 +926,6 @@ int SoundManager::PlaySample(unsigned int theSoundId, int thePan) {
         return -1;
     }
 
-    // Allocate an available channel
     int chosenChannel = -1;
     for (int i = 0; i < mNumChannels; ++i) {
         if (!mChannels[i].active) {
@@ -871,7 +934,6 @@ int SoundManager::PlaySample(unsigned int theSoundId, int thePan) {
         }
     }
 
-    // If all channels active, steal channel with lowest volume or oldest
     if (chosenChannel < 0) {
         chosenChannel = 0;
     }
@@ -890,6 +952,18 @@ int SoundManager::PlaySample(unsigned int theSoundId, int thePan) {
     if (mSdlMixerOpen && mSounds[theSoundId].mixChunk) {
         int vol = static_cast<int>(mMasterVolume * ch.volume * 128.0);
         Mix_Volume(chosenChannel, std::clamp(vol, 0, 128));
+
+        // Panning: PopCap uses -100 (left) to +100 (right), 0 = center
+        int panClamped = std::clamp(thePan, -100, 100);
+        Uint8 left = 255;
+        Uint8 right = 255;
+        if (panClamped < 0) {
+            right = static_cast<Uint8>(255.0f * (1.0f + static_cast<float>(panClamped) / 100.0f));
+        } else if (panClamped > 0) {
+            left = static_cast<Uint8>(255.0f * (1.0f - static_cast<float>(panClamped) / 100.0f));
+        }
+        Mix_SetPanning(chosenChannel, left, right);
+
         Mix_PlayChannelTimed(chosenChannel, static_cast<Mix_Chunk*>(mSounds[theSoundId].mixChunk), 0, -1);
     }
 #endif
