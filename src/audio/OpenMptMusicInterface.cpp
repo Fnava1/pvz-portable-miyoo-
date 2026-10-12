@@ -86,19 +86,26 @@ OpenMptMusicInterface::~OpenMptMusicInterface() {
 
 void OpenMptMusicInterface::RegisterWithSdlMixer() {
 #if PVZ_HAVE_SDL_MIXER
-    std::lock_guard<std::recursive_mutex> lock(mMutex);
+    {
+        std::lock_guard<std::recursive_mutex> lock(mMutex);
+        if (mRegisteredWithMixer) {
+            return;
+        }
+        mRegisteredWithMixer = true;
+    }
+    // Call Mix_HookMusic outside mMutex to prevent ABBA deadlock with SDL_LockAudio
     Mix_HookMusic(SdlMusicCallback, this);
-    mRegisteredWithMixer = true;
 #endif
 }
 
 void OpenMptMusicInterface::UnregisterFromSdlMixer() {
 #if PVZ_HAVE_SDL_MIXER
+    // Call Mix_HookMusic first without holding mMutex.
+    // When Mix_HookMusic returns, any in-flight callback has finished and SDL_LockAudio is released.
+    Mix_HookMusic(nullptr, nullptr);
+
     std::lock_guard<std::recursive_mutex> lock(mMutex);
-    if (mRegisteredWithMixer) {
-        Mix_HookMusic(nullptr, nullptr);
-        mRegisteredWithMixer = false;
-    }
+    mRegisteredWithMixer = false;
 #endif
 }
 
