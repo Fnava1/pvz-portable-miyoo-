@@ -775,7 +775,8 @@ bool SoundManager::DecodeWav(const uint8_t* wavBytes, size_t size, SoundAsset& a
             break;
         }
 
-        offset += chunkSize;
+        offset += chunkSize + (chunkSize & 1);
+
     }
 
     if (!pcmSource || pcmSizeBytes == 0) {

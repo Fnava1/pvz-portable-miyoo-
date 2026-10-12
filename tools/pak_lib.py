@@ -31,6 +31,8 @@ POP_PAK_MAGIC = 0xBAC04AC0
 POP_PAK_VERSION = 0
 FILEFLAGS_END = 0x80
 XOR_KEY = 0xF7
+_XOR_TABLE = bytes(i ^ XOR_KEY for i in range(256))
+
 
 
 class PakError(Exception):
@@ -187,8 +189,9 @@ class PakArchive:
                 f"Truncated data for '{name}' (expected {record.size} bytes, got {len(raw_data)})"
             )
 
-        # Fast XOR 0xF7 decryption
-        return bytes(b ^ XOR_KEY for b in raw_data)
+        # Fast XOR 0xF7 decryption via translation table
+        return raw_data.translate(_XOR_TABLE)
+
 
     def unpack_file(self, name: str, dest_path: Optional[str] = None) -> bytes:
         """
@@ -264,7 +267,7 @@ class PakArchive:
             # 4. Stream data payload with XOR 0xF7 encryption
             for norm_path, _, size, data_or_path in prepared_entries:
                 if isinstance(data_or_path, bytes):
-                    payload = bytes(b ^ XOR_KEY for b in data_or_path)
+                    payload = data_or_path.translate(_XOR_TABLE)
                     out_fp.write(payload)
                 else:
                     with open(data_or_path, "rb") as in_fp:
@@ -273,7 +276,8 @@ class PakArchive:
                             chunk = in_fp.read(chunk_size)
                             if not chunk:
                                 break
-                            out_fp.write(bytes(b ^ XOR_KEY for b in chunk))
+                            out_fp.write(chunk.translate(_XOR_TABLE))
+
 
         if log_fn:
             log_fn(f"Created PAK archive: {out_pak_path} ({len(prepared_entries)} files)")

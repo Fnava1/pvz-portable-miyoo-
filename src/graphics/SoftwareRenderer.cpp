@@ -64,14 +64,16 @@ void* DmaTexturePool::Allocate(size_t size, size_t alignment) {
         return nullptr;
     }
 
-    size_t aligned_offset = (mUsedOffset + alignment - 1) & ~(alignment - 1);
-    if (aligned_offset + size > mTotalSize) {
+    uintptr_t current_addr = reinterpret_cast<uintptr_t>(mPoolBuffer + mUsedOffset);
+    uintptr_t aligned_addr = (current_addr + alignment - 1) & ~(alignment - 1);
+    size_t offset_needed = static_cast<size_t>(aligned_addr - reinterpret_cast<uintptr_t>(mPoolBuffer));
+    if (offset_needed + size > mTotalSize) {
         return nullptr; // Out of pool capacity
     }
 
-    void* result = mPoolBuffer + aligned_offset;
-    mUsedOffset = aligned_offset + size;
-    return result;
+    mUsedOffset = offset_needed + size;
+    return reinterpret_cast<void*>(aligned_addr);
+
 }
 
 void DmaTexturePool::Reset() {
@@ -537,7 +539,9 @@ void SoftwareRenderer::DrawImage(SoftwareSurface* image, const Rect& dst_rect, c
     BlitMode mode = (mDrawMode == DRAWMODE_ADDITIVE) ? BLIT_ADDITIVE : BLIT_ALPHA;
 
     // Fast Path: 1:1 physical pixel match (optimized 80% assets from main_mmp.pak)
-    if (pw == src_rect.w && ph == src_rect.h) {
+    // Allow 1-pixel rounding tolerance for non-divisible odd dimensions under 0.8x projection
+    if (std::abs(pw - src_rect.w) <= 1 && std::abs(ph - src_rect.h) <= 1) {
+
         int src_offset_x = src_rect.x + (clipped.x - phys.x);
         int src_offset_y = src_rect.y + (clipped.y - phys.y);
 

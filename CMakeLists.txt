@@ -19,7 +19,12 @@ else()
     message(STATUS "Renderer: 100% Software Rasterizer (Miyoo Mini Plus native mode)")
 endif()
 
+if(NOT WIN32)
+    add_compile_definitions(_POSIX_C_SOURCE=200809L _GNU_SOURCE)
+endif()
+
 # Global include directories
+
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/include
