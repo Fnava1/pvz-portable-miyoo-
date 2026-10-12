@@ -10,7 +10,7 @@ Arguments=""
 unset LD_PRELOAD
 PORTDIR="$(dirname "$0")"
 
-# Dynamic game directory lookup
+# Dynamic game directory lookup (relative to Shortcuts/Strategy or ports root)
 if [ -d "$PORTDIR/Games/Plants vs. Zombies" ]; then
     GAMEDIR="$PORTDIR/Games/Plants vs. Zombies"
 elif [ -d "$PORTDIR/../../Games/Plants vs. Zombies" ]; then

@@ -3,6 +3,7 @@
 /dist/
 build/
 dist/
+Testing/
 
 # Distribution anti-virus and clean-room asset rules
 *.exe

@@ -84,32 +84,21 @@ target_link_libraries(pvz_input PUBLIC m)
 # ---------------------------------------------------------------------------
 # Target 1: Engine Core (PvZ)
 # ---------------------------------------------------------------------------
-file(GLOB_RECURSE ENGINE_SOURCES
-    "src/*.cpp"
-    "src/*.c"
+set(ENGINE_SOURCES
+    "src/main_miyoo.cpp"
 )
-list(FILTER ENGINE_SOURCES EXCLUDE REGEX "src/setup/.*")
-list(FILTER ENGINE_SOURCES EXCLUDE REGEX "src/graphics/.*")
-list(FILTER ENGINE_SOURCES EXCLUDE REGEX "src/audio/.*")
-list(FILTER ENGINE_SOURCES EXCLUDE REGEX "src/input/.*")
-
-# Check if any source provides main() entry point
-set(HAS_ENGINE_MAIN FALSE)
-foreach(SRC ${ENGINE_SOURCES})
-    if(SRC MATCHES ".*main.*")
-        set(HAS_ENGINE_MAIN TRUE)
-    endif()
-endforeach()
-
-if(NOT HAS_ENGINE_MAIN)
-    # Temporary scaffolding stub until engine main module is created
-    set(ENGINE_STUB "${CMAKE_CURRENT_BINARY_DIR}/stub_engine.cpp")
-    file(WRITE "${ENGINE_STUB}" "int main(int argc, char* argv[]) { (void)argc; (void)argv; return 0; }\n")
-    list(APPEND ENGINE_SOURCES "${ENGINE_STUB}")
-endif()
 
 add_executable(PvZ ${ENGINE_SOURCES})
 target_link_libraries(PvZ PRIVATE pvz_graphics pvz_audio pvz_input m)
+if(SDL_LIB)
+    target_link_libraries(PvZ PRIVATE ${SDL_LIB})
+endif()
+if(SDL_MIXER_LIB)
+    target_link_libraries(PvZ PRIVATE ${SDL_MIXER_LIB})
+endif()
+if(NOT WIN32)
+    target_link_libraries(PvZ PRIVATE dl pthread)
+endif()
 
 # ---------------------------------------------------------------------------
 # Target 2: Setup Utility (setup_miyoo) & Setup Core Library
@@ -185,4 +174,21 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_input_mapping.cpp")
     target_link_libraries(test_input_mapping PRIVATE pvz_input m)
     add_test(NAME test_input_mapping COMMAND test_input_mapping)
 endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_main_teardown.cpp")
+    add_executable(test_main_teardown "tests/test_main_teardown.cpp" "src/main_miyoo.cpp")
+    target_compile_definitions(test_main_teardown PRIVATE PVZ_UNIT_TEST=1)
+    target_link_libraries(test_main_teardown PRIVATE pvz_graphics pvz_audio pvz_input m)
+    if(SDL_LIB)
+        target_link_libraries(test_main_teardown PRIVATE ${SDL_LIB})
+    endif()
+    if(SDL_MIXER_LIB)
+        target_link_libraries(test_main_teardown PRIVATE ${SDL_MIXER_LIB})
+    endif()
+    if(NOT WIN32)
+        target_link_libraries(test_main_teardown PRIVATE dl pthread)
+    endif()
+    add_test(NAME test_main_teardown COMMAND test_main_teardown)
+endif()
+
 

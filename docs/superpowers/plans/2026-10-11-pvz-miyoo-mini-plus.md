@@ -215,17 +215,17 @@
 - Consumes: Compiled ARM binaries (`PvZ`, `setup_miyoo`), shared libraries, assets.
 - Produces: Ready-to-copy OnionOS directory structure with signal traps and overclock.
 
-- [ ] **Step 1: Write integration test for launch script traps (`tests/test_launch_script.sh`)**
+- [x] **Step 1: Write integration test for launch script traps (`tests/test_launch_script.sh`)**
   Verify `launch.sh` syntax, signal trap traps `EXIT`, `INT`, `TERM`, `HUP`, exports `sync`, and restores CPU governor.
-- [ ] **Step 2: Implement `ports/Games/Plants vs. Zombies/launch.sh`**
+- [x] **Step 2: Implement `ports/Games/Plants vs. Zombies/launch.sh`**
   Add detection: if `main_mmp.pak` exists, delete `setup_miyoo` if present. If only raw `main.pak` exists, run `./setup_miyoo`. Apply safe overclock `cpuclock 1700`, kill `audioserver`, export `SDL_MMIYOO_TEXTURE_POOL=1`. Wrap in `trap cleanup`.
-- [ ] **Step 3: Implement clean teardown and `ResetFramebuffer()` in `src/main_miyoo.cpp`**
+- [x] **Step 3: Implement clean teardown and `ResetFramebuffer()` in `src/main_miyoo.cpp`**
   Unwind main loop cleanly on quit; call `ResetFramebuffer()` using `ioctl(fb, FBIOPAN_DISPLAY, &vinfo)` after `SDL_Quit()` to restore display offsets to $(0,0)$.
-- [ ] **Step 4: Create OnionOS shortcut `ports/Plants vs. Zombies.port`**
+- [x] **Step 4: Create OnionOS shortcut `ports/Plants vs. Zombies.port`**
   Create pure port launcher script resolving paths dynamically relative to `Roms/PORTS/Games/Plants vs. Zombies/`.
-- [ ] **Step 5: Verify launch script passes linting and unit test**
+- [x] **Step 5: Verify launch script passes linting and unit test**
   Run: `bash -n ports/Games/Plants\ vs.\ Zombies/launch.sh` and run test.
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
   `git commit -m "feat(onion): add OnionOS launch scripts, lifecycle traps, and clean fb reset"`
 
 ---
