@@ -7,6 +7,13 @@
 GAMEDIR="$(dirname "$0")"
 cd "$GAMEDIR"
 
+# Redirect stdout and stderr to launch.log for live diagnostics on console
+exec > ./launch.log 2>&1
+echo "=== Starting Plants vs. Zombies (Miyoo Mini Plus) ==="
+date
+echo "GAMEDIR: $GAMEDIR"
+
+
 # ------------------------------------------------------------------------------
 # Lifecycle Traps & Power Resiliency
 # ------------------------------------------------------------------------------
@@ -74,7 +81,7 @@ export SDL_MMIYOO_TEXTURE_POOL=1
 export SDL_MMIYOO_TEXTURE_POOL_MAX_BYTES=16777216
 export SDL_MMIYOO_VSYNC_MODE=off
 export SDL_HINT_RENDER_SCALE_QUALITY=0
-export LD_LIBRARY_PATH="./libs:$LD_LIBRARY_PATH"
+export LD_LIBRARY_PATH="$GAMEDIR/libs:/mnt/SDCARD/Roms/PORTS/Games/Plants vs. Zombies/libs:./libs:$LD_LIBRARY_PATH"
 
 # 3. Audio device isolation: kill audioserver to prevent MI_AO hardware conflict
 killall -9 audioserver 2>/dev/null
@@ -82,7 +89,13 @@ killall -9 audioserver 2>/dev/null
 # ------------------------------------------------------------------------------
 # Execute Game Binary
 # ------------------------------------------------------------------------------
+echo "Checking executable ./PvZ:"
+ls -la ./PvZ
 chmod +x ./PvZ 2>/dev/null
+echo "Launching ./PvZ..."
 ./PvZ "$@"
+PvZ_EXIT=$?
+echo "PvZ terminated with exit code: $PvZ_EXIT"
+
 
 # Cleanup trap automatically executes upon script exit or signal

@@ -18,10 +18,13 @@ Testing/
 *.dylib
 *.dll
 
-# Explicit tracking exceptions for scripts and CMake configuration
+# Explicit tracking exceptions for scripts, CMake configuration, and console shared libraries
 !*.sh
 !*.cmake
 !CMakeLists.txt
+!/packaging/Roms/PORTS/Games/Plants vs. Zombies/libs/*.so*
+!/ports/Games/Plants vs. Zombies/libs/*.so*
+
 
 # Editor / IDE artifacts
 .vscode/
