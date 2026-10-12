@@ -162,15 +162,15 @@
 - Consumes: PopCap Laura Shigihara soundtrack files (`.mo3`, `.it`).
 - Produces: Low-latency streaming stereo audio to SDL-Mixer-X / ALSA.
 
-- [ ] **Step 1: Write test for OpenMPT stream decoding (`tests/test_openmpt_playback.cpp`)**
+- [x] **Step 1: Write test for OpenMPT stream decoding (`tests/test_openmpt_playback.cpp`)**
   Verify opening and streaming sample frames from a tracker music module without allocating more than 2 MB buffer.
-- [ ] **Step 2: Implement `src/audio/OpenMptMusicInterface.cpp`**
+- [x] **Step 2: Implement `src/audio/OpenMptMusicInterface.cpp`**
   Implement PopCap `MusicInterface` using `openmpt::module`. Stream in chunks of 2,048 samples; handle music volume, loop points, and song transitions.
-- [ ] **Step 3: Integrate low-overhead SFX loading in SDL-Mixer-X**
+- [x] **Step 3: Integrate low-overhead SFX loading in SDL-Mixer-X**
   Load downsampled 22.05 kHz WAV sound effects lazily or on-demand to maintain audio buffer footprint under 8 MB RAM.
-- [ ] **Step 4: Verify test passes**
+- [x] **Step 4: Verify test passes**
   Run: `build/tests/test_openmpt_playback` -> PASS.
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
   `git commit -m "feat(audio): integrate libopenmpt tracker streamer and SDL-Mixer-X sound manager"`
 
 ---

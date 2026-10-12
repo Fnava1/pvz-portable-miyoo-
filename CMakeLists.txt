@@ -31,6 +31,11 @@ if(SDL_INCLUDE_DIR)
     include_directories(${SDL_INCLUDE_DIR})
 endif()
 
+find_path(SDL_MIXER_INCLUDE_DIR NAMES SDL_mixer.h PATH_SUFFIXES SDL SDL2 SDL_mixer)
+if(SDL_MIXER_INCLUDE_DIR)
+    include_directories(${SDL_MIXER_INCLUDE_DIR})
+endif()
+
 # ---------------------------------------------------------------------------
 # Module: Graphics Subsystem (pvz_graphics)
 # ---------------------------------------------------------------------------
@@ -43,6 +48,30 @@ add_library(pvz_graphics STATIC ${GRAPHICS_SOURCES})
 target_link_libraries(pvz_graphics PUBLIC m)
 
 # ---------------------------------------------------------------------------
+# Module: Audio Subsystem (pvz_audio)
+# ---------------------------------------------------------------------------
+set(AUDIO_SOURCES
+    "src/audio/OpenMptMusicInterface.cpp"
+)
+
+add_library(pvz_audio STATIC ${AUDIO_SOURCES})
+target_link_libraries(pvz_audio PUBLIC m)
+
+find_library(SDL_MIXER_LIB NAMES SDL_mixer SDL2_mixer)
+if(SDL_MIXER_LIB)
+    target_link_libraries(pvz_audio PUBLIC ${SDL_MIXER_LIB})
+endif()
+
+find_library(SDL_LIB NAMES SDL SDL2)
+if(SDL_LIB)
+    target_link_libraries(pvz_audio PUBLIC ${SDL_LIB})
+endif()
+
+if(NOT WIN32)
+    target_link_libraries(pvz_audio PUBLIC dl)
+endif()
+
+# ---------------------------------------------------------------------------
 # Target 1: Engine Core (PvZ)
 # ---------------------------------------------------------------------------
 file(GLOB_RECURSE ENGINE_SOURCES
@@ -51,6 +80,7 @@ file(GLOB_RECURSE ENGINE_SOURCES
 )
 list(FILTER ENGINE_SOURCES EXCLUDE REGEX "src/setup/.*")
 list(FILTER ENGINE_SOURCES EXCLUDE REGEX "src/graphics/.*")
+list(FILTER ENGINE_SOURCES EXCLUDE REGEX "src/audio/.*")
 
 # Check if any source provides main() entry point
 set(HAS_ENGINE_MAIN FALSE)
@@ -68,7 +98,7 @@ if(NOT HAS_ENGINE_MAIN)
 endif()
 
 add_executable(PvZ ${ENGINE_SOURCES})
-target_link_libraries(PvZ PRIVATE pvz_graphics m)
+target_link_libraries(PvZ PRIVATE pvz_graphics pvz_audio m)
 
 # ---------------------------------------------------------------------------
 # Target 2: Setup Utility (setup_miyoo) & Setup Core Library
@@ -132,3 +162,10 @@ else()
     add_executable(test_arm "${TEST_ARM_STUB}")
     add_test(NAME test_arm COMMAND test_arm)
 endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_openmpt_playback.cpp")
+    add_executable(test_openmpt_playback "tests/test_openmpt_playback.cpp")
+    target_link_libraries(test_openmpt_playback PRIVATE pvz_audio m)
+    add_test(NAME test_openmpt_playback COMMAND test_openmpt_playback)
+endif()
+
