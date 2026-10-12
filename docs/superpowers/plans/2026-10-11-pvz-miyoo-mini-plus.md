@@ -107,17 +107,17 @@
 - Consumes: Raw `main.pak` placed on SD card.
 - Produces: `main_mmp.pak`, renames `main.pak` to `main.pak.bak`, touches `.installed`, and deletes itself (`setup_miyoo`) upon success.
 
-- [ ] **Step 1: Write test for single-file streaming PAK processor (`tests/test_setup_conversion.cpp`)**
+- [x] **Step 1: Write test for single-file streaming PAK processor (`tests/test_setup_conversion.cpp`)**
   Assert that conversion processes sequentially without buffering all files in memory simultaneously (peak memory $\le 10$ MB).
-- [ ] **Step 2: Implement framebuffer UI `src/setup/fb_progress.c`**
+- [x] **Step 2: Implement framebuffer UI `src/setup/fb_progress.c`**
   Open `/dev/fb0`, query `FBIOGET_VSCREENINFO`, render clean progress bar and status text ("Optimizando Plants vs. Zombies...") in 16-bit RGB565 / 32-bit XRGB8888.
-- [ ] **Step 3: Implement sequential image downscaler in `src/setup/setup_miyoo.c`**
+- [x] **Step 3: Implement sequential image downscaler in `src/setup/setup_miyoo.c`**
   Integrate `stb_image`, `stb_image_resize2`, and lightweight PAK streamer. Scale images to $80\%$, resample WAVs to 22.05 kHz mono, write atomic `main_mmp.pak.tmp`.
-- [ ] **Step 4: Implement transactional finalize and self-destruction**
+- [x] **Step 4: Implement transactional finalize and self-destruction**
   Rename `main_mmp.pak.tmp` $\to$ `main_mmp.pak`, rename `main.pak` $\to$ `main.pak.bak`, touch `.installed`, sync filesystem, and unlink `setup_miyoo`.
-- [ ] **Step 5: Verify setup tool builds for ARM and passes unit tests**
+- [x] **Step 5: Verify setup tool builds for ARM and passes unit tests**
   Compile via Docker toolchain and run test suite.
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
   `git commit -m "feat(setup): implement autonomous on-device installer with fb0 progress and self-cleanup"`
 
 ---
@@ -135,17 +135,17 @@
 - Consumes: SexyAppBase draw calls (quads, triangles, textured blits, Reanim transforms).
 - Produces: 640×480 framebuffer rendering via SDL2 Software Surface with DMA texture pool.
 
-- [ ] **Step 1: Write test for 0.8× coordinate matrix projection (`tests/test_viewport_scale.cpp`)**
+- [x] **Step 1: Write test for 0.8× coordinate matrix projection (`tests/test_viewport_scale.cpp`)**
   Test that an 800×600 quad coordinate $(x=400, y=300, w=100, h=100)$ maps exactly to $(320, 240, 80, 80)$ on the 640×480 surface.
-- [ ] **Step 2: Implement `src/graphics/SoftwareRenderer.cpp`**
+- [x] **Step 2: Implement `src/graphics/SoftwareRenderer.cpp`**
   Provide `SoftwareRenderer` implementing SexyApp Graphics interface using `SDL_Surface` blitting and direct pixel access. Bind pre-allocated 16 MB DMA pool (`SDL_MMIYOO_TEXTURE_POOL=1`).
-- [ ] **Step 3: Implement NEON-accelerated alpha blending (`src/graphics/NeonBlit.cpp`)**
+- [x] **Step 3: Implement NEON-accelerated alpha blending (`src/graphics/NeonBlit.cpp`)**
   Implement vector alpha blend: process 8 pixels per iteration using ARM NEON registers without crossing into VFP/integer banks.
-- [ ] **Step 4: Implement global viewport scaling in camera pipeline**
+- [x] **Step 4: Implement global viewport scaling in camera pipeline**
   Apply $0.8\times$ affine scale matrix to all vertex submissions; keep game logic, Reanim bone hierarchy, and TodParticleSystem coordinates at original 800×600.
-- [ ] **Step 5: Verify test passes**
+- [x] **Step 5: Verify test passes**
   Run: `build/tests/test_viewport_scale` -> PASS.
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
   `git commit -m "feat(gfx): implement SDL2 software rasterizer with NEON blit and 0.8x viewport projection"`
 
 ---

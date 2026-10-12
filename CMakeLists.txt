@@ -25,6 +25,23 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
+# Search for SDL headers in system/toolchain include paths
+find_path(SDL_INCLUDE_DIR NAMES SDL.h SDL2/SDL.h PATH_SUFFIXES SDL SDL2)
+if(SDL_INCLUDE_DIR)
+    include_directories(${SDL_INCLUDE_DIR})
+endif()
+
+# ---------------------------------------------------------------------------
+# Module: Graphics Subsystem (pvz_graphics)
+# ---------------------------------------------------------------------------
+set(GRAPHICS_SOURCES
+    "src/graphics/NeonBlit.cpp"
+    "src/graphics/SoftwareRenderer.cpp"
+)
+
+add_library(pvz_graphics STATIC ${GRAPHICS_SOURCES})
+target_link_libraries(pvz_graphics PUBLIC m)
+
 # ---------------------------------------------------------------------------
 # Target 1: Engine Core (PvZ)
 # ---------------------------------------------------------------------------
@@ -33,15 +50,25 @@ file(GLOB_RECURSE ENGINE_SOURCES
     "src/*.c"
 )
 list(FILTER ENGINE_SOURCES EXCLUDE REGEX "src/setup/.*")
+list(FILTER ENGINE_SOURCES EXCLUDE REGEX "src/graphics/.*")
 
-if(NOT ENGINE_SOURCES)
-    # Temporary scaffolding stub until engine modules are populated
+# Check if any source provides main() entry point
+set(HAS_ENGINE_MAIN FALSE)
+foreach(SRC ${ENGINE_SOURCES})
+    if(SRC MATCHES ".*main.*")
+        set(HAS_ENGINE_MAIN TRUE)
+    endif()
+endforeach()
+
+if(NOT HAS_ENGINE_MAIN)
+    # Temporary scaffolding stub until engine main module is created
     set(ENGINE_STUB "${CMAKE_CURRENT_BINARY_DIR}/stub_engine.cpp")
     file(WRITE "${ENGINE_STUB}" "int main(int argc, char* argv[]) { (void)argc; (void)argv; return 0; }\n")
-    set(ENGINE_SOURCES "${ENGINE_STUB}")
+    list(APPEND ENGINE_SOURCES "${ENGINE_STUB}")
 endif()
 
 add_executable(PvZ ${ENGINE_SOURCES})
+target_link_libraries(PvZ PRIVATE pvz_graphics m)
 
 # ---------------------------------------------------------------------------
 # Target 2: Setup Utility (setup_miyoo) & Setup Core Library
@@ -80,9 +107,15 @@ else()
 endif()
 
 # ---------------------------------------------------------------------------
-# Target 3: Test Suite (test_setup_conversion and test_arm)
+# Target 3: Test Suite (test_viewport_scale, test_setup_conversion, test_arm)
 # ---------------------------------------------------------------------------
 enable_testing()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_viewport_scale.cpp")
+    add_executable(test_viewport_scale "tests/test_viewport_scale.cpp")
+    target_link_libraries(test_viewport_scale PRIVATE pvz_graphics m)
+    add_test(NAME test_viewport_scale COMMAND test_viewport_scale)
+endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_setup_conversion.cpp")
     add_executable(test_setup_conversion "tests/test_setup_conversion.cpp")
