@@ -1,0 +1,37 @@
+#!/bin/sh
+GameName="Plants vs. Zombies"
+GameDir="Plants vs. Zombies"
+GameExecutable="launch.sh"
+GameDataFile="main_mmp.pak"
+KillAudioserver=1
+PerformanceMode=0
+Arguments=""
+
+unset LD_PRELOAD
+PORTDIR="$(dirname "$0")"
+
+# Dynamic game directory lookup
+if [ -d "$PORTDIR/Games/Plants vs. Zombies" ]; then
+    GAMEDIR="$PORTDIR/Games/Plants vs. Zombies"
+elif [ -d "$PORTDIR/../../Games/Plants vs. Zombies" ]; then
+    GAMEDIR="$PORTDIR/../../Games/Plants vs. Zombies"
+elif [ -d "$PORTDIR/../Games/Plants vs. Zombies" ]; then
+    GAMEDIR="$PORTDIR/../Games/Plants vs. Zombies"
+elif [ -d "/mnt/SDCARD/Roms/PORTS/Games/Plants vs. Zombies" ]; then
+    GAMEDIR="/mnt/SDCARD/Roms/PORTS/Games/Plants vs. Zombies"
+else
+    GAMEDIR="/mnt/SDCARD/Roms/PORTS/Games/Plants vs. Zombies"
+fi
+
+if [ -f "/mnt/SDCARD/Emu/PORTS/launch_standalone.sh" ]; then
+    /mnt/SDCARD/Emu/PORTS/launch_standalone.sh "$GameName" "$GameDir" "$GameExecutable" "$Arguments" "$GameDataFile" "$KillAudioserver" "$PerformanceMode"
+else
+    cd "$GAMEDIR"
+    if [ -f "./launch.sh" ]; then
+        ./launch.sh
+    elif [ -f "./launcher.sh" ]; then
+        ./launcher.sh
+    else
+        ./PvZ
+    fi
+fi

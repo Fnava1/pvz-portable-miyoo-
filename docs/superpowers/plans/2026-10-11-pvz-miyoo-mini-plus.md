@@ -49,17 +49,17 @@
 - Consumes: `aemiii91/miyoomini-toolchain:latest` Docker image.
 - Produces: Working cross-compilation pipeline emitting ARMv7 hard-float ELFs with `-mcpu=cortex-a7 -mfpu=neon-vfpv4 -O3`.
 
-- [ ] **Step 1: Create `.gitignore` adhering to distribution anti-virus rules**
+- [x] **Step 1: Create `.gitignore` adhering to distribution anti-virus rules**
   Write `.gitignore` containing `/build/`, `/dist/`, `*.exe`, `*.pak`, `*.dat`, `*.o`, `*.a`, `*.so*`, and explicit tracking exception for shell scripts and CMake.
-- [ ] **Step 2: Create CMake toolchain file `cmake/miyoomini.toolchain.cmake`**
+- [x] **Step 2: Create CMake toolchain file `cmake/miyoomini.toolchain.cmake`**
   Set `CMAKE_SYSTEM_NAME Linux`, `CMAKE_SYSTEM_PROCESSOR arm`, compiler `arm-linux-gnueabihf-gcc`/`g++`, with flags `-mcpu=cortex-a7 -mtune=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard -O3 -fomit-frame-pointer -ffast-math`.
-- [ ] **Step 3: Create top-level `CMakeLists.txt` scaffolding**
+- [x] **Step 3: Create top-level `CMakeLists.txt` scaffolding**
   Define project `PvZ_Miyoo` (C++20, C11). Add target for engine core, setup utility, and test suite. Provide option `ENABLE_GLES=OFF`.
-- [ ] **Step 4: Create Docker build runner `scripts/docker_build.sh`**
+- [x] **Step 4: Create Docker build runner `scripts/docker_build.sh`**
   Script mounts workspace into `/root/workspace` in `aemiii91/miyoomini-toolchain` and invokes `cmake -B build -DCMAKE_TOOLCHAIN_FILE=cmake/miyoomini.toolchain.cmake && cmake --build build`.
-- [ ] **Step 5: Verify cross-compilation of dummy ARM target**
+- [x] **Step 5: Verify cross-compilation of dummy ARM target**
   Run dummy test build through Docker; verify generated ELF with `file build/test_arm` reports `ELF 32-bit LSB executable, ARM, EABI5 version 1 (SYSV), dynamically linked`.
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
   `git commit -m "chore: setup Miyoo Mini Plus CMake toolchain and Docker build harness"`
 
 ---
@@ -77,19 +77,19 @@
 - Consumes: PC Steam GOTY directory containing `main.pak` and `properties/`.
 - Produces: Optimized `main_mmp.pak` with 80% downscaled textures (bilinear/lanczos), 22.05 kHz mono audio, and staging tree in `Roms/PORTS/...`.
 
-- [ ] **Step 1: Write test for PopCap PAK container unpack/pack (`tests/test_pak_lib.py`)**
+- [x] **Step 1: Write test for PopCap PAK container unpack/pack (`tests/test_pak_lib.py`)**
   Test byte-exact roundtrip packing and unpacking with PopCap XOR 0xF7 record encryption.
-- [ ] **Step 2: Implement `tools/pak_lib.py`**
+- [x] **Step 2: Implement `tools/pak_lib.py`**
   Implement PopCap PAK parser and writer supporting single-pass streaming, XOR 0xF7 record decryption, and linear seek offsets.
-- [ ] **Step 3: Implement `tools/optimize_assets.py`**
+- [x] **Step 3: Implement `tools/optimize_assets.py`**
   Implement asset transformation: downscale all PNG/JPEG textures by $0.8\times$ (preserving aspect and alpha channels); convert WAV SFX to 22,050 Hz mono 16-bit PCM; pack output directly into `main_mmp.pak`.
-- [ ] **Step 4: Implement `tools/build_release.py` with safe staging**
+- [x] **Step 4: Implement `tools/build_release.py` with safe staging**
   Staging in `tempfile.mkdtemp()`, non-destructive `copy_tree_merge()`, POSIX permission normalization (`0755` for scripts/binaries), and creation of `.installed` marker.
-- [ ] **Step 5: Implement `Launcher.py` Tkinter UI**
+- [x] **Step 5: Implement `Launcher.py` Tkinter UI**
   Zero-dependency Python GUI with Steam installation auto-discovery, progress bar, and "Export to SD Card" button.
-- [ ] **Step 6: Verify PAK optimization test passes**
+- [x] **Step 6: Verify PAK optimization test passes**
   Run: `python -m pytest tests/test_pak_lib.py -v` -> PASS.
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
   `git commit -m "feat(tools): add PC release builder, Tkinter launcher, and PAK optimizer"`
 
 ---
