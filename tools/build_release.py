@@ -221,7 +221,7 @@ def build_package(
                         "    /customer/app/audioserver &\n"
                         "}\n"
                         "trap cleanup EXIT INT TERM HUP\n"
-                        "if [ -f \"./.installed\" ] || [ -f \"./main_mmp.pak\" ]; then\n"
+                        "if [ -f \"./main_mmp.pak\" ]; then\n"
                         "    [ -f \"./setup_miyoo\" ] && rm -f ./setup_miyoo\n"
                         "fi\n"
                         "/mnt/SDCARD/.tmp_update/bin/cpuclock 1700 2>/dev/null\n"
