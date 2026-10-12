@@ -59,10 +59,12 @@ public:
 #ifdef LOW_MEMORY
 	FILE*						mFileHandle;
 	std::mutex					mFileMutex;
+	bool						mEncryptedPayload;
 
-	explicit PakCollection(FILE* theFileHandle) : mFileHandle(theFileHandle) {}
+	explicit PakCollection(FILE* theFileHandle, bool theEncryptedPayload = true)
+		: mFileHandle(theFileHandle), mEncryptedPayload(theEncryptedPayload) {}
 
-	~PakCollection() { fclose(mFileHandle); }
+	~PakCollection() { if (mFileHandle) fclose(mFileHandle); }
 
 	size_t ReadAt(void* thePtr, int theOffset, int theSize)
 	{
@@ -70,16 +72,21 @@ public:
 		if (fseek(mFileHandle, theOffset, SEEK_SET) != 0)
 			return 0;
 		size_t aRead = fread(thePtr, 1, theSize, mFileHandle);
-		for (auto& aByte : std::span{static_cast<uint8_t*>(thePtr), aRead})
-			aByte ^= 0xF7;
+		if (mEncryptedPayload)
+		{
+			for (auto& aByte : std::span{static_cast<uint8_t*>(thePtr), aRead})
+				aByte ^= 0xF7;
+		}
 		return aRead;
 	}
 #else
 	void*						mDataPtr;				//+0x8: raw bytes of the whole pak
+	bool						mEncryptedPayload;
 
-	explicit PakCollection(size_t size) { mDataPtr = malloc(size); }
+	explicit PakCollection(size_t size, bool theEncryptedPayload = true)
+		: mDataPtr(malloc(size)), mEncryptedPayload(theEncryptedPayload) {}
 
-	~PakCollection() { free(mDataPtr); }
+	~PakCollection() { if (mDataPtr) free(mDataPtr); }
 #endif
 };
 

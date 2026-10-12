@@ -45,7 +45,7 @@ trap cleanup EXIT INT TERM HUP
 # ------------------------------------------------------------------------------
 # Autonomous On-Device Asset Detection & Converter Self-Cleanup
 # ------------------------------------------------------------------------------
-if [ -f "./main_mmp.pak" ] || [ -f "./.installed" ]; then
+if [ -f "./main_mmp.pak" ]; then
     # PC conversion complete or asset package present:
     # Remove setup_miyoo if present to save storage space on microSD card
     if [ -f "./setup_miyoo" ]; then
@@ -89,6 +89,8 @@ killall -9 audioserver 2>/dev/null
 # ------------------------------------------------------------------------------
 # Execute Game Binary
 # ------------------------------------------------------------------------------
+echo "Files in game directory:"
+ls -la .
 echo "Checking executable ./PvZ:"
 ls -la ./PvZ
 chmod +x ./PvZ 2>/dev/null

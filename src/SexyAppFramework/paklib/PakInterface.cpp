@@ -28,6 +28,8 @@
 #include "PakInterface.h"
 #include "fcaseopen/fcaseopen.h"
 
+using Sexy::LogInfoLn;
+
 typedef unsigned char uchar;
 typedef unsigned short ushort;
 typedef unsigned long ulong;
@@ -86,104 +88,111 @@ bool PakInterface::AddPakFile(const std::string& theFileName)
 {
 	FILE *aFileHandle = fcaseopen(theFileName.c_str(), "rb");
 	if (!aFileHandle)
+	{
+		const std::string& aResourceBase = Sexy::GetResourceFolder();
+		if (!aResourceBase.empty() && !Sexy::IsPathRooted(theFileName))
+		{
+			aFileHandle = fcaseopenat(aResourceBase.c_str(), theFileName.c_str(), "rb");
+		}
+	}
+
+	if (!aFileHandle)
+	{
+		LogInfoLn("PakInterface: AddPakFile('{}') failed to open file (errno={})", theFileName, errno);
 		return false;
+	}
 
 	fseek(aFileHandle, 0, SEEK_END);
 	size_t aFileSize = ftell(aFileHandle);
 	fseek(aFileHandle, 0, SEEK_SET);
 
-#ifdef LOW_MEMORY
-	mPakCollectionList.emplace_back(aFileHandle);
-#else
-	mPakCollectionList.emplace_back(aFileSize);
-#endif
-	PakCollection* aPakCollection = &mPakCollectionList.back();
+	if (aFileSize < 8)
+	{
+		LogInfoLn("PakInterface: AddPakFile('{}') file size too small ({} bytes)", theFileName, aFileSize);
+		fclose(aFileHandle);
+		return false;
+	}
 
-#ifndef LOW_MEMORY
-	if (fread(aPakCollection->mDataPtr, 1, aFileSize, aFileHandle) != aFileSize)
+	uint32_t aRawMagic = 0;
+	if (fread(&aRawMagic, sizeof(uint32_t), 1, aFileHandle) != 1)
 	{
 		fclose(aFileHandle);
 		return false;
 	}
-	fclose(aFileHandle);
+	aRawMagic = Sexy::FromLE32(aRawMagic);
 
-	auto *aDataPtr = static_cast<uint8_t *>(aPakCollection->mDataPtr);
-	for (size_t i = 0; i < aFileSize; i++)
-		*aDataPtr++ ^= 0xF7;
-#endif
-
-	std::string aPakKey = NormalizePakPath(theFileName);
-	auto aEmplaceResult = mPakRecordMap.emplace(aPakKey, PakRecord());
-	PakRecord* aPakRecord = &aEmplaceResult.first->second;
-	aPakRecord->mCollection = aPakCollection;
-	aPakRecord->mFileName = aPakKey;
-	aPakRecord->mStartPos = 0;
-	aPakRecord->mSize = aFileSize;
-
-	PFILE* aFP = FOpen(theFileName.c_str(), "rb");
-	if (aFP == nullptr)
+	bool aEncryptedHeader = false;
+	if (aRawMagic == 0x4D37BD37) // Standard PopCap XOR 0xF7 (0xBAC04AC0 ^ 0xF7F7F7F7)
 	{
-#ifdef LOW_MEMORY
-		if (aEmplaceResult.second)
-		{
-			mPakRecordMap.erase(aPakKey);
-			mPakCollectionList.pop_back();
-		}
-#endif
+		aEncryptedHeader = true;
+	}
+	else if (aRawMagic == 0xBAC04AC0) // Unencrypted header
+	{
+		aEncryptedHeader = false;
+	}
+	else
+	{
+		LogInfoLn("PakInterface: AddPakFile('{}') invalid magic 0x{:08X}", theFileName, aRawMagic);
+		fclose(aFileHandle);
 		return false;
 	}
 
-	uint32_t aMagic = 0;
-	FRead(&aMagic, sizeof(uint32_t), 1, aFP);
-	aMagic = Sexy::FromLE32(aMagic);
-	if (aMagic != 0xBAC04AC0)
+	uint32_t aRawVersion = 0;
+	if (fread(&aRawVersion, sizeof(uint32_t), 1, aFileHandle) != 1)
 	{
-		FClose(aFP);
-#ifdef LOW_MEMORY
-		if (aEmplaceResult.second)
-		{
-			mPakRecordMap.erase(aPakKey);
-			mPakCollectionList.pop_back();
-		}
-#endif
+		fclose(aFileHandle);
+		return false;
+	}
+	aRawVersion = Sexy::FromLE32(aRawVersion);
+	if (aEncryptedHeader)
+		aRawVersion ^= 0xF7F7F7F7;
+
+	if (aRawVersion > 0)
+	{
+		LogInfoLn("PakInterface: AddPakFile('{}') unsupported version {}", theFileName, aRawVersion);
+		fclose(aFileHandle);
 		return false;
 	}
 
-	uint32_t aVersion = 0;
-	FRead(&aVersion, sizeof(uint32_t), 1, aFP);
-	aVersion = Sexy::FromLE32(aVersion);
-	if (aVersion > 0)
-	{
-		FClose(aFP);
-#ifdef LOW_MEMORY
-		if (aEmplaceResult.second)
+	auto ReadHeaderBytes = [aFileHandle, aEncryptedHeader](void* theDest, size_t theCount) -> bool {
+		if (fread(theDest, 1, theCount, aFileHandle) != theCount)
+			return false;
+		if (aEncryptedHeader)
 		{
-			mPakRecordMap.erase(aPakKey);
-			mPakCollectionList.pop_back();
+			auto* aPtr = static_cast<uint8_t*>(theDest);
+			for (size_t i = 0; i < theCount; ++i)
+				aPtr[i] ^= 0xF7;
 		}
-#endif
-		return false;
-	}
+		return true;
+	};
 
+	std::vector<PakRecord> aParsedRecords;
 	int aPos = 0;
 	for (;;)
 	{
 		uchar aFlags = 0;
-		int aCount = FRead(&aFlags, 1, 1, aFP);
-		if ((aFlags & FILEFLAGS_END) || (aCount == 0))
+		if (!ReadHeaderBytes(&aFlags, 1))
+			break;
+		if ((aFlags & FILEFLAGS_END) || (aFlags == 0x80))
 			break;
 
 		uchar aNameWidth = 0;
+		if (!ReadHeaderBytes(&aNameWidth, 1))
+			break;
+
 		char aName[256];
-		FRead(&aNameWidth, 1, 1, aFP);
-		FRead(aName, 1, aNameWidth, aFP);
+		if (!ReadHeaderBytes(aName, aNameWidth))
+			break;
 		aName[aNameWidth] = 0;
 
 		int aSrcSize = 0;
-		FRead(&aSrcSize, sizeof(int), 1, aFP);
+		if (!ReadHeaderBytes(&aSrcSize, sizeof(int)))
+			break;
 		aSrcSize = static_cast<int>(Sexy::FromLE32(static_cast<uint32_t>(aSrcSize)));
-		int64_t aFileTime;
-		FRead(&aFileTime, sizeof(int64_t), 1, aFP);
+
+		int64_t aFileTime = 0;
+		if (!ReadHeaderBytes(&aFileTime, sizeof(int64_t)))
+			break;
 		aFileTime = static_cast<int64_t>(Sexy::FromLE64(static_cast<uint64_t>(aFileTime)));
 
 		for (int i = 0; i < aNameWidth; i++)
@@ -193,26 +202,99 @@ bool PakInterface::AddPakFile(const std::string& theFileName)
 		}
 
 		std::string aKey = NormalizePakPath(aName);
-		auto aRecordItr = mPakRecordMap.emplace(aKey, PakRecord()).first;
-		PakRecord* aPakRecord = &aRecordItr->second;
-		aPakRecord->mCollection = aPakCollection;
-		aPakRecord->mFileName = aKey;
-		aPakRecord->mStartPos = aPos;
-		aPakRecord->mSize = aSrcSize;
-		aPakRecord->mFileTime = aFileTime;
+		PakRecord aRecord;
+		aRecord.mCollection = nullptr;
+		aRecord.mFileName = aKey;
+		aRecord.mStartPos = aPos;
+		aRecord.mSize = aSrcSize;
+		aRecord.mFileTime = aFileTime;
+		aParsedRecords.push_back(std::move(aRecord));
 
 		aPos += aSrcSize;
 	}
 
-	int anOffset = FTell(aFP);
+	long aDataStartOffset = ftell(aFileHandle);
 
-	for (auto& [key, record] : mPakRecordMap)
+	for (auto& rec : aParsedRecords)
 	{
-		if (record.mCollection == aPakCollection)
-			record.mStartPos += anOffset;
+		rec.mStartPos += aDataStartOffset;
 	}
 
-	FClose(aFP);
+	// Detect payload encryption
+	bool aEncryptedPayload = true;
+	if (aEncryptedHeader)
+	{
+		aEncryptedPayload = true;
+	}
+	else
+	{
+		// Probe records to check if payload is XOR 0xF7 or plain
+		for (const auto& rec : aParsedRecords)
+		{
+			if (rec.mSize >= 4)
+			{
+				if (fseek(aFileHandle, rec.mStartPos, SEEK_SET) == 0)
+				{
+					uint8_t aProbe[4] = {0};
+					if (fread(aProbe, 1, 4, aFileHandle) == 4)
+					{
+						if (rec.mFileName.find("XML") != std::string::npos ||
+							rec.mFileName.find("TXT") != std::string::npos)
+						{
+							// Plain XML starts with "<?" (0x3C, 0x3F); XOR 0xF7 starts with (0xCB, 0xC8)
+							if (aProbe[0] == 0x3C && aProbe[1] == 0x3F)
+								aEncryptedPayload = false;
+							else if (aProbe[0] == 0xCB && aProbe[1] == 0xC8)
+								aEncryptedPayload = true;
+							break;
+						}
+						else if (rec.mFileName.find(".PNG") != std::string::npos)
+						{
+							// Plain PNG starts with \x89P (0x89, 0x50); XOR 0xF7 starts with (0x7E, 0xA7)
+							if (aProbe[0] == 0x89 && aProbe[1] == 0x50)
+								aEncryptedPayload = false;
+							else if (aProbe[0] == 0x7E && aProbe[1] == 0xA7)
+								aEncryptedPayload = true;
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
+
+#ifdef LOW_MEMORY
+	mPakCollectionList.emplace_back(aFileHandle, aEncryptedPayload);
+	PakCollection* aPakCollection = &mPakCollectionList.back();
+#else
+	mPakCollectionList.emplace_back(aFileSize, aEncryptedPayload);
+	PakCollection* aPakCollection = &mPakCollectionList.back();
+	fseek(aFileHandle, 0, SEEK_SET);
+	if (fread(aPakCollection->mDataPtr, 1, aFileSize, aFileHandle) != aFileSize)
+	{
+		fclose(aFileHandle);
+		mPakCollectionList.pop_back();
+		return false;
+	}
+	fclose(aFileHandle);
+
+	if (aEncryptedPayload)
+	{
+		auto *aDataPtr = static_cast<uint8_t *>(aPakCollection->mDataPtr);
+		for (size_t i = 0; i < aFileSize; i++)
+			*aDataPtr++ ^= 0xF7;
+	}
+#endif
+
+	for (auto& rec : aParsedRecords)
+	{
+		rec.mCollection = aPakCollection;
+		mPakRecordMap[rec.mFileName] = std::move(rec);
+	}
+
+	LogInfoLn("PakInterface: Mounted '{}' with {} files (data offset {}, enc_header={}, enc_payload={})",
+		theFileName, aParsedRecords.size(), aDataStartOffset, aEncryptedHeader, aEncryptedPayload);
+
 	return true;
 }
 
