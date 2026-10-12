@@ -186,19 +186,19 @@
 - Consumes: SDL2 Controller / Keyboard events (`SDLK_UP`, `SDLK_DOWN`, `SDLK_HOME`, buttons).
 - Produces: Hybrid interaction events (9×5 grid navigation, hover sun auto-collect, L/R packet selection, direct shop list navigation, contextual smooth cursor).
 
-- [ ] **Step 1: Write unit test for hybrid navigation modes (`tests/test_input_mapping.cpp`)**
+- [x] **Step 1: Write unit test for hybrid navigation modes (`tests/test_input_mapping.cpp`)**
   Assert grid coordinates increment discretely in lawn mode $(0..8, 0..4)$; assert hovering cursor over sun object fires `CollectSun()`; assert `SDLK_HOME` and `SDLK_RALT` trigger `KEYCODE_ESCAPE`.
-- [ ] **Step 2: Implement 9×5 Grid Snapping and Hover Sun Auto-Collect**
+- [x] **Step 2: Implement 9×5 Grid Snapping and Hover Sun Auto-Collect**
   In garden battle state: D-pad jumps directly between cell centers. Check collision bounds between current cursor position and active falling suns/coins; trigger collection immediately on overlap.
-- [ ] **Step 3: Implement Seed Packet Cycle and Action Buttons**
+- [x] **Step 3: Implement Seed Packet Cycle and Action Buttons**
   L/R triggers shift active packet index `(mSelectedSeed ± 1) % mNumSeeds`. Button A plants/confirms; Button B drops selection; Button X toggles shovel tool.
-- [ ] **Step 4: Implement Shop and Contextual Smooth Cursor Modes**
+- [x] **Step 4: Implement Shop and Contextual Smooth Cursor Modes**
   In Dave's shop: translate D-pad into direct list selection. In Zen Garden, Zombatar, and free-aim minigames (*Whack-a-Zombie*): switch to floating virtual cursor with acceleration curve.
-- [ ] **Step 5: Map physical Menu key**
+- [x] **Step 5: Map physical Menu key**
   Translate `SDLK_HOME` (scancode 102) and `SDLK_RALT` (scancode 100) to PopCap `KEYCODE_ESCAPE`.
-- [ ] **Step 6: Verify input tests pass**
+- [x] **Step 6: Verify input tests pass**
   Run: `build/tests/test_input_mapping` -> PASS.
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
   `git commit -m "feat(input): implement hybrid grid-snapping, sun hover-collect, and contextual cursor"`
 
 ---

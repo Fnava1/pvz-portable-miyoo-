@@ -72,6 +72,16 @@ if(NOT WIN32)
 endif()
 
 # ---------------------------------------------------------------------------
+# Module: Input Subsystem (pvz_input)
+# ---------------------------------------------------------------------------
+set(INPUT_SOURCES
+    "src/input/HandheldInput.cpp"
+)
+
+add_library(pvz_input STATIC ${INPUT_SOURCES})
+target_link_libraries(pvz_input PUBLIC m)
+
+# ---------------------------------------------------------------------------
 # Target 1: Engine Core (PvZ)
 # ---------------------------------------------------------------------------
 file(GLOB_RECURSE ENGINE_SOURCES
@@ -81,6 +91,7 @@ file(GLOB_RECURSE ENGINE_SOURCES
 list(FILTER ENGINE_SOURCES EXCLUDE REGEX "src/setup/.*")
 list(FILTER ENGINE_SOURCES EXCLUDE REGEX "src/graphics/.*")
 list(FILTER ENGINE_SOURCES EXCLUDE REGEX "src/audio/.*")
+list(FILTER ENGINE_SOURCES EXCLUDE REGEX "src/input/.*")
 
 # Check if any source provides main() entry point
 set(HAS_ENGINE_MAIN FALSE)
@@ -98,7 +109,7 @@ if(NOT HAS_ENGINE_MAIN)
 endif()
 
 add_executable(PvZ ${ENGINE_SOURCES})
-target_link_libraries(PvZ PRIVATE pvz_graphics pvz_audio m)
+target_link_libraries(PvZ PRIVATE pvz_graphics pvz_audio pvz_input m)
 
 # ---------------------------------------------------------------------------
 # Target 2: Setup Utility (setup_miyoo) & Setup Core Library
@@ -167,5 +178,11 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_openmpt_playback.cpp")
     add_executable(test_openmpt_playback "tests/test_openmpt_playback.cpp")
     target_link_libraries(test_openmpt_playback PRIVATE pvz_audio m)
     add_test(NAME test_openmpt_playback COMMAND test_openmpt_playback)
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_input_mapping.cpp")
+    add_executable(test_input_mapping "tests/test_input_mapping.cpp")
+    target_link_libraries(test_input_mapping PRIVATE pvz_input m)
+    add_test(NAME test_input_mapping COMMAND test_input_mapping)
 endif()
 
