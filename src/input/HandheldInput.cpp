@@ -19,6 +19,8 @@ void HandheldInput::SetMode(InputMode mode) {
     mHoldDown = false;
     mHoldDurationX = 0.0f;
     mHoldDurationY = 0.0f;
+    mLastDirX = 0;
+    mLastDirY = 0;
     mVelocityX = 0.0f;
     mVelocityY = 0.0f;
 
@@ -128,7 +130,7 @@ HandheldButton HandheldInput::MapSDLKeyToHandheldButton(int sdlKey, int scancode
         return HandheldButton::Select;
     }
 
-    return HandheldButton::A;
+    return HandheldButton::Unknown;
 }
 
 bool HandheldInput::HandleSDLEvent(const SDL_Event& event) {
@@ -187,15 +189,23 @@ void HandheldInput::OnKeyDown(int sdlKey, int scancode) {
     }
 
     HandheldButton button = MapSDLKeyToHandheldButton(sdlKey, scancode);
-    OnButtonDown(button);
+    if (button != HandheldButton::Unknown) {
+        OnButtonDown(button);
+    }
 }
 
 void HandheldInput::OnKeyUp(int sdlKey, int scancode) {
     HandheldButton button = MapSDLKeyToHandheldButton(sdlKey, scancode);
-    OnButtonUp(button);
+    if (button != HandheldButton::Unknown) {
+        OnButtonUp(button);
+    }
 }
 
 void HandheldInput::OnButtonDown(HandheldButton button) {
+    if (button == HandheldButton::Unknown) {
+        return;
+    }
+
     if (button == HandheldButton::Menu) {
         mLastPopCapKey = Sexy::KeyCode::KEYCODE_ESCAPE;
         if (mMode == InputMode::Shop) {
@@ -301,6 +311,9 @@ void HandheldInput::OnButtonDown(HandheldButton button) {
 }
 
 void HandheldInput::OnButtonUp(HandheldButton button) {
+    if (button == HandheldButton::Unknown) {
+        return;
+    }
     if (mMode == InputMode::FreeCursor) {
         switch (button) {
             case HandheldButton::Right: mHoldRight = false; break;
@@ -317,10 +330,17 @@ void HandheldInput::Update(float deltaTimeSeconds) {
         return;
     }
 
-    if (mMode == InputMode::FreeCursor) {
+    if (mMode == InputMode::LawnBattle) {
+        // Real-time hover auto-collection in LawnBattle mode for falling/moving suns and coins
+        CheckHoverAutoCollect();
+    } else if (mMode == InputMode::FreeCursor) {
         // X-axis velocity and acceleration
         int dirX = (mHoldRight ? 1 : 0) - (mHoldLeft ? 1 : 0);
         if (dirX != 0) {
+            if (dirX != mLastDirX) {
+                mHoldDurationX = 0.0f;
+                mLastDirX = dirX;
+            }
             mHoldDurationX += deltaTimeSeconds;
             float speed = mCursorConfig.baseVelocity + mCursorConfig.acceleration * mHoldDurationX;
             if (speed > mCursorConfig.maxVelocity) {
@@ -328,6 +348,7 @@ void HandheldInput::Update(float deltaTimeSeconds) {
             }
             mVelocityX = static_cast<float>(dirX) * speed;
         } else {
+            mLastDirX = 0;
             mHoldDurationX = 0.0f;
             if (mVelocityX > 0.0f) {
                 mVelocityX = std::max(0.0f, mVelocityX - mCursorConfig.friction * deltaTimeSeconds);
@@ -339,6 +360,10 @@ void HandheldInput::Update(float deltaTimeSeconds) {
         // Y-axis velocity and acceleration
         int dirY = (mHoldDown ? 1 : 0) - (mHoldUp ? 1 : 0);
         if (dirY != 0) {
+            if (dirY != mLastDirY) {
+                mHoldDurationY = 0.0f;
+                mLastDirY = dirY;
+            }
             mHoldDurationY += deltaTimeSeconds;
             float speed = mCursorConfig.baseVelocity + mCursorConfig.acceleration * mHoldDurationY;
             if (speed > mCursorConfig.maxVelocity) {
@@ -346,6 +371,7 @@ void HandheldInput::Update(float deltaTimeSeconds) {
             }
             mVelocityY = static_cast<float>(dirY) * speed;
         } else {
+            mLastDirY = 0;
             mHoldDurationY = 0.0f;
             if (mVelocityY > 0.0f) {
                 mVelocityY = std::max(0.0f, mVelocityY - mCursorConfig.friction * deltaTimeSeconds);
@@ -392,6 +418,16 @@ void HandheldInput::SetCursorPosition(float x, float y) {
 
 void HandheldInput::AddCollectible(const CollectibleItem& item) {
     mCollectibles.push_back(item);
+}
+
+void HandheldInput::UpdateCollectiblePosition(int id, float x, float y) {
+    for (auto& item : mCollectibles) {
+        if (item.id == id) {
+            item.x = x;
+            item.y = y;
+            break;
+        }
+    }
 }
 
 void HandheldInput::ClearCollectibles() {

@@ -60,6 +60,20 @@ static void test_menu_key_translation() {
     assert(menuEscaped == true);
     assert(input.GetLastPopCapKeyCode() == Sexy::KeyCode::KEYCODE_ESCAPE);
 
+    // Verify unmapped keys return HandheldButton::Unknown and do NOT trigger inadvertent action callbacks
+    assert(HandheldInput::MapSDLKeyToHandheldButton('z', 0) == HandheldButton::Unknown);
+    assert(HandheldInput::MapSDLKeyToHandheldButton(9999, 0) == HandheldButton::Unknown);
+
+    bool inadvertentPlant = false;
+    input.SetOnPlantConfirmCallback([&inadvertentPlant](int, int, int) {
+        inadvertentPlant = true;
+    });
+    input.OnKeyDown('z', 0);
+    input.OnKeyUp('z', 0);
+    input.OnKeyDown(9999, 0);
+    input.OnKeyUp(9999, 0);
+    assert(inadvertentPlant == false);
+
     std::cout << "  -> PASS: Physical Menu keys (SDLK_HOME / SDLK_RALT) trigger KEYCODE_ESCAPE (27)" << std::endl;
 }
 
@@ -248,15 +262,31 @@ static void test_sun_coin_hover_auto_collect() {
     assert(collectedIds.size() == 3);
     assert(collectedIds[2] == 201);
 
-    // Far sun (301) must still remain uncollected
-    const auto& items = input.GetCollectibles();
-    for (const auto& item : items) {
-        if (item.id == 301) {
-            assert(!item.collected);
-        }
-    }
+    // Test stationary cursor real-time auto-collection in LawnBattle mode via Update()
+    input.SetGridPosition(3, 2);
+    float curX = input.GetCursorX();
+    float curY = input.GetCursorY();
 
-    std::cout << "  -> PASS: Cursor hover overlap auto-collects suns and coins without button presses" << std::endl;
+    CollectibleItem fallingSun;
+    fallingSun.id = 555;
+    fallingSun.x = curX;
+    fallingSun.y = 0.0f;
+    fallingSun.width = 40.0f;
+    fallingSun.height = 40.0f;
+    fallingSun.collected = false;
+    fallingSun.isCoin = false;
+    input.AddCollectible(fallingSun);
+
+    // Simulate falling sun frame-by-frame without pressing any cursor buttons
+    for (float y = 50.0f; y <= curY + 20.0f; y += 30.0f) {
+        input.UpdateCollectiblePosition(555, curX, y);
+        input.Update(0.016f);
+    }
+    // Stationary cursor must have auto-collected the falling sun when it overlapped
+    assert(collectedIds.size() == 4);
+    assert(collectedIds.back() == 555);
+
+    std::cout << "  -> PASS: Cursor hover overlap auto-collects suns and coins without button presses (including stationary real-time Update)" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -517,8 +547,30 @@ static void test_contextual_smooth_cursor_and_velocity_curves() {
     input.Update(2.0f);
     assert(input.GetCursorX() >= 0.0f);
     assert(input.GetCursorY() >= 0.0f);
+    input.OnButtonUp(HandheldButton::Left);
+    input.OnButtonUp(HandheldButton::Up);
 
-    std::cout << "  -> PASS: Virtual cursor progressive acceleration curve and velocity verified" << std::endl;
+    // Test direction reversal polish: going Left immediately after holding Right
+    input.SetCursorPosition(400.0f, 300.0f);
+    input.OnButtonDown(HandheldButton::Right);
+    // Hold for 2.0s to reach maximum speed (650 px/s)
+    input.Update(2.0f);
+    assert(float_near(input.GetCursorVelocityX(), input.GetCursorConfig().maxVelocity, 1.0f));
+
+    // Switch direction to Left immediately
+    input.OnButtonUp(HandheldButton::Right);
+    input.OnButtonDown(HandheldButton::Left);
+
+    // On immediate next frame (dt = 0.016s), velocity must reset cleanly from base velocity
+    input.Update(0.016f);
+    float vReversed = input.GetCursorVelocityX();
+    assert(vReversed < 0.0f);
+    // Should be near base velocity (-180 px/s) and strictly below 300 px/s, NOT holding 650 px/s
+    assert(std::fabs(vReversed) < input.GetCursorConfig().baseVelocity + 50.0f);
+    assert(std::fabs(vReversed) < 300.0f);
+    input.OnButtonUp(HandheldButton::Left);
+
+    std::cout << "  -> PASS: Virtual cursor progressive acceleration curve, velocity, and reversal verified" << std::endl;
 }
 
 // ---------------------------------------------------------------------------

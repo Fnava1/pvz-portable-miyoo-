@@ -61,6 +61,7 @@ constexpr InputMode InputMode_Zombiquarium  = InputMode::FreeCursor;
  * Physical handheld console buttons.
  */
 enum class HandheldButton {
+    Unknown = 0,
     Up,
     Down,
     Left,
@@ -180,6 +181,7 @@ public:
 
     // --- Sun / Coin Hover Auto-Collection ---
     void AddCollectible(const CollectibleItem& item);
+    void UpdateCollectiblePosition(int id, float x, float y);
     void ClearCollectibles();
     const std::vector<CollectibleItem>& GetCollectibles() const { return mCollectibles; }
     bool CollectSun(int id);
@@ -232,6 +234,8 @@ private:
     float mVelocityY = 0.0f;
     float mHoldDurationX = 0.0f;
     float mHoldDurationY = 0.0f;
+    int mLastDirX = 0;
+    int mLastDirY = 0;
     bool mHoldLeft = false;
     bool mHoldRight = false;
     bool mHoldUp = false;
