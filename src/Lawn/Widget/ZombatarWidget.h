@@ -1,0 +1,158 @@
+/*
+ * Copyright (C) 2026 Zhou Qiankang <wszqkzqk@qq.com>
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ *
+ * This file is part of PvZ-Portable.
+ *
+ * PvZ-Portable is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * PvZ-Portable is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with PvZ-Portable. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+#ifndef __ZOMBATARWIDGET_H__
+#define __ZOMBATARWIDGET_H__
+
+#include "widget/Widget.h"
+#include "widget/ButtonListener.h"
+#include "../System/Zombatar.h"
+#include <memory>
+
+class GameSelector;
+class LawnApp;
+class PlayerInfo;
+class NewLawnButton;
+class Zombie;
+
+using namespace Sexy;
+
+enum ZombatarWidgetState
+{
+	ZOMBATAR_STATE_LIST,
+	ZOMBATAR_STATE_CREATE,
+	ZOMBATAR_STATE_CONFIRM,
+	ZOMBATAR_STATE_TO_CONFIRM,		// slide-in transition from CREATE to CONFIRM
+	ZOMBATAR_STATE_FROM_CONFIRM		// slide-out transition from CONFIRM back to CREATE
+};
+
+class ZombatarWidget : public Widget, public ButtonListener
+{
+public:
+	enum
+	{
+		ZOMBATAR_BTN_BACK = 300,
+		ZOMBATAR_BTN_VIEW,
+		ZOMBATAR_BTN_FINISHED,
+		ZOMBATAR_BTN_NEW,
+		ZOMBATAR_BTN_CONFIRM_BACK,
+		ZOMBATAR_BTN_PREV_PORTRAIT,
+		ZOMBATAR_BTN_NEXT_PORTRAIT,
+		ZOMBATAR_BTN_PREV_PAGE,
+		ZOMBATAR_BTN_NEXT_PAGE
+	};
+
+public:
+	GameSelector*				mGameSelector;
+	LawnApp*					mApp;
+	ZombatarWidgetState			mState;
+	ZombatarPage				mPage;
+	int							mCurrentIndex;
+	int							mSubPage;
+	int							mMaxSubPages;
+	int							mMouseX;
+	int							mMouseY;
+	int							mHoverGridCell;
+	int							mHoverColorCell;
+	int							mHoverTab;
+	bool						mDeleteHover;
+	int							mTransitionTimer;
+	int							mPart[NUM_ZOMBATAR_PAGES];
+	int							mColor[NUM_ZOMBATAR_PAGES];
+
+	std::unique_ptr<NewLawnButton>	mBackButton;
+	std::unique_ptr<NewLawnButton>	mViewButton;
+	std::unique_ptr<NewLawnButton>	mFinishedButton;
+	std::unique_ptr<NewLawnButton>	mNewButton;
+	std::unique_ptr<NewLawnButton>	mConfirmBackButton;
+	std::unique_ptr<NewLawnButton>	mPrevPortraitButton;
+	std::unique_ptr<NewLawnButton>	mNextPortraitButton;
+	std::unique_ptr<NewLawnButton>	mPrevPageButton;
+	std::unique_ptr<NewLawnButton>	mNextPageButton;
+
+	std::unique_ptr<Zombie>			mPreviewZombie;
+
+public:
+	ZombatarWidget(GameSelector* theGameSelector);
+	~ZombatarWidget() override;
+
+	void						Open();
+	void						ResetDraft();
+	void						LoadCurrentToDraft();
+	bool						SaveDraft();
+	void						DeleteCurrent();
+	bool						CanSaveNewHead() const;
+	int							GetHeadCount() const;
+	void						ClampCurrentIndex();
+	void						ChangeState(ZombatarWidgetState theState);
+	void						ChangePage(ZombatarPage thePage);
+
+	void						Draw(Graphics* g) override;
+	void						Update() override;
+	void						AddedToManager(WidgetManager* theWidgetManager) override;
+	void						RemovedFromManager(WidgetManager* theWidgetManager) override;
+	void						MouseMove(int x, int y) override;
+	void						MouseUp(int x, int y) override;
+	void						KeyDown(KeyCode theKey) override;
+
+	void						ButtonPress(int theId) override;
+	void						ButtonDepress(int theId) override;
+	void						ButtonDownTick(int) override {}
+	void						ButtonMouseEnter(int) override {}
+	void						ButtonMouseLeave(int) override {}
+	void						ButtonMouseMove(int, int, int) override {}
+
+private:
+	void						DrawMainBackground(Graphics* g);
+	void						DrawList(Graphics* g);
+	void						DrawCreate(Graphics* g);
+	void						DrawConfirm(Graphics* g);
+	void						DrawTransition(Graphics* g);
+	void						DrawAvatar(Graphics* g, int theX, int theY, const unsigned char* theRecord);
+	void						DrawDraftAvatar(Graphics* g, int theX, int theY);
+	void						DrawColorSwatches(Graphics* g, int thePaletteBase, int theCount, int theSavedColor);
+	void						CreatePreviewZombie();
+	void						DestroyPreviewZombie();
+	void						DrawAvatarBox(Graphics* g);
+	void						DrawImageColorized(Graphics* g, Image* theImage, int theX, int theY, int theColorIndex);
+	Rect						GetCategoryRect(int theIndex) const;
+	Rect						GetItemRect(int theIndex) const;
+	Rect						GetItemHitRect(int theIndex) const;
+	Rect						GetColorRect(int theIndex) const;
+	int							GetTotalItemsForPage(ZombatarPage thePage) const;
+	int							GetSubPageItemCount() const;
+	bool						PageAllowsNone() const;
+	bool						PageAllowsColors() const;
+	Image*						GetCategoryImage(ZombatarPage thePage, bool theSelected, bool theOver) const;
+	Image*						GetPartImage(ZombatarPage thePage, int theIndex) const;
+	Image*						GetPartMaskImage(ZombatarPage thePage, int theIndex) const;
+	Image*						GetBackgroundImage(int theIndex) const;
+	void						DrawPartImage(Graphics* g, ZombatarPage thePage, int theIndex, int theX, int theY, int theColorIndex);
+	void						DecodeRecord(const unsigned char* theRecord, int* thePart, int* theColor) const;
+	void						EncodeRecord(unsigned char* theRecord) const;
+	void						BackToSelector();
+	void						ShowMaxHeadsMessage();
+	void						HandleGridClick(int theX, int theY);
+	void						HandleColorClick(int theX, int theY);
+	void						UpdateButtonState();
+};
+
+#endif

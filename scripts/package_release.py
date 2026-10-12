@@ -281,7 +281,14 @@ def stage_release(
         with open(setup_dst, "w", newline="\n") as f:
             f.write("#!/bin/sh\necho 'setup_miyoo test placeholder'\n")
 
-    # 5. Directory placeholders & BYOD instructions
+    # 5. Shared Libraries (libSDL2 and libneonarmmiyoo)
+    sdl2_lib_dir = os.path.join(REPO_ROOT, "3rdparty", "SDL2", "lib")
+    if os.path.isdir(sdl2_lib_dir):
+        for lib_file in os.listdir(sdl2_lib_dir):
+            if lib_file.endswith(".so") or ".so." in lib_file:
+                shutil.copy2(os.path.join(sdl2_lib_dir, lib_file), os.path.join(staging_libs, lib_file))
+
+    # 6. Directory placeholders & BYOD instructions
     for d, tag in [(staging_libs, "Shared libraries"), (staging_userdata, "Save data"), (staging_properties, "Game properties")]:
         keep = os.path.join(d, ".gitkeep")
         if not os.path.isfile(keep):

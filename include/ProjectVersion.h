@@ -1,0 +1,5 @@
+#pragma once
+#define PVZP_VERSION "1.0.0"
+#define PVZP_VERSION_PLAIN "1.0.0"
+#define PVZP_BUILD_NUMBER 100
+#define PVZP_COMMIT_DATE "2026-10-12"

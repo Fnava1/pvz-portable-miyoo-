@@ -1,0 +1,105 @@
+/*
+ * Copyright (C) 2026 Zhou Qiankang <wszqkzqk@qq.com>
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ *
+ * This file is part of PvZ-Portable.
+ *
+ * PvZ-Portable is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * PvZ-Portable is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with PvZ-Portable. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+#ifndef __CHALLENGESCREEN_H__
+#define __CHALLENGESCREEN_H__
+
+#include "../../ConstEnums.h"
+#include "widget/Dialog.h"
+#include <array>
+#include <memory>
+using namespace Sexy;
+
+constexpr const int NUM_CHALLENGE_MODES = static_cast<int>(GameMode::NUM_GAME_MODES) - 1;
+
+class LawnApp;
+class ToolTipWidget;
+class NewLawnButton;
+class ChallengeScreen : public Widget, public ButtonListener
+{
+private:
+	enum
+	{
+		ChallengeScreen_Back = 100,
+		ChallengeScreen_Mode = 200,
+		ChallengeScreen_Page = 300
+	};
+
+public:
+	std::unique_ptr<NewLawnButton>                                 mBackButton;
+	std::array<std::unique_ptr<ButtonWidget>, MAX_CHALLANGE_PAGES> mPageButton;
+	std::array<std::unique_ptr<ButtonWidget>, NUM_CHALLENGE_MODES> mChallengeButtons;
+	LawnApp*                    mApp;
+	std::unique_ptr<ToolTipWidget>                                 mToolTip;
+	ChallengePage               mPageIndex;
+	bool                        mCheatEnableChallenges;
+	UnlockingState              mUnlockState;
+	int                         mUnlockStateCounter;
+	int                         mUnlockChallengeIndex;
+	float                       mLockShakeX;
+	float                       mLockShakeY;
+	bool                        mLimboPageUnlocked;
+	int                         mClickCount;
+	uint                        mLastClickUpdateCnt;
+
+public:
+	ChallengeScreen(LawnApp* theApp, ChallengePage thePage);
+	~ChallengeScreen() override;
+	void                        SetUnlockChallengeIndex(ChallengePage thePage, bool theIsIZombie = false);
+	int                         MoreTrophiesNeeded(int theChallengeIndex);
+	bool             ShowPageButtons();
+	void                        UpdateButtons();
+	int                         AccomplishmentsNeeded(int theChallengeIndex);
+	void                        DrawButton(Graphics* g, int theChallengeIndex);
+	void                        Draw(Graphics* g) override;
+	void                        Update() override;
+	void                        AddedToManager(WidgetManager* theWidgetManager) override;
+	void                        RemovedFromManager(WidgetManager* theWidgetManager) override;
+	void                        ButtonPress(int theId) override;
+	void                        ButtonDownTick(int) override {}
+	void                        ButtonMouseEnter(int) override {}
+	void                        ButtonMouseLeave(int) override {}
+	void                        ButtonMouseMove(int, int, int) override {}
+	void                        ButtonDepress(int theId) override;
+	void                        KeyDown(KeyCode theKey) override;
+	void                        UpdateToolTip();
+	void                        MouseDown(int x, int y, int theClickCount) override;
+//  virtual void                KeyChar(char theChar);
+
+	bool             IsScaryPotterLevel(GameMode theGameMode);
+	bool             IsIZombieLevel(GameMode theGameMode);
+};
+
+class ChallengeDefinition
+{
+public:
+	GameMode                    mChallengeMode;
+	int                         mChallengeIconIndex;
+	ChallengePage               mPage;
+	int                         mRow;
+	int                         mCol;
+	const char*             mChallengeName;
+};
+extern const ChallengeDefinition gChallengeDefs[NUM_CHALLENGE_MODES];
+
+const ChallengeDefinition& GetChallengeDefinition(int theChallengeMode);
+
+#endif

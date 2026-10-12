@@ -1,45 +1,128 @@
 cmake_minimum_required(VERSION 3.13)
 project(PvZ_Miyoo LANGUAGES C CXX)
 
-# Language standards: C++20 for engine, C11 for setup and low-level routines
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "9.0")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++2a")
+endif()
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "10.0")
+    add_compile_definitions(constinit=)
+endif()
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-# GLES Option: strictly OFF by default on Miyoo Mini Plus (SSD202D software blitter)
-option(ENABLE_GLES "Enable OpenGLES support (disabled for Miyoo software rasterizer)" OFF)
-
-if(ENABLE_GLES)
-    add_compile_definitions(PVZ_ENABLE_GLES=1)
-    message(STATUS "Renderer: OpenGL ES enabled")
-else()
-    add_compile_definitions(PVZ_ENABLE_GLES=0)
-    message(STATUS "Renderer: 100% Software Rasterizer (Miyoo Mini Plus native mode)")
-endif()
+add_compile_definitions(PVZ_ENABLE_GLES=0)
 
 if(NOT WIN32)
     add_compile_definitions(_POSIX_C_SOURCE=200809L _GNU_SOURCE)
 endif()
 
-# Global include directories
-
+# Global includes
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/SexyAppFramework
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/SexyAppFramework/sound/SDL-Mixer-X/include
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/SDL2/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/SDL2/include/SDL2
+    ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/jpeg
 )
 
-# Search for SDL headers in system/toolchain include paths
-find_path(SDL_INCLUDE_DIR NAMES SDL.h SDL2/SDL.h PATH_SUFFIXES SDL SDL2)
-if(SDL_INCLUDE_DIR)
-    include_directories(${SDL_INCLUDE_DIR})
+# ---------------------------------------------------------------------------
+# Vendored SDL2 imported target
+# ---------------------------------------------------------------------------
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/SDL2/lib/libSDL2.so")
+    add_library(SDL2_Vendored SHARED IMPORTED GLOBAL)
+    set_target_properties(SDL2_Vendored PROPERTIES
+        IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/SDL2/lib/libSDL2.so"
+        INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/SDL2/include/SDL2"
+    )
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/SDL2/lib/libneonarmmiyoo.so")
+        set_target_properties(SDL2_Vendored PROPERTIES
+            INTERFACE_LINK_LIBRARIES "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/SDL2/lib/libneonarmmiyoo.so"
+        )
+    endif()
+    if(NOT TARGET SDL2::SDL2)
+        add_library(SDL2::SDL2 ALIAS SDL2_Vendored)
+    endif()
+    set(SDL2_LIB "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/SDL2/lib/libSDL2.so")
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/SDL2/lib/libneonarmmiyoo.so")
+        list(APPEND SDL2_LIB "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/SDL2/lib/libneonarmmiyoo.so")
+    endif()
+    set(SDL2_FOUND TRUE)
 endif()
 
-find_path(SDL_MIXER_INCLUDE_DIR NAMES SDL_mixer.h PATH_SUFFIXES SDL SDL2 SDL_mixer)
-if(SDL_MIXER_INCLUDE_DIR)
-    include_directories(${SDL_MIXER_INCLUDE_DIR})
-endif()
+# ---------------------------------------------------------------------------
+# Module: JPEG library (pvz_jpeg)
+# ---------------------------------------------------------------------------
+set(JPEG_SOURCES
+    3rdparty/jpeg/jcapimin.c 
+    3rdparty/jpeg/jcapistd.c
+    3rdparty/jpeg/jccoefct.c 
+    3rdparty/jpeg/jccolor.c 
+    3rdparty/jpeg/jcdctmgr.c 
+    3rdparty/jpeg/jchuff.c
+    3rdparty/jpeg/jcinit.c 
+    3rdparty/jpeg/jcmainct.c 
+    3rdparty/jpeg/jcmarker.c 
+    3rdparty/jpeg/jcmaster.c 
+    3rdparty/jpeg/jcomapi.c 
+    3rdparty/jpeg/jcparam.c
+    3rdparty/jpeg/jcphuff.c 
+    3rdparty/jpeg/jcprepct.c 
+    3rdparty/jpeg/jcsample.c
+    3rdparty/jpeg/jctrans.c 
+    3rdparty/jpeg/jdapimin.c 
+    3rdparty/jpeg/jdapistd.c
+    3rdparty/jpeg/jdatadst.c 
+    3rdparty/jpeg/jdatasrc.c 
+    3rdparty/jpeg/jdcoefct.c 
+    3rdparty/jpeg/jdcolor.c 
+    3rdparty/jpeg/jddctmgr.c 
+    3rdparty/jpeg/jdhuff.c
+    3rdparty/jpeg/jdinput.c 
+    3rdparty/jpeg/jdmainct.c 
+    3rdparty/jpeg/jdmarker.c 
+    3rdparty/jpeg/jdmaster.c 
+    3rdparty/jpeg/jdmerge.c 
+    3rdparty/jpeg/jdphuff.c
+    3rdparty/jpeg/jdpostct.c 
+    3rdparty/jpeg/jdsample.c 
+    3rdparty/jpeg/jdtrans.c 
+    3rdparty/jpeg/jerror.c 
+    3rdparty/jpeg/jfdctflt.c 
+    3rdparty/jpeg/jfdctfst.c
+    3rdparty/jpeg/jfdctint.c 
+    3rdparty/jpeg/jidctflt.c 
+    3rdparty/jpeg/jidctfst.c 
+    3rdparty/jpeg/jidctint.c 
+    3rdparty/jpeg/jidctred.c 
+    3rdparty/jpeg/jquant1.c
+    3rdparty/jpeg/jquant2.c 
+    3rdparty/jpeg/jutils.c 
+    3rdparty/jpeg/jmemmgr.c
+    3rdparty/jpeg/jmemansi.c
+)
+add_library(pvz_jpeg STATIC ${JPEG_SOURCES})
+target_include_directories(pvz_jpeg PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/jpeg)
+
+# ---------------------------------------------------------------------------
+# Module: SDL-Mixer-X
+# ---------------------------------------------------------------------------
+set(SDL_MIXER_X_STATIC ON CACHE BOOL "Build static library of SDL Mixer X")
+set(SDL_MIXER_X_SHARED OFF CACHE BOOL "Build shared library of SDL Mixer X")
+set(USE_MIDI OFF CACHE BOOL "SDL Mixer X midi")
+set(USE_MODPLUG OFF CACHE BOOL "SDL Mixer X modplug")
+set(USE_XMP OFF CACHE BOOL "SDL Mixer X xmp")
+set(USE_OPUS OFF CACHE BOOL "SDL Mixer X opus")
+set(USE_DRFLAC OFF CACHE BOOL "SDL Mixer X flac")
+set(USE_PXTONE OFF CACHE BOOL "SDL Mixer X pxtone")
+set(USE_SYSTEM_SDL2 ON CACHE BOOL "Use system SDL2")
+add_subdirectory(src/SexyAppFramework/sound/SDL-Mixer-X EXCLUDE_FROM_ALL)
 
 # ---------------------------------------------------------------------------
 # Module: Graphics Subsystem (pvz_graphics)
@@ -48,7 +131,6 @@ set(GRAPHICS_SOURCES
     "src/graphics/NeonBlit.cpp"
     "src/graphics/SoftwareRenderer.cpp"
 )
-
 add_library(pvz_graphics STATIC ${GRAPHICS_SOURCES})
 target_link_libraries(pvz_graphics PUBLIC m)
 
@@ -58,20 +140,8 @@ target_link_libraries(pvz_graphics PUBLIC m)
 set(AUDIO_SOURCES
     "src/audio/OpenMptMusicInterface.cpp"
 )
-
 add_library(pvz_audio STATIC ${AUDIO_SOURCES})
-target_link_libraries(pvz_audio PUBLIC m)
-
-find_library(SDL_MIXER_LIB NAMES SDL_mixer SDL2_mixer)
-if(SDL_MIXER_LIB)
-    target_link_libraries(pvz_audio PUBLIC ${SDL_MIXER_LIB})
-endif()
-
-find_library(SDL_LIB NAMES SDL SDL2)
-if(SDL_LIB)
-    target_link_libraries(pvz_audio PUBLIC ${SDL_LIB})
-endif()
-
+target_link_libraries(pvz_audio PUBLIC m SDL2_mixer_ext_Static ${SDL2_LIB})
 if(NOT WIN32)
     target_link_libraries(pvz_audio PUBLIC dl)
 endif()
@@ -82,28 +152,51 @@ endif()
 set(INPUT_SOURCES
     "src/input/HandheldInput.cpp"
 )
-
 add_library(pvz_input STATIC ${INPUT_SOURCES})
 target_link_libraries(pvz_input PUBLIC m)
 
 # ---------------------------------------------------------------------------
 # Target 1: Engine Core (PvZ)
 # ---------------------------------------------------------------------------
+file(GLOB_RECURSE ENGINE_CPP_SOURCES CONFIGURE_DEPENDS
+    src/LawnApp.cpp
+    src/Resources.cpp
+    src/Lawn/*.cpp
+    src/PvzpLib/*.cpp
+    src/SexyAppFramework/*.cpp
+    src/SexyAppFramework/graphics/*.cpp
+    src/SexyAppFramework/imagelib/*.cpp
+    src/SexyAppFramework/misc/*.cpp
+    src/SexyAppFramework/paklib/*.cpp
+    src/SexyAppFramework/sound/*.cpp
+    src/SexyAppFramework/widget/*.cpp
+    src/SexyAppFramework/platform/default/Window.cpp
+    src/SexyAppFramework/platform/default/Input.cpp
+)
+list(FILTER ENGINE_CPP_SOURCES EXCLUDE REGEX "src/SexyAppFramework/platform/(switch|emscripten)/")
+list(FILTER ENGINE_CPP_SOURCES EXCLUDE REGEX "src/SexyAppFramework/sound/SDL-Mixer-X/")
+
 set(ENGINE_SOURCES
-    "src/main_miyoo.cpp"
+    ${ENGINE_CPP_SOURCES}
+    src/SexyAppFramework/fcaseopen/fcaseopen.c
+    src/main_miyoo.cpp
 )
 
 add_executable(PvZ ${ENGINE_SOURCES})
-target_link_libraries(PvZ PRIVATE pvz_graphics pvz_audio pvz_input m)
-if(SDL_LIB)
-    target_link_libraries(PvZ PRIVATE ${SDL_LIB})
-endif()
-if(SDL_MIXER_LIB)
-    target_link_libraries(PvZ PRIVATE ${SDL_MIXER_LIB})
-endif()
-if(NOT WIN32)
-    target_link_libraries(PvZ PRIVATE dl pthread)
-endif()
+target_link_libraries(PvZ PRIVATE
+    pvz_graphics
+    pvz_audio
+    pvz_input
+    pvz_jpeg
+    SDL2_mixer_ext_Static
+    ${SDL2_LIB}
+    png16
+    z
+    m
+    pthread
+    dl
+    stdc++fs
+)
 
 # ---------------------------------------------------------------------------
 # Target 2: Setup Utility (setup_miyoo) & Setup Core Library
@@ -114,7 +207,6 @@ set(SETUP_LIB_SOURCES
     "src/setup/stb_impl.c"
 )
 
-# Filter existing files
 set(VALID_SETUP_LIB_SOURCES "")
 foreach(SRC ${SETUP_LIB_SOURCES})
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${SRC}")
@@ -126,7 +218,6 @@ if(VALID_SETUP_LIB_SOURCES)
     add_library(setup_core STATIC ${VALID_SETUP_LIB_SOURCES})
     target_link_libraries(setup_core PUBLIC m)
 else()
-    # Stub library if implementation files not created yet
     set(SETUP_LIB_STUB "${CMAKE_CURRENT_BINARY_DIR}/stub_setup_lib.c")
     file(WRITE "${SETUP_LIB_STUB}" "/* stub */\n")
     add_library(setup_core STATIC "${SETUP_LIB_STUB}")
@@ -142,7 +233,7 @@ else()
 endif()
 
 # ---------------------------------------------------------------------------
-# Target 3: Test Suite (test_viewport_scale, test_setup_conversion, test_arm)
+# Target 3: Test Suite
 # ---------------------------------------------------------------------------
 enable_testing()
 
@@ -157,20 +248,17 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_setup_conversion.cpp")
     target_link_libraries(test_setup_conversion setup_core m)
     add_test(NAME test_setup_conversion COMMAND test_setup_conversion)
 
-    # test_arm target for Miyoo Mini ARM verification compatibility
     add_executable(test_arm "tests/test_setup_conversion.cpp")
     target_link_libraries(test_arm setup_core m)
-    add_test(NAME test_arm COMMAND test_arm)
-else()
-    set(TEST_ARM_STUB "${CMAKE_CURRENT_BINARY_DIR}/test_arm.c")
-    file(WRITE "${TEST_ARM_STUB}" "/* Miyoo Mini Plus ARM verification target */\nint main(void) { return 0; }\n")
-    add_executable(test_arm "${TEST_ARM_STUB}")
     add_test(NAME test_arm COMMAND test_arm)
 endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_openmpt_playback.cpp")
     add_executable(test_openmpt_playback "tests/test_openmpt_playback.cpp")
-    target_link_libraries(test_openmpt_playback PRIVATE pvz_audio m)
+    target_link_libraries(test_openmpt_playback PRIVATE pvz_audio SDL2_mixer_ext_Static ${SDL2_LIB} m)
+    if(NOT WIN32)
+        target_link_libraries(test_openmpt_playback PRIVATE dl pthread)
+    endif()
     add_test(NAME test_openmpt_playback COMMAND test_openmpt_playback)
 endif()
 
@@ -184,16 +272,11 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_main_teardown.cpp")
     add_executable(test_main_teardown "tests/test_main_teardown.cpp" "src/main_miyoo.cpp")
     target_compile_definitions(test_main_teardown PRIVATE PVZ_UNIT_TEST=1)
     target_link_libraries(test_main_teardown PRIVATE pvz_graphics pvz_audio pvz_input m)
-    if(SDL_LIB)
-        target_link_libraries(test_main_teardown PRIVATE ${SDL_LIB})
-    endif()
-    if(SDL_MIXER_LIB)
-        target_link_libraries(test_main_teardown PRIVATE ${SDL_MIXER_LIB})
+    if(SDL2_LIB)
+        target_link_libraries(test_main_teardown PRIVATE ${SDL2_LIB})
     endif()
     if(NOT WIN32)
         target_link_libraries(test_main_teardown PRIVATE dl pthread)
     endif()
     add_test(NAME test_main_teardown COMMAND test_main_teardown)
 endif()
-
-

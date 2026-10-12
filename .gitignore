@@ -9,6 +9,10 @@ Testing/
 *.exe
 *.pak
 *.dat
+*.mp3
+*.wav
+*.mo3
+src/SexyAppFramework/sound/SDL-Mixer-X/test/
 
 # Object files and compiled libraries
 *.o

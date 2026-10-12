@@ -1,0 +1,17 @@
+#pragma once
+#if __has_include(<format>) && (!defined(__GNUC__) || __GNUC__ >= 13)
+  #include <format>
+#else
+  #define FMT_HEADER_ONLY 1
+  #include "fmt/core.h"
+  #include "fmt/format.h"
+
+  namespace std {
+      using fmt::format;
+      using fmt::format_to;
+      using fmt::vformat;
+      using fmt::make_format_args;
+      template <typename... Args>
+      using format_string = fmt::format_string<Args...>;
+  }
+#endif

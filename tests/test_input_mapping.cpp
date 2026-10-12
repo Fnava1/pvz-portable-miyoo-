@@ -592,7 +592,7 @@ static void test_sdl_event_handling_integration() {
     std::memset(&ev, 0, sizeof(ev));
     ev.type = SDL_KEYDOWN;
     ev.key.keysym.sym = SDLK_HOME;
-    ev.key.keysym.scancode = 102;
+    ev.key.keysym.scancode = static_cast<SDL_Scancode>(102);
     input.HandleSDLEvent(ev);
     assert(menuTriggered == true);
     assert(input.GetLastPopCapKeyCode() == Sexy::KeyCode::KEYCODE_ESCAPE);
@@ -602,7 +602,7 @@ static void test_sdl_event_handling_integration() {
     std::memset(&ev, 0, sizeof(ev));
     ev.type = SDL_KEYDOWN;
     ev.key.keysym.sym = SDLK_RALT;
-    ev.key.keysym.scancode = 100;
+    ev.key.keysym.scancode = static_cast<SDL_Scancode>(100);
     input.HandleSDLEvent(ev);
     assert(menuTriggered == true);
     assert(input.GetLastPopCapKeyCode() == Sexy::KeyCode::KEYCODE_ESCAPE);

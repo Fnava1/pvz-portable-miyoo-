@@ -76,7 +76,7 @@ static void test_clean_unwinding() {
     std::memset(&event, 0, sizeof(event));
     event.type = SDL_KEYDOWN;
     event.key.keysym.sym = SDLK_HOME;
-    event.key.keysym.scancode = 102;
+    event.key.keysym.scancode = static_cast<SDL_Scancode>(102);
 
     input.HandleSDLEvent(event);
 

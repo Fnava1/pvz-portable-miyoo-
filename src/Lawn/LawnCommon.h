@@ -1,0 +1,78 @@
+/*
+ * Copyright (C) 2026 Zhou Qiankang <wszqkzqk@qq.com>
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ *
+ * This file is part of PvZ-Portable.
+ *
+ * PvZ-Portable is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * PvZ-Portable is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with PvZ-Portable. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+#ifndef __LAWN_COMMON_H__
+#define __LAWN_COMMON_H__
+
+#include "../ConstEnums.h"
+#include "graphics/Graphics.h"
+#include "widget/EditWidget.h"
+#include <memory>
+#include <time.h>
+
+using namespace Sexy;
+// using namespace std;
+
+class Board;
+class LawnStoneButton;
+class NewLawnButton;
+namespace Sexy
+{
+	class Dialog;
+	class Checkbox;
+	class DialogButton;
+	class CheckboxListener;
+}
+
+class LawnEditWidget : public EditWidget
+{
+public:
+	Dialog*					mDialog;
+	bool					mAutoCapFirstLetter;
+
+public:
+	LawnEditWidget(int theId, EditListener* theListener, Dialog* theDialog);
+	~LawnEditWidget() override;
+
+	void					KeyDown(KeyCode theKey) override;
+	void					KeyChar(char theChar) override;
+	void					KeyText(std::string_view theText) override;
+};
+
+// Logic checks
+bool				ModInRange(int theNumber, int theMod, int theRange = 0);
+bool				GridInRange(int x1, int y1, int x2, int y2, int theRangeX = 1, int theRangeY = 1);
+
+// Animation, effects and drawing
+void				TileImageHorizontally(Graphics* g, Image* theImage, int theX, int theY, int theWidth);
+void				TileImageVertically(Graphics* g, Image* theImage, int theX, int theY, int theHeight);
+
+// Widgets
+std::unique_ptr<Checkbox>	MakeNewCheckbox(int theId, CheckboxListener* theListener, bool theDefault);
+std::unique_ptr<LawnEditWidget>	CreateEditWidget(int theId, EditListener* theListener, Dialog* theDialog);
+void						DrawEditBox(Graphics* g, EditWidget* theWidget);
+
+// Miscellaneous
+std::string					GetSavedGameName(GameMode theGameMode, int theProfileId);
+std::string					GetLegacySavedGameName(GameMode theGameMode, int theProfileId);
+int							GetCurrentDaysSince2000(time_t theTime);
+
+#endif
