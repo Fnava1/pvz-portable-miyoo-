@@ -240,13 +240,13 @@
 - Consumes: Complete project repository and cross-compiled binaries.
 - Produces: Distributable release ZIP `PvZ_MiyooMiniPlus_v1.0.0.zip` ready for SD card drag-and-drop.
 
-- [ ] **Step 1: Execute full Docker cross-compilation**
+- [x] **Step 1: Execute full Docker cross-compilation**
   Run: `bash scripts/docker_build.sh` -> Produces `build/PvZ` and `build/setup_miyoo`.
-- [ ] **Step 2: Assemble release tree structure**
+- [x] **Step 2: Assemble release tree structure**
   Run: `python scripts/package_release.py` -> Populates `dist/Roms/PORTS/...`.
-- [ ] **Step 3: Run memory profiling simulation**
+- [x] **Step 3: Run memory profiling simulation**
   Verify with memory logger that steady-state level execution allocates $\le 78$ MB heap/resident memory.
-- [ ] **Step 4: Update README.md with installation guide**
+- [x] **Step 4: Update README.md with installation guide**
   Document Steam PC automated setup (`Launcher.py`) and autonomous console setup.
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
   `git commit -m "release: finalize end-to-end packaging and documentation for Miyoo Mini Plus"`
