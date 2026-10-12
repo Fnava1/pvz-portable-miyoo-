@@ -16,6 +16,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 add_compile_definitions(PVZ_ENABLE_GLES=0)
+add_compile_definitions(LOW_MEMORY=1)
 
 if(NOT WIN32)
     add_compile_definitions(_POSIX_C_SOURCE=200809L _GNU_SOURCE)

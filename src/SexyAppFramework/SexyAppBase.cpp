@@ -3391,7 +3391,9 @@ void SexyAppBase::Init()
 		SetResourceFolder(mResourceDir);
 	}
 
-	gPakInterface->AddPakFile(GetResourcePath("main.pak"));
+	bool aLoadedMmp = gPakInterface->AddPakFile(GetResourcePath("main_mmp.pak")) || gPakInterface->AddPakFile("main_mmp.pak");
+	bool aLoadedMain = gPakInterface->AddPakFile(GetResourcePath("main.pak")) || gPakInterface->AddPakFile("main.pak");
+	LogInfoLn("Pak loading status: main_mmp.pak = {}, main.pak = {}", aLoadedMmp, aLoadedMain);
 
 	// Set up demo recording stuff
 	if (mPlayingDemoBuffer) // must load before any demo-synced ops
