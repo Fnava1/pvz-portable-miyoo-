@@ -13,31 +13,25 @@
 				for (int x = 0; x < theSrcRect.mWidth; x++)
 				{
 					uint32_t src = NEXT_SRC_COLOR;
-					uint32_t dest = *aDestPixels;
+					uint32_t a = src >> 24;
 
-					int a = src >> 24;
-
-					if (a != 0)
+					if (a == 0)
 					{
-						int aDestAlpha = dest >> 24;
-						int aNewDestAlpha = aDestAlpha + ((255 - aDestAlpha) * a) / 255;
-						a = 255 * a / aNewDestAlpha;
-
-						int oma = 256 - a;
-
-						// TODO: To avoid rounding problems for fully opaque pixels use (a+1) instead of a in the code below since we are dividing by 256
-						*(aDestPixels++) = (aNewDestAlpha << 24) |
-#ifdef OPTIMIZE_SOFTWARE_DRAWING
-							((((dest & 0xFF00FF) * oma >> 8) + ((src & 0xFF00FF) * a >> 8)) & 0xFF00FF) |
-							((((dest & 0x00FF00) * oma >> 8) + ((src & 0x00FF00) * a >> 8)) & 0x00FF00);
-#else
-							((((dest & 0x0000FF) * oma) >> 8) + (((src & 0x0000FF) * a) >> 8) & 0x0000FF) |
-							((((dest & 0x00FF00) * oma) >> 8) + (((src & 0x00FF00) * a) >> 8) & 0x00FF00) |
-							((((dest & 0xFF0000) * oma) >> 8) + (((src & 0xFF0000) * a) >> 8) & 0xFF0000);
-#endif
+						aDestPixels++;
+					}
+					else if (a == 255)
+					{
+						*(aDestPixels++) = src;
 					}
 					else
-						aDestPixels++;
+					{
+						uint32_t dest = *aDestPixels;
+						int oma = 256 - a;
+
+						*(aDestPixels++) = 0xFF000000 |
+							((((dest & 0xFF00FF) * oma >> 8) + ((src & 0xFF00FF) * a >> 8)) & 0xFF00FF) |
+							((((dest & 0x00FF00) * oma >> 8) + ((src & 0x00FF00) * a >> 8)) & 0x00FF00);
+					}
 				}
 
 				aDestPixelsRow += mWidth;
@@ -65,25 +59,21 @@
 					for (int x = 0; x < theSrcRect.mWidth; x++)
 					{
 						uint32_t src = NEXT_SRC_COLOR;
-						uint32_t dest = *aDestPixels;
+						uint32_t a = ((src >> 24) * ca) / 255;
 
-						int a = ((src >> 24) * ca) / 255;
-
-						if (a != 0)
+						if (a == 0)
 						{
-							int aDestAlpha = dest >> 24;
-							int aNewDestAlpha = aDestAlpha + ((255 - aDestAlpha) * a) / 255;
-
-							a = 255 * a / aNewDestAlpha;
-
+							aDestPixels++;
+						}
+						else
+						{
+							uint32_t dest = *aDestPixels;
 							int oma = 256 - a;
 
-							*(aDestPixels++) = (aNewDestAlpha << 24) |
+							*(aDestPixels++) = 0xFF000000 |
 								((((dest & 0xFF00FF) * oma >> 8) + ((((src & 0xFF00FF) * cr >> 8) & 0xFF00FF) * a >> 8)) & 0xFF00FF) |
 								((((dest & 0x00FF00) * oma >> 8) + ((src & 0x00FF00) * cr * a >> 16)) & 0x00FF00);
 						}
-						else
-							aDestPixels++;
 					}
 
 					aDestPixelsRow += mWidth;
@@ -102,26 +92,22 @@
 					for (int x = 0; x < theSrcRect.mWidth; x++)
 					{
 						uint32_t src = NEXT_SRC_COLOR;
-						uint32_t dest = *aDestPixels;
+						uint32_t a = ((src >> 24) * ca) / 255;
 
-						int a = ((src >> 24) * ca) / 255;
-
-						if (a != 0)
+						if (a == 0)
 						{
-							int aDestAlpha = dest >> 24;
-							int aNewDestAlpha = aDestAlpha + ((255 - aDestAlpha) * a) / 255;
-
-							a = 255 * a / aNewDestAlpha;
-
+							aDestPixels++;
+						}
+						else
+						{
+							uint32_t dest = *aDestPixels;
 							int oma = 256 - a;
 
-							*(aDestPixels++) = (aNewDestAlpha << 24) |
+							*(aDestPixels++) = 0xFF000000 |
 								((((dest & 0x0000FF) * oma) >> 8) + (((src & 0x0000FF) * a * cb) >> 16) & 0x0000FF) |
 								((((dest & 0x00FF00) * oma) >> 8) + (((src & 0x00FF00) * a * cg) >> 16) & 0x00FF00) |
 								((((dest & 0xFF0000) * oma) >> 8) + (((((src & 0xFF0000) * a) >> 8) * cr) >> 8) & 0xFF0000);
 						}
-						else
-							aDestPixels++;
 					}
 
 					aDestPixelsRow += mWidth;

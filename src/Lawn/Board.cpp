@@ -2006,6 +2006,58 @@ void Board::RefreshSeedPacketFromCursor()
 	ClearCursor();
 }
 
+void Board::CycleSeedPacket(int theDelta)
+{
+	if (!mSeedBank || mSeedBank->mNumPackets <= 0 || mPaused || mApp->mGameScene != GameScenes::SCENE_PLAYING)
+		return;
+
+	int aCurrentIndex = -1;
+	if (mCursorObject->mCursorType == CursorType::CURSOR_TYPE_PLANT_FROM_BANK)
+	{
+		aCurrentIndex = mCursorObject->mSeedBankIndex;
+		RefreshSeedPacketFromCursor();
+	}
+	else if (mCursorObject->mCursorType != CursorType::CURSOR_TYPE_NORMAL)
+	{
+		RefreshSeedPacketFromCursor();
+	}
+
+	int aIndex = aCurrentIndex;
+	for (int i = 0; i < mSeedBank->mNumPackets; ++i)
+	{
+		if (theDelta > 0)
+			aIndex = (aIndex + 1) % mSeedBank->mNumPackets;
+		else
+			aIndex = (aIndex - 1 + mSeedBank->mNumPackets) % mSeedBank->mNumPackets;
+
+		SeedPacket& aPacket = mSeedBank->mSeedPackets[aIndex];
+		if (aPacket.mPacketType != SeedType::SEED_NONE && aPacket.CanPickUp())
+		{
+			aPacket.MouseDown(0, 0, 1);
+			break;
+		}
+	}
+}
+
+void Board::ToggleShovel()
+{
+	if (!mShowShovel || mPaused || mApp->mGameScene != GameScenes::SCENE_PLAYING)
+		return;
+
+	if (mCursorObject->mCursorType == CursorType::CURSOR_TYPE_SHOVEL)
+	{
+		ClearCursor();
+	}
+	else
+	{
+		if (mCursorObject->mCursorType != CursorType::CURSOR_TYPE_NORMAL)
+			RefreshSeedPacketFromCursor();
+
+		mCursorObject->mCursorType = CursorType::CURSOR_TYPE_SHOVEL;
+		mApp->PlayFoley(FoleyType::FOLEY_SHOVEL);
+	}
+}
+
 bool Board::IsPoolSquare(int theGridX, int theGridY)
 {
 	if (theGridX >= 0 && theGridY >= 0)
@@ -5717,6 +5769,32 @@ void Board::Update()
 		return;
 	}
 
+#if !PVZ_ENABLE_GLES
+	// Handheld hover auto-collection: collect suns and coins when cursor hovers near them
+	if (mApp->mGameScene == GameScenes::SCENE_PLAYING)
+	{
+		int curX = (int)SexyAppBase::sVirtualCursorX;
+		int curY = (int)SexyAppBase::sVirtualCursorY;
+		for (Coin* aCoin : mCoins)
+		{
+			if (aCoin->mDead || aCoin->mIsBeingCollected)
+				continue;
+			if (aCoin->IsSun() || aCoin->IsMoney())
+			{
+				float cx = aCoin->mPosX + aCoin->mWidth * 0.5f;
+				float cy = aCoin->mPosY + aCoin->mHeight * 0.5f;
+				float dx = (float)curX - cx;
+				float dy = (float)curY - cy;
+				if ((dx * dx + dy * dy) <= (55.0f * 55.0f))
+				{
+					aCoin->PlayCollectSound();
+					aCoin->Collect();
+				}
+			}
+		}
+	}
+#endif
+
 	bool aDisabled = !CanInteractWithBoardButtons() || mIgnoreMouseUp;
 	if (!mMenuButton->mBtnNoDraw)
 	{
@@ -7645,7 +7723,7 @@ void Board::KeyDown(KeyCode theKey)
 		{
 			mApp->mZenGarden->AdvanceCrazyDaveDialog();
 		}
-		else if (theKey == KeyCode::KEYCODE_SPACE && mApp->CanPauseNow())
+		else if ((theKey == KeyCode::KEYCODE_SPACE || theKey == KeyCode::KEYCODE_RETURN) && mApp->CanPauseNow())
 		{
 			mApp->PlaySample(Sexy::SOUND_PAUSE);
 			mApp->DoPauseDialog();

@@ -1515,6 +1515,11 @@ void GLInterface::Flush()
 			"................"
 		};
 
+		SDL_Point blackPoints[288];
+		SDL_Point whitePoints[288];
+		int numBlack = 0;
+		int numWhite = 0;
+
 		for (int r = 0; r < 18; ++r)
 		{
 			for (int c = 0; c < 16; ++c)
@@ -1522,15 +1527,28 @@ void GLInterface::Flush()
 				char ch = sCursorShape[r][c];
 				if (ch == '#')
 				{
-					SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
-					SDL_RenderDrawPoint(ren, cx + c, cy + r);
+					blackPoints[numBlack].x = cx + c;
+					blackPoints[numBlack].y = cy + r;
+					numBlack++;
 				}
 				else if (ch == '*')
 				{
-					SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
-					SDL_RenderDrawPoint(ren, cx + c, cy + r);
+					whitePoints[numWhite].x = cx + c;
+					whitePoints[numWhite].y = cy + r;
+					numWhite++;
 				}
 			}
+		}
+
+		if (numBlack > 0)
+		{
+			SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
+			SDL_RenderDrawPoints(ren, blackPoints, numBlack);
+		}
+		if (numWhite > 0)
+		{
+			SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
+			SDL_RenderDrawPoints(ren, whitePoints, numWhite);
 		}
 
 		SDL_RenderPresent(ren);

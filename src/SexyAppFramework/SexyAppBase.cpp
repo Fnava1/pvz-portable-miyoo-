@@ -2484,6 +2484,13 @@ void SexyAppBase::ResetCustomCursorCache()
 
 void SexyAppBase::EnforceCursor()
 {
+#if !PVZ_ENABLE_GLES
+	// On software framebuffer (Miyoo Mini), virtual cursor is drawn directly to screen.
+	// Hardware/OS SDL cursors are unsupported and SDL_CreateSystemCursor spams stderr.
+	SDL_ShowCursor(SDL_DISABLE);
+	return;
+#endif
+
 	int aCursorNum = mSEHOccured ? CURSOR_POINTER : mCursorNum;
 	if (aCursorNum < 0 || aCursorNum >= NUM_CURSORS)
 		aCursorNum = CURSOR_POINTER;

@@ -31,6 +31,10 @@
 #include "graphics/GLImage.h"
 #include "widget/WidgetManager.h"
 #include "misc/KeyCodes.h"
+#if !PVZ_ENABLE_GLES
+#include "LawnApp.h"
+#include "Lawn/Board.h"
+#endif
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -774,16 +778,46 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 					break;
 				}
 
-				if (event.key.keysym.sym == SDLK_SPACE || event.key.keysym.sym == SDLK_RETURN ||
-					event.key.keysym.sym == 'c' || event.key.keysym.sym == 'C')
+				if (event.key.keysym.sym == SDLK_SPACE || event.key.keysym.sym == 'c' || event.key.keysym.sym == 'C')
 				{
+					// Button A: Left Click (Primary Action) ONLY. Do NOT fall through to KeyDown(KEYCODE_SPACE) which paused the game!
 					mWidgetManager->MouseMove((int)sVirtualCursorX, (int)sVirtualCursorY);
 					mWidgetManager->MouseDown((int)sVirtualCursorX, (int)sVirtualCursorY, 1);
+					break;
 				}
 				else if (event.key.keysym.sym == SDLK_LALT || event.key.keysym.sym == 'x' || event.key.keysym.sym == 'X')
 				{
+					// Button B: Right Click (Cancel / Drop / Deselect)
 					mWidgetManager->MouseMove((int)sVirtualCursorX, (int)sVirtualCursorY);
 					mWidgetManager->MouseDown((int)sVirtualCursorX, (int)sVirtualCursorY, -1);
+					break;
+				}
+				else if (event.key.keysym.sym == SDLK_LSHIFT || event.key.keysym.sym == 'y' || event.key.keysym.sym == 'Y')
+				{
+					// Button X: Toggle Shovel
+					if (gLawnApp && gLawnApp->mBoard)
+					{
+						gLawnApp->mBoard->ToggleShovel();
+						break;
+					}
+				}
+				else if (event.key.keysym.sym == SDLK_TAB || event.key.keysym.sym == 'e' || event.key.keysym.sym == 'E')
+				{
+					// Button L: Previous Seed Packet
+					if (gLawnApp && gLawnApp->mBoard)
+					{
+						gLawnApp->mBoard->CycleSeedPacket(-1);
+						break;
+					}
+				}
+				else if (event.key.keysym.sym == SDLK_BACKSPACE || event.key.keysym.sym == 't' || event.key.keysym.sym == 'T')
+				{
+					// Button R: Next Seed Packet
+					if (gLawnApp && gLawnApp->mBoard)
+					{
+						gLawnApp->mBoard->CycleSeedPacket(1);
+						break;
+					}
 				}
 #endif
 
@@ -805,14 +839,21 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 					break;
 				}
 
-				if (event.key.keysym.sym == SDLK_SPACE || event.key.keysym.sym == SDLK_RETURN ||
-					event.key.keysym.sym == 'c' || event.key.keysym.sym == 'C')
+				if (event.key.keysym.sym == SDLK_SPACE || event.key.keysym.sym == 'c' || event.key.keysym.sym == 'C')
 				{
 					mWidgetManager->MouseUp((int)sVirtualCursorX, (int)sVirtualCursorY, 1);
+					break;
 				}
 				else if (event.key.keysym.sym == SDLK_LALT || event.key.keysym.sym == 'x' || event.key.keysym.sym == 'X')
 				{
 					mWidgetManager->MouseUp((int)sVirtualCursorX, (int)sVirtualCursorY, -1);
+					break;
+				}
+				else if (event.key.keysym.sym == SDLK_LSHIFT || event.key.keysym.sym == 'y' || event.key.keysym.sym == 'Y' ||
+						 event.key.keysym.sym == SDLK_TAB || event.key.keysym.sym == 'e' || event.key.keysym.sym == 'E' ||
+						 event.key.keysym.sym == SDLK_BACKSPACE || event.key.keysym.sym == 't' || event.key.keysym.sym == 'T')
+				{
+					break;
 				}
 #endif
 				mWidgetManager->KeyUp(SDLKeyToKeyCode(event.key.keysym.sym));

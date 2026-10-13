@@ -428,6 +428,8 @@ public:
 	void							SpawnZombiesFromPool();
 	void							SpawnZombiesFromSky();
 	void							PickUpTool(GameObjectType theObjectType);
+	void							CycleSeedPacket(int theDelta);
+	void							ToggleShovel();
 	void							TutorialArrowShow(int theX, int theY);
 	void							TutorialArrowRemove();
 	int								CountCoinsBeingCollected();
