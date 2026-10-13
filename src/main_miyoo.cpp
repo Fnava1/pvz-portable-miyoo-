@@ -60,6 +60,9 @@ static void CrashSignalHandler(int sig, siginfo_t* info, void* context) {
     const char endmsg[] = "========================================\n";
     (void)write(STDERR_FILENO, endmsg, sizeof(endmsg) - 1);
 
+#ifndef _WIN32
+    sync();
+#endif
     _exit(1);
 }
 
@@ -132,6 +135,7 @@ int main(int argc, char* argv[]) {
     }
 
     SetupWorkingDirectory();
+    SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
     InstallSignalHandlers();
 
     PvzpStringListSetColors(gLawnStringFormats, gLawnStringFormatCount);
@@ -140,6 +144,7 @@ int main(int argc, char* argv[]) {
     gLawnApp = new LawnApp();
     gLawnApp->SetArgs(argc, argv);
     gLawnApp->Init();
+    InstallSignalHandlers();
     gLawnApp->Start();
     gLawnApp->Shutdown();
     delete gLawnApp;

@@ -52,16 +52,27 @@ void PoolEffect::PoolEffectInitialize()
 	memset(mCausticImage->mBits.get(), 0xFF, CAUSTIC_IMAGE_WIDTH * CAUSTIC_IMAGE_HEIGHT * 4); //4
 	mCausticImage->mBits[CAUSTIC_IMAGE_WIDTH * CAUSTIC_IMAGE_HEIGHT] = MEMORYCHECK_ID;
 
-	mCausticGrayscaleImage.resize(256 * 256);
+	mCausticGrayscaleImage.resize(256 * 256, 0);
 	MemoryImage* aCausticGrayscaleImage = reinterpret_cast<MemoryImage*>(IMAGE_POOL_CAUSTIC_EFFECT);
-	uint32_t* aCausticBits = aCausticGrayscaleImage->GetBits();
-	int index = 0;
-	for (int x = 0; x < 256; x++)
+	if (aCausticGrayscaleImage != nullptr)
 	{
-		for (int y = 0; y < 256; y++)
+		uint32_t* aCausticBits = aCausticGrayscaleImage->GetBits();
+		int srcW = aCausticGrayscaleImage->mWidth;
+		int srcH = aCausticGrayscaleImage->mHeight;
+		if (aCausticBits != nullptr && srcW > 0 && srcH > 0)
 		{
-			mCausticGrayscaleImage[index] = static_cast<unsigned char>(aCausticBits[index]);
-			index++;
+			for (int y = 0; y < 256; y++)
+			{
+				int srcY = (y * srcH) / 256;
+				if (srcY >= srcH) srcY = srcH - 1;
+				for (int x = 0; x < 256; x++)
+				{
+					int srcX = (x * srcW) / 256;
+					if (srcX >= srcW) srcX = srcW - 1;
+					int srcIdx = srcY * srcW + srcX;
+					mCausticGrayscaleImage[y * 256 + x] = static_cast<unsigned char>(aCausticBits[srcIdx]);
+				}
+			}
 		}
 	}
 }

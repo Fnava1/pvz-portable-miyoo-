@@ -30,6 +30,8 @@
 #else
 #include <libopenmpt/libopenmpt.h>
 #include <libopenmpt/libopenmpt_ext.h>
+#include <math.h>
+#include <string.h>
 #endif
 
 typedef struct
@@ -188,21 +190,18 @@ void *OPENMPT_CreateFromRW(SDL_RWops *src, int freesrc)
         OPENMPT_Delete(music);
         return NULL;
     }
-	music->internal_buf = SDL_malloc(sizeof(int16_t) * 1024 * 2);
-	if (!music->buffer)
+	music->internal_buf = (int16_t *)SDL_calloc(1024 * 2, sizeof(int16_t));
+	if (!music->internal_buf)
 	{
-		SDL_free(music->buffer);
-        OPENMPT_Delete(music);
-        return NULL;
-    }
-	music->ext_interactive = SDL_malloc(sizeof(openmpt_module_ext_interface_interactive));
+		OPENMPT_Delete(music);
+		return NULL;
+	}
+	music->ext_interactive = (openmpt_module_ext_interface_interactive *)SDL_calloc(1, sizeof(openmpt_module_ext_interface_interactive));
 	if (!music->ext_interactive)
 	{
-		SDL_free(music->buffer);
-		SDL_free(music->internal_buf);
-        OPENMPT_Delete(music);
-        return NULL;
-    }
+		OPENMPT_Delete(music);
+		return NULL;
+	}
 
     buffer = SDL_LoadFile_RW(src, &size, SDL_FALSE);
     if (buffer) {
@@ -218,7 +217,9 @@ void *OPENMPT_CreateFromRW(SDL_RWops *src, int freesrc)
         return NULL;
     }
 	music->file = openmpt.openmpt_module_ext_get_module(music->ext);
-	openmpt.openmpt_module_ext_get_interface(music->ext, "interactive", music->ext_interactive, sizeof(openmpt_module_ext_interface_interactive));
+	if (openmpt.openmpt_module_ext_get_interface) {
+		openmpt.openmpt_module_ext_get_interface(music->ext, "interactive", music->ext_interactive, sizeof(openmpt_module_ext_interface_interactive));
+	}
 
     meta_tags_init(&music->tags);
     meta_tags_set(&music->tags, MIX_META_TITLE, openmpt.openmpt_module_get_metadata(music->file, "title"));
@@ -236,9 +237,14 @@ void *OPENMPT_CreateFromRW(SDL_RWops *src, int freesrc)
 static void OPENMPT_SetVolume(void *context, int volume)
 {
     OPENMPT_Music *music = (OPENMPT_Music *)context;
+    if (!music || !music->file) return;
     music->volume = volume;
-	unsigned int mptVol = (unsigned int)volume * 2;
-	openmpt.openmpt_module_set_render_param(music->file, OPENMPT_MODULE_RENDER_MASTERGAIN_MILLIBEL, (int32_t)(2000.0*log10(mptVol/128.0)));
+    if (volume <= 0) {
+        openmpt.openmpt_module_set_render_param(music->file, OPENMPT_MODULE_RENDER_MASTERGAIN_MILLIBEL, -10000);
+    } else {
+        unsigned int mptVol = (unsigned int)volume * 2;
+        openmpt.openmpt_module_set_render_param(music->file, OPENMPT_MODULE_RENDER_MASTERGAIN_MILLIBEL, (int32_t)(2000.0 * log10((double)mptVol / 128.0)));
+    }
 }
 
 /* Get the volume for an openmpt stream */
@@ -381,7 +387,9 @@ static int OPENMPT_GetOrder(void *context, int *order)
 static int OPENMPT_MuteChannel(void *context, int channel, int mute)
 {
     OPENMPT_Music *music = (OPENMPT_Music *)context;
-	music->ext_interactive->set_channel_mute_status(music->ext, channel, mute);
+    if (music && music->ext && music->ext_interactive && music->ext_interactive->set_channel_mute_status) {
+        music->ext_interactive->set_channel_mute_status(music->ext, channel, mute);
+    }
     return 0;
 }
 
@@ -389,7 +397,9 @@ static int OPENMPT_MuteChannel(void *context, int channel, int mute)
 static int OPENMPT_SetChannelVolume(void *context, int channel, int volume)
 {
     OPENMPT_Music *music = (OPENMPT_Music *)context;
-	music->ext_interactive->set_channel_volume(music->ext, channel, volume/128.);
+    if (music && music->ext && music->ext_interactive && music->ext_interactive->set_channel_volume) {
+        music->ext_interactive->set_channel_volume(music->ext, channel, (double)volume / 128.0);
+    }
     return 0;
 }
 

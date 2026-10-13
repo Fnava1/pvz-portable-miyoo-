@@ -467,16 +467,18 @@ def optimize_assets(
         lower_path = rel_path.lower()
         norm_path = lower_path.replace("\\", "/")
 
-        # Preserve font sprite sheets and data/ assets at 1:1 original resolution
+        # Preserve font sprite sheets, data/, and caustic assets at 1:1 original resolution
         # Bitmap font descriptors (.txt) rely on exact pixel bounding rectangles.
-        is_font_asset = (
+        # Pool caustics rely on 256x256 lookup tables.
+        is_preserved_asset = (
             norm_path.startswith("data/") or
             norm_path.startswith("fonts/") or
             "/fonts/" in norm_path or
-            "font" in os.path.basename(norm_path)
+            "font" in os.path.basename(norm_path) or
+            "caustic" in norm_path
         )
 
-        if downscale_textures and not is_font_asset and (lower_path.endswith(".png") or lower_path.endswith(".jpg") or lower_path.endswith(".jpeg")):
+        if downscale_textures and not is_preserved_asset and (lower_path.endswith(".png") or lower_path.endswith(".jpg") or lower_path.endswith(".jpeg")):
             new_data = downscale_image(data, scale_factor=scale_factor)
             images_count += 1
         elif resample_audio and lower_path.endswith(".wav"):

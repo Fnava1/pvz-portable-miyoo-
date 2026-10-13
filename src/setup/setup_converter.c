@@ -81,6 +81,26 @@ static int is_font_asset(const char *path) {
     return 0;
 }
 
+static int is_preserved_image(const char *path) {
+    if (!path) return 0;
+    if (is_font_asset(path)) return 1;
+    // Check for "caustic" anywhere in path (case-insensitive)
+    const char *p = path;
+    while (*p) {
+        if ((p[0] == 'c' || p[0] == 'C') &&
+            (p[1] == 'a' || p[1] == 'A') &&
+            (p[2] == 'u' || p[2] == 'U') &&
+            (p[3] == 's' || p[3] == 'S') &&
+            (p[4] == 't' || p[4] == 'T') &&
+            (p[5] == 'i' || p[5] == 'I') &&
+            (p[6] == 'c' || p[6] == 'C')) {
+            return 1;
+        }
+        p++;
+    }
+    return 0;
+}
+
 int convert_image_buffer(const uint8_t *in_data, size_t in_size, const char *filename,
                          uint8_t **out_data, size_t *out_size) {
     if (!in_data || in_size == 0 || !out_data || !out_size) {
@@ -552,7 +572,7 @@ int convert_pak_streaming(const char *in_pak_path, const char *out_pak_path,
         size_t file_mem = peak_memory + orig_sz;
 
         const char *fname = entries[i].name;
-        if (!is_font_asset(fname) &&
+        if (!is_preserved_image(fname) &&
             (str_ends_with_case_insensitive(fname, ".png") ||
              str_ends_with_case_insensitive(fname, ".jpg") ||
              str_ends_with_case_insensitive(fname, ".jpeg"))) {
