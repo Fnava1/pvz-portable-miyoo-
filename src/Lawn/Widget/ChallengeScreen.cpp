@@ -567,7 +567,7 @@ void ChallengeScreen::DrawButton(Graphics* g, int theChallengeIndex)
 
 void ChallengeScreen::Draw(Graphics* g)
 {
-	g->SetLinearBlend(true);
+	g->SetLinearBlend(false);
 	g->DrawImage(Sexy::IMAGE_CHALLENGE_BACKGROUND, 0, 0);
 
 	std::string aTitleString =

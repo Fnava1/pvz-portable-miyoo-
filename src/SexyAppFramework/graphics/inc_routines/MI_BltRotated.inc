@@ -22,7 +22,7 @@
 				uint32_t r = (((((src1&0xFF0000)*a1)) + (((src2&0xFF0000)*a2)) + (((src3&0xFF0000)*a3)) + (((src4&0xFF0000)*a4)))&0xFF000000); \
 				uint32_t g = (((((src1&0x00FF00)*a1)) + (((src2&0x00FF00)*a2)) + (((src3&0x00FF00)*a3)) + (((src4&0x00FF00)*a4)))&0x00FF0000); \
 				uint32_t b = (((((src1&0x0000FF)*a1)) + (((src2&0x0000FF)*a2)) + (((src3&0x0000FF)*a3)) + (((src4&0x0000FF)*a4)))&0x0000FF00); \
-				if(a > 250) /* opaque */ \
+				if(a >= 255) /* opaque */ \
 					*aDestPixels++ = 0xFF000000 | (r>>8) | (g>>8) | (b>>8);\
 				else /* blend */ \
 				{\
@@ -70,7 +70,7 @@
 				uint32_t r = (cr * (((((src1&0xFF0000)*a1)) + (((src2&0xFF0000)*a2)) + (((src3&0xFF0000)*a3)) + (((src4&0xFF0000)*a4)))>>8)) & 0xFF000000 ; \
 				uint32_t g = ((((((src1&0x00FF00)*a1)) + (((src2&0x00FF00)*a2)) + (((src3&0x00FF00)*a3)) + (((src4&0x00FF00)*a4)))&0x00FF0000) * cg) & 0xFF000000; \
 				uint32_t b = ((((((src1&0x0000FF)*a1)) + (((src2&0x0000FF)*a2)) + (((src3&0x0000FF)*a3)) + (((src4&0x0000FF)*a4)))&0x0000FF00) * cb) & 0x00FF0000; \
-				if(a > 250) /* opaque */ \
+				if(a >= 255) /* opaque */ \
 					*aDestPixels++ = 0xFF000000 | (r>>8) | (g>>16) | (b>>16);\
 				else /* blend */ \
 				{\

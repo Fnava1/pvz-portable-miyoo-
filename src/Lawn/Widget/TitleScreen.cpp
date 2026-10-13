@@ -84,7 +84,7 @@ void TitleScreen::DrawToPreload(Graphics* g)
 
 void TitleScreen::Draw(Graphics* g)
 {
-	g->SetLinearBlend(true);
+	g->SetLinearBlend(false);
 
 	if (mTitleState == TitleState::TITLESTATE_WAITING_FOR_FIRST_DRAW)
 	{

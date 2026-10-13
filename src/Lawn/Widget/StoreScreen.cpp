@@ -454,7 +454,7 @@ void StoreScreen::DrawItem(Graphics* g, int theItemPosition, StoreItem theItemTy
 
 void StoreScreen::Draw(Graphics* g)
 {
-	g->SetLinearBlend(true);
+	g->SetLinearBlend(false);
 	mDrawnOnce = true;
 
 	int aStoreSignPosY = PvzpAnimateCurve(50, 110, mStoreTime, -150, 0, CURVE_EASE_IN_OUT);

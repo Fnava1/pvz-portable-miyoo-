@@ -289,7 +289,7 @@ void AwardScreen::DrawAwardSeed(Graphics* g)
 
 void AwardScreen::Draw(Graphics* g)
 {
-	g->SetLinearBlend(true);
+	g->SetLinearBlend(false);
 
 	int aLevel = mApp->mPlayerInfo->GetLevel();
 	if (mShowingAchievements)

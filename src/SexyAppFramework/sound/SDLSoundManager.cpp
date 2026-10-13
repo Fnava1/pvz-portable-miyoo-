@@ -67,8 +67,9 @@ SDLSoundManager::SDLSoundManager()
 
 SDLSoundManager::~SDLSoundManager()
 {
-	// Must precede Mix_CloseAudio(): ~SDLSoundInstance calls mixer functions
+	// Must precede Mix_CloseAudio(): ~SDLSoundInstance and loaded chunks need active mixer
 	ReleaseChannels();
+	ReleaseSounds();
 	if (mInitializedMixer)
 		Mix_CloseAudio();
 

@@ -337,7 +337,7 @@ void SeedChooserScreen::Draw(Graphics* g)
 	if (mApp->GetDialog(DIALOG_STORE) || mApp->GetDialog(DIALOG_ALMANAC))
 		return;
 
-	g->SetLinearBlend(true);
+	g->SetLinearBlend(false);
 	if (!mBoard->ChooseSeedsOnCurrentLevel() || (mBoard->mCutScene && mBoard->mCutScene->IsBeforePreloading()))
 		return;
 

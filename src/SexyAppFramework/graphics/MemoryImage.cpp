@@ -1206,9 +1206,26 @@ void MemoryImage::FillRect(const Rect& theRect, const Color& theColor, [[maybe_u
 			for (int i = 0; i < aRect.mWidth; i++)
 			{
 				uint32_t dest = *aDestPixels;
-				*(aDestPixels++) = 0xFF000000 |
-					((((dest & 0xFF00FF) * oma >> 8) + src_rb_a) & 0xFF00FF) |
-					((((dest & 0x00FF00) * oma >> 8) + src_g_a) & 0x00FF00);
+				uint32_t aDestAlpha = dest >> 24;
+				if (aDestAlpha == 255)
+				{
+					*(aDestPixels++) = 0xFF000000 |
+						((((dest & 0xFF00FF) * oma >> 8) + src_rb_a) & 0xFF00FF) |
+						((((dest & 0x00FF00) * oma >> 8) + src_g_a) & 0x00FF00);
+				}
+				else if (aDestAlpha == 0)
+				{
+					*(aDestPixels++) = (oldAlpha << 24) | (src & 0x00FFFFFF);
+				}
+				else
+				{
+					int aNewDestAlpha = aDestAlpha + ((255 - aDestAlpha) * oldAlpha) / 255;
+					int newAlpha = (aNewDestAlpha == 0) ? 0 : (255 * oldAlpha) / aNewDestAlpha;
+					int local_oma = 256 - newAlpha;
+					*(aDestPixels++) = (aNewDestAlpha << 24) |
+						((((dest & 0xFF00FF) * local_oma + (src & 0xFF00FF) * newAlpha) >> 8) & 0xFF00FF) |
+						((((dest & 0x00FF00) * local_oma + (src & 0x00FF00) * newAlpha) >> 8) & 0x00FF00);
+				}
 			}
 		}
 	}

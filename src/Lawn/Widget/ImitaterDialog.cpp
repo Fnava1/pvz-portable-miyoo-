@@ -93,7 +93,7 @@ void ImitaterDialog::GetSeedPosition(int theIndex, int& x, int& y)
 void ImitaterDialog::Draw(Graphics* g)
 {
 	LawnDialog::Draw(g);
-	g->SetLinearBlend(true);
+	g->SetLinearBlend(false);
 	for (SeedType aSeedType = (SeedType)0; aSeedType < SeedType::SEED_GATLINGPEA; aSeedType = (SeedType)(aSeedType + 1))
 	{
 		if (mApp->HasSeedType(aSeedType))

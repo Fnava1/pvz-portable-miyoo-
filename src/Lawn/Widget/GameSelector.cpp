@@ -550,7 +550,7 @@ void GameSelector::Draw(Graphics* g)
 	if (mApp->GetDialog(Dialogs::DIALOG_STORE) || mApp->GetDialog(Dialogs::DIALOG_ALMANAC))
 		return;
 
-	g->SetLinearBlend(true);
+	g->SetLinearBlend(false);
 	Reanimation* aSelectorReanim = mApp->ReanimationGet(mSelectorReanimID);
 	aSelectorReanim->DrawRenderGroup(g, 1);  // "SelectorScreen_BG"
 	for (int i = 0; i < 6; i++)
@@ -600,7 +600,7 @@ void GameSelector::Draw(Graphics* g)
 
 void GameSelector::DrawOverlay(Graphics* g)
 {
-	g->SetLinearBlend(true);
+	g->SetLinearBlend(false);
 	if (mApp->mPlayerInfo == nullptr)
 		return;
 

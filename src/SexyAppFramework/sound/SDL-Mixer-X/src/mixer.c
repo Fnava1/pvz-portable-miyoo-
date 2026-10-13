@@ -1013,15 +1013,17 @@ void MIXCALLCC Mix_FreeChunk(Mix_Chunk *chunk)
     /* Caution -- if the chunk is playing, the mixer will crash */
     if (chunk) {
         /* Guarantee that this chunk isn't playing */
-        Mix_LockAudio();
-        if (mix_channel) {
-            for (i=0; i<num_channels; ++i) {
-                if (chunk == mix_channel[i].chunk) {
-                    Mix_HaltChannel_locked(i);
+        if (audio_device) {
+            Mix_LockAudio();
+            if (mix_channel) {
+                for (i=0; i<num_channels; ++i) {
+                    if (chunk == mix_channel[i].chunk) {
+                        Mix_HaltChannel_locked(i);
+                    }
                 }
             }
+            Mix_UnlockAudio();
         }
-        Mix_UnlockAudio();
         /* Actually free the chunk */
         if (chunk->allocated) {
             SDL_free(chunk->abuf);
@@ -1837,12 +1839,16 @@ int MIXCALLCC Mix_UnregisterAllEffects(int channel)
 
 void Mix_LockAudio(void)
 {
-    SDL_LockAudioDevice(audio_device);
+    if (audio_device) {
+        SDL_LockAudioDevice(audio_device);
+    }
 }
 
 void Mix_UnlockAudio(void)
 {
-    SDL_UnlockAudioDevice(audio_device);
+    if (audio_device) {
+        SDL_UnlockAudioDevice(audio_device);
+    }
 }
 
 int MIXCALLCC Mix_MasterVolume(int volume)

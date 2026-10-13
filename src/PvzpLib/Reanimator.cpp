@@ -612,10 +612,8 @@ void Reanimation::MatrixFromTransform(const ReanimatorTransform& theTransform, S
 void Reanimation::ReanimBltMatrix(Graphics* g, Image* theImage, SexyMatrix3& theTransform, const Rect& theClipRect, const Color& theColor, int theDrawMode, const Rect& theSrcRect)
 {
 	if (!gSexyAppBase->Is3DAccelerated() &&
-		TestBit(gReanimationParamArray[mReanimationType].mReanimParamFlags, static_cast<int>(ReanimFlags::REANIM_FAST_DRAW_IN_SW_MODE)) &&
 		FloatApproxEqual(theTransform.m01, 0.0f) && FloatApproxEqual(theTransform.m10, 0.0f) &&  // no horizontal or vertical skew
-		theTransform.m00 > 0.0f && theTransform.m11 > 0.0f &&  // positive horizontal and vertical scale
-		theColor == Color::White)
+		theTransform.m00 > 0.0f && theTransform.m11 > 0.0f)  // positive horizontal and vertical scale
 	{
 		float aScaleX = theTransform.m00;
 		float aScaleY = theTransform.m11;
@@ -626,6 +624,14 @@ void Reanimation::ReanimBltMatrix(Graphics* g, Image* theImage, SexyMatrix3& the
 		Rect aOldClipRect = g->mClipRect;
 		g->SetClipRect(theClipRect);
 
+		Color aOldColor = g->GetColor();
+		bool aOldColorize = g->GetColorizeImages();
+		if (theColor != Color::White)
+		{
+			g->SetColor(theColor);
+			g->SetColorizeImages(true);
+		}
+
 		if (FloatApproxEqual(aScaleX, 1.0f) && FloatApproxEqual(aScaleY, 1.0f))  // no scaling
 			g->DrawImage(theImage, aPosX, aPosY, theSrcRect);
 		else
@@ -634,6 +640,12 @@ void Reanimation::ReanimBltMatrix(Graphics* g, Image* theImage, SexyMatrix3& the
 			int aHeight = FloatRoundToInt(aScaleY * theSrcRect.mHeight);
 			Rect aDestRect(aPosX, aPosY, aWidth, aHeight);
 			g->DrawImage(theImage, aDestRect, theSrcRect);
+		}
+
+		if (theColor != Color::White)
+		{
+			g->SetColor(aOldColor);
+			g->SetColorizeImages(aOldColorize);
 		}
 
 		g->SetDrawMode(aOldMode);

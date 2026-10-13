@@ -34,7 +34,7 @@
 
 			#if defined(GLOBAL_ARGB) || defined (TEX_ALPHA) || defined(MOD_ARGB)
 			{
-				if (alpha < 0xf0)
+				if (alpha < 255)
 				{
 					unsigned int trb, tg;
 					#if !defined(LINEAR_BLEND)
@@ -71,7 +71,7 @@
 	}
 	#elif defined(MOD_ARGB)
 	{
-		if (a > 0xf00000)
+		if (a >= 0xff0000)
 		{
 			*pix = ((r>>9)&0x7c00)|((g>>14)&0x03e0)|((b>>19)&0x001f);
 		}

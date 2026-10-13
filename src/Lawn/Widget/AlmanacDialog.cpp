@@ -496,7 +496,7 @@ void AlmanacDialog::DrawZombies(Graphics* g)
 
 void AlmanacDialog::Draw(Graphics* g)
 {
-	g->SetLinearBlend(true);
+	g->SetLinearBlend(false);
 	switch (mOpenPage)
 	{
 	case AlmanacPage::ALMANAC_PAGE_INDEX:	DrawIndex(g);	break;
