@@ -1489,6 +1489,50 @@ void GLInterface::Flush()
 		}
 		SDL_RenderClear(ren);
 		SDL_RenderCopy(ren, tex, nullptr, nullptr);
+
+		// Render virtual cursor overlay for handheld navigation
+		int cx = (int)(SexyAppBase::sVirtualCursorX * 640.0f / 800.0f);
+		int cy = (int)(SexyAppBase::sVirtualCursorY * 480.0f / 600.0f);
+
+		static const char* const sCursorShape[] = {
+			"#...............",
+			"##..............",
+			"#*#.............",
+			"#**#............",
+			"#***#...........",
+			"#****#..........",
+			"#*****#.........",
+			"#******#........",
+			"#*******#.......",
+			"#********#......",
+			"#*****####......",
+			"#**#**#.........",
+			"#*#.#**#........",
+			"##..#**#........",
+			"#....#**#.......",
+			".....#**#.......",
+			"......##........",
+			"................"
+		};
+
+		for (int r = 0; r < 18; ++r)
+		{
+			for (int c = 0; c < 16; ++c)
+			{
+				char ch = sCursorShape[r][c];
+				if (ch == '#')
+				{
+					SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
+					SDL_RenderDrawPoint(ren, cx + c, cy + r);
+				}
+				else if (ch == '*')
+				{
+					SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
+					SDL_RenderDrawPoint(ren, cx + c, cy + r);
+				}
+			}
+		}
+
 		SDL_RenderPresent(ren);
 	}
 #else

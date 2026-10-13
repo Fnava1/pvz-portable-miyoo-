@@ -85,7 +85,26 @@ bool Music::PvzpLoadMusic(MusicFile theMusicFile, std::string_view theFileName)
 
 	PFILE* pFile = p_fopen(aFileName.c_str(), "rb");
 	if (pFile == nullptr)
+	{
+		if (anExt == "mo3")
+		{
+			std::string aFallback = aFileName.substr(0, aDot + 1) + "it";
+			pFile = p_fopen(aFallback.c_str(), "rb");
+			if (pFile) aFileName = aFallback;
+		}
+		else if (anExt == "it")
+		{
+			std::string aFallback = aFileName.substr(0, aDot + 1) + "mo3";
+			pFile = p_fopen(aFallback.c_str(), "rb");
+			if (pFile) aFileName = aFallback;
+		}
+	}
+
+	if (pFile == nullptr)
+	{
+		PvzpLogLn("Music file not found: {}", theFileName);
 		return false;
+	}
 
 	p_fseek(pFile, 0, SEEK_END);
 	int aSize = p_ftell(pFile);
@@ -105,7 +124,10 @@ bool Music::PvzpLoadMusic(MusicFile theMusicFile, std::string_view theFileName)
 	}
 
 	if (aHMusic == 0)
+	{
+		PvzpLogLn("Mix_LoadMUS_RW failed for {}: {}", aFileName, Mix_GetError());
 		return false;
+	}
 
 	SDLMusicInfo aMusicInfo;
 	aMusicInfo.mHMusic = aHMusic;

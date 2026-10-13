@@ -33,6 +33,7 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/SDL2/include
     ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/SDL2/include/SDL2
     ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/jpeg
+    ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/libopenmpt/include
 )
 
 # ---------------------------------------------------------------------------
@@ -125,6 +126,15 @@ set(USE_OPUS OFF CACHE BOOL "SDL Mixer X opus")
 set(USE_DRFLAC OFF CACHE BOOL "SDL Mixer X flac")
 set(USE_PXTONE OFF CACHE BOOL "SDL Mixer X pxtone")
 set(USE_SYSTEM_SDL2 ON CACHE BOOL "Use system SDL2")
+set(USE_SYSTEM_AUDIO_LIBRARIES ON CACHE BOOL "Use system audio libraries" FORCE)
+set(USE_OPENMPT ON CACHE BOOL "SDL Mixer X openmpt" FORCE)
+set(USE_OPENMPT_STATIC ON CACHE BOOL "SDL Mixer X openmpt static" FORCE)
+set(USE_OPENMPT_DYNAMIC OFF CACHE BOOL "SDL Mixer X openmpt dynamic" FORCE)
+set(OpenMPT_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/libopenmpt/include" CACHE PATH "libopenmpt include dir" FORCE)
+set(OpenMPT_LIBRARY "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/libopenmpt/lib/libopenmpt.a" CACHE FILEPATH "libopenmpt library" FORCE)
+set(OpenMPT_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/libopenmpt/include" CACHE PATH "libopenmpt include dirs" FORCE)
+set(OpenMPT_LIBRARIES "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/libopenmpt/lib/libopenmpt.a" CACHE FILEPATH "libopenmpt libraries" FORCE)
+set(OpenMPT_FOUND TRUE CACHE BOOL "libopenmpt found" FORCE)
 add_subdirectory(src/SexyAppFramework/sound/SDL-Mixer-X EXCLUDE_FROM_ALL)
 
 # ---------------------------------------------------------------------------
@@ -144,7 +154,7 @@ set(AUDIO_SOURCES
     "src/audio/OpenMptMusicInterface.cpp"
 )
 add_library(pvz_audio STATIC ${AUDIO_SOURCES})
-target_link_libraries(pvz_audio PUBLIC m SDL2_mixer_ext_Static ${SDL2_LIB})
+target_link_libraries(pvz_audio PUBLIC m SDL2_mixer_ext_Static ${OpenMPT_LIBRARIES} z ${SDL2_LIB})
 if(NOT WIN32)
     target_link_libraries(pvz_audio PUBLIC dl)
 endif()
@@ -192,6 +202,7 @@ target_link_libraries(PvZ PRIVATE
     pvz_input
     pvz_jpeg
     SDL2_mixer_ext_Static
+    ${OpenMPT_LIBRARIES}
     ${SDL2_LIB}
     png16
     z
@@ -258,7 +269,7 @@ endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_openmpt_playback.cpp")
     add_executable(test_openmpt_playback "tests/test_openmpt_playback.cpp")
-    target_link_libraries(test_openmpt_playback PRIVATE pvz_audio SDL2_mixer_ext_Static ${SDL2_LIB} m)
+    target_link_libraries(test_openmpt_playback PRIVATE pvz_audio SDL2_mixer_ext_Static ${OpenMPT_LIBRARIES} z ${SDL2_LIB} m)
     if(NOT WIN32)
         target_link_libraries(test_openmpt_playback PRIVATE dl pthread)
     endif()

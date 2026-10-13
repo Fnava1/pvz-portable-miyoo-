@@ -766,6 +766,26 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 					break;
 				}
 
+#if !PVZ_ENABLE_GLES
+				if (event.key.keysym.sym == SDLK_HOME || event.key.keysym.sym == SDLK_RALT)
+				{
+					mWidgetManager->KeyDown(KeyCode::KEYCODE_ESCAPE);
+					break;
+				}
+
+				if (event.key.keysym.sym == SDLK_SPACE || event.key.keysym.sym == SDLK_RETURN ||
+					event.key.keysym.sym == 'c' || event.key.keysym.sym == 'C')
+				{
+					mWidgetManager->MouseMove((int)sVirtualCursorX, (int)sVirtualCursorY);
+					mWidgetManager->MouseDown((int)sVirtualCursorX, (int)sVirtualCursorY, 1);
+				}
+				else if (event.key.keysym.sym == SDLK_LALT || event.key.keysym.sym == 'x' || event.key.keysym.sym == 'X')
+				{
+					mWidgetManager->MouseMove((int)sVirtualCursorX, (int)sVirtualCursorY);
+					mWidgetManager->MouseDown((int)sVirtualCursorX, (int)sVirtualCursorY, -1);
+				}
+#endif
+
 				mWidgetManager->KeyDown(SDLKeyToKeyCode(event.key.keysym.sym));
 
 				char aSynthesizedChar = 0;
@@ -777,6 +797,23 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 
 			case SDL_KEYUP:
 				mLastUserInputTick = mLastTimerTime;
+#if !PVZ_ENABLE_GLES
+				if (event.key.keysym.sym == SDLK_HOME || event.key.keysym.sym == SDLK_RALT)
+				{
+					mWidgetManager->KeyUp(KeyCode::KEYCODE_ESCAPE);
+					break;
+				}
+
+				if (event.key.keysym.sym == SDLK_SPACE || event.key.keysym.sym == SDLK_RETURN ||
+					event.key.keysym.sym == 'c' || event.key.keysym.sym == 'C')
+				{
+					mWidgetManager->MouseUp((int)sVirtualCursorX, (int)sVirtualCursorY, 1);
+				}
+				else if (event.key.keysym.sym == SDLK_LALT || event.key.keysym.sym == 'x' || event.key.keysym.sym == 'X')
+				{
+					mWidgetManager->MouseUp((int)sVirtualCursorX, (int)sVirtualCursorY, -1);
+				}
+#endif
 				mWidgetManager->KeyUp(SDLKeyToKeyCode(event.key.keysym.sym));
 				break;
 

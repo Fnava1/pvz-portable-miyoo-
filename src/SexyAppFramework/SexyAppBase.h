@@ -540,9 +540,18 @@ public:
 	bool					StartTextInput(std::string& theInput); // set theInput and return true if using soft keyboard capability and user pressed OK (e.g. Switch libnx swkbd)
 	void					StopTextInput();
 	void					SetTextInputRect(const Rect& theRect); // caret rect in logical coords; anchors the IME UI (candidate window, keyboard pan)
+	static inline float		sVirtualCursorX = 400.0f;
+	static inline float		sVirtualCursorY = 300.0f;
+
+#if PVZ_ENABLE_GLES
 	bool					Is3DAccelerated() { return true; }
 	bool					Is3DAccelerationSupported();
 	bool					Is3DAccelerationRecommended();
+#else
+	bool					Is3DAccelerated() { return false; }
+	bool					Is3DAccelerationSupported() { return false; }
+	bool					Is3DAccelerationRecommended() { return false; }
+#endif
 	void					DemoSyncRefreshRate();
 	void					Set3DAcclerated(bool is3D, bool reinit = true);
 	virtual void			Done3dTesting();

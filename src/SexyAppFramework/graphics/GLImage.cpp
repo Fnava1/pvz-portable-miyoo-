@@ -85,13 +85,23 @@ void GLImage::FillScanLinesWithCoverage(Span* theSpans, int theSpanCount, const 
 
 bool GLImage::Check3D(GLImage *theImage)
 {
+#if PVZ_ENABLE_GLES
 	return true;
+#else
+	(void)theImage;
+	return false;
+#endif
 }
 
 bool GLImage::Check3D(Image *theImage)
 {
+#if PVZ_ENABLE_GLES
 	GLImage *anImage = dynamic_cast<GLImage*>(theImage);
 	return anImage != 0;
+#else
+	(void)theImage;
+	return false;
+#endif
 }
 
 void GLImage::PurgeBits()

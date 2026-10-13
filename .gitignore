@@ -28,6 +28,7 @@ src/SexyAppFramework/sound/SDL-Mixer-X/test/
 !CMakeLists.txt
 !/packaging/Roms/PORTS/Games/Plants vs. Zombies/libs/*.so*
 !/ports/Games/Plants vs. Zombies/libs/*.so*
+!/3rdparty/libopenmpt/lib/libopenmpt.a
 
 
 # Editor / IDE artifacts

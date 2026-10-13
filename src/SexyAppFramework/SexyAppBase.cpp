@@ -1663,6 +1663,52 @@ void SexyAppBase::UpdateFrames()
 {
 	mUpdateCount++;
 
+#if !PVZ_ENABLE_GLES
+	const Uint8* state = SDL_GetKeyboardState(nullptr);
+	if (state)
+	{
+		float speed = 6.0f;
+		if (state[SDL_SCANCODE_LSHIFT] || state[SDL_SCANCODE_TAB] || state[SDL_SCANCODE_BACKSPACE])
+			speed = 12.0f;
+
+		bool moved = false;
+		if (state[SDL_SCANCODE_LEFT])
+		{
+			sVirtualCursorX -= speed;
+			moved = true;
+		}
+		if (state[SDL_SCANCODE_RIGHT])
+		{
+			sVirtualCursorX += speed;
+			moved = true;
+		}
+		if (state[SDL_SCANCODE_UP])
+		{
+			sVirtualCursorY -= speed;
+			moved = true;
+		}
+		if (state[SDL_SCANCODE_DOWN])
+		{
+			sVirtualCursorY += speed;
+			moved = true;
+		}
+
+		if (moved)
+		{
+			if (sVirtualCursorX < 0.0f) sVirtualCursorX = 0.0f;
+			if (sVirtualCursorX > 799.0f) sVirtualCursorX = 799.0f;
+			if (sVirtualCursorY < 0.0f) sVirtualCursorY = 0.0f;
+			if (sVirtualCursorY > 599.0f) sVirtualCursorY = 599.0f;
+
+			if (mWidgetManager)
+			{
+				mWidgetManager->MouseMove((int)sVirtualCursorX, (int)sVirtualCursorY);
+				mCustomCursorDirty = true;
+			}
+		}
+	}
+#endif
+
 	if (!mMinimized)
 		mWidgetManager->UpdateFrame();
 
@@ -4147,6 +4193,7 @@ void SexyAppBase::Remove3DData(MemoryImage* theMemoryImage)
 }
 
 
+#if PVZ_ENABLE_GLES
 bool SexyAppBase::Is3DAccelerationSupported()
 {
 	return true;
@@ -4156,6 +4203,7 @@ bool SexyAppBase::Is3DAccelerationRecommended()
 {
 	return true;
 }
+#endif
 
 void SexyAppBase::DemoSyncRefreshRate()
 {
