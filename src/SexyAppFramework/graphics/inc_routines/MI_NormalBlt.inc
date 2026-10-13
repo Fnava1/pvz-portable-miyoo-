@@ -27,27 +27,13 @@
 					{
 						uint32_t dest = *aDestPixels;
 						uint32_t aDestAlpha = dest >> 24;
+						uint32_t aNewDestAlpha = aDestAlpha + ((255 - aDestAlpha) * a) / 255;
+						uint32_t blend_a = 255 * a / aNewDestAlpha;
+						int oma = 256 - blend_a;
 
-						if (aDestAlpha == 255)
-						{
-							int oma = 256 - a;
-							*(aDestPixels++) = 0xFF000000 |
-								((((dest & 0xFF00FF) * oma >> 8) + ((src & 0xFF00FF) * a >> 8)) & 0xFF00FF) |
-								((((dest & 0x00FF00) * oma >> 8) + ((src & 0x00FF00) * a >> 8)) & 0x00FF00);
-						}
-						else if (aDestAlpha == 0)
-						{
-							*(aDestPixels++) = src;
-						}
-						else
-						{
-							uint32_t aNewDestAlpha = aDestAlpha + ((255 - aDestAlpha) * a) / 255;
-							uint32_t blend_a = (255 * a) / aNewDestAlpha;
-							int oma = 256 - blend_a;
-							*(aDestPixels++) = (aNewDestAlpha << 24) |
-								((((dest & 0xFF00FF) * oma >> 8) + ((src & 0xFF00FF) * blend_a >> 8)) & 0xFF00FF) |
-								((((dest & 0x00FF00) * oma >> 8) + ((src & 0x00FF00) * blend_a >> 8)) & 0x00FF00);
-						}
+						*(aDestPixels++) = (aNewDestAlpha << 24) |
+							((((dest & 0xFF00FF) * oma >> 8) + ((src & 0xFF00FF) * blend_a >> 8)) & 0xFF00FF) |
+							((((dest & 0x00FF00) * oma >> 8) + ((src & 0x00FF00) * blend_a >> 8)) & 0x00FF00);
 					}
 				}
 
@@ -78,38 +64,20 @@
 						uint32_t src = NEXT_SRC_COLOR;
 						uint32_t a = ((src >> 24) * ca) / 255;
 
-						if (a == 0)
-						{
-							aDestPixels++;
-						}
-						else
+						if (a != 0)
 						{
 							uint32_t dest = *aDestPixels;
 							uint32_t aDestAlpha = dest >> 24;
-							uint32_t c_rb = (((src & 0xFF00FF) * cr >> 8) & 0xFF00FF);
-							uint32_t c_g  = (((src & 0x00FF00) * cr >> 8) & 0x00FF00);
+							uint32_t aNewDestAlpha = aDestAlpha + ((255 - aDestAlpha) * a) / 255;
+							uint32_t blend_a = 255 * a / aNewDestAlpha;
+							int oma = 256 - blend_a;
 
-							if (aDestAlpha == 255)
-							{
-								int oma = 256 - a;
-								*(aDestPixels++) = 0xFF000000 |
-									((((dest & 0xFF00FF) * oma >> 8) + ((c_rb * a) >> 8)) & 0xFF00FF) |
-									((((dest & 0x00FF00) * oma >> 8) + ((c_g * a) >> 8)) & 0x00FF00);
-							}
-							else if (aDestAlpha == 0)
-							{
-								*(aDestPixels++) = (a << 24) | c_rb | c_g;
-							}
-							else
-							{
-								uint32_t aNewDestAlpha = aDestAlpha + ((255 - aDestAlpha) * a) / 255;
-								uint32_t blend_a = (255 * a) / aNewDestAlpha;
-								int oma = 256 - blend_a;
-								*(aDestPixels++) = (aNewDestAlpha << 24) |
-									((((dest & 0xFF00FF) * oma >> 8) + ((c_rb * blend_a) >> 8)) & 0xFF00FF) |
-									((((dest & 0x00FF00) * oma >> 8) + ((c_g * blend_a) >> 8)) & 0x00FF00);
-							}
+							*(aDestPixels++) = (aNewDestAlpha << 24) |
+								((((dest & 0xFF00FF) * oma >> 8) + ((((src & 0xFF00FF) * cr >> 8) & 0xFF00FF) * blend_a >> 8)) & 0xFF00FF) |
+								((((dest & 0x00FF00) * oma >> 8) + ((src & 0x00FF00) * cr * blend_a >> 16)) & 0x00FF00);
 						}
+						else
+							aDestPixels++;
 					}
 
 					aDestPixelsRow += mWidth;
@@ -130,41 +98,21 @@
 						uint32_t src = NEXT_SRC_COLOR;
 						uint32_t a = ((src >> 24) * ca) / 255;
 
-						if (a == 0)
-						{
-							aDestPixels++;
-						}
-						else
+						if (a != 0)
 						{
 							uint32_t dest = *aDestPixels;
 							uint32_t aDestAlpha = dest >> 24;
-							uint32_t cb_val = (((src & 0x0000FF) * cb) >> 8) & 0x0000FF;
-							uint32_t cg_val = (((src & 0x00FF00) * cg) >> 8) & 0x00FF00;
-							uint32_t cr_val = (((src & 0xFF0000) * cr) >> 8) & 0xFF0000;
+							uint32_t aNewDestAlpha = aDestAlpha + ((255 - aDestAlpha) * a) / 255;
+							uint32_t blend_a = 255 * a / aNewDestAlpha;
+							int oma = 256 - blend_a;
 
-							if (aDestAlpha == 255)
-							{
-								int oma = 256 - a;
-								*(aDestPixels++) = 0xFF000000 |
-									((((dest & 0x0000FF) * oma) >> 8) + (((cb_val * a) >> 8) & 0x0000FF)) |
-									((((dest & 0x00FF00) * oma) >> 8) + (((cg_val * a) >> 8) & 0x00FF00)) |
-									((((dest & 0xFF0000) * oma) >> 8) + (((cr_val * a) >> 8) & 0xFF0000));
-							}
-							else if (aDestAlpha == 0)
-							{
-								*(aDestPixels++) = (a << 24) | cr_val | cg_val | cb_val;
-							}
-							else
-							{
-								uint32_t aNewDestAlpha = aDestAlpha + ((255 - aDestAlpha) * a) / 255;
-								uint32_t blend_a = (255 * a) / aNewDestAlpha;
-								int oma = 256 - blend_a;
-								*(aDestPixels++) = (aNewDestAlpha << 24) |
-									((((dest & 0x0000FF) * oma) >> 8) + (((cb_val * blend_a) >> 8) & 0x0000FF)) |
-									((((dest & 0x00FF00) * oma) >> 8) + (((cg_val * blend_a) >> 8) & 0x00FF00)) |
-									((((dest & 0xFF0000) * oma) >> 8) + (((cr_val * blend_a) >> 8) & 0xFF0000));
-							}
+							*(aDestPixels++) = (aNewDestAlpha << 24) |
+								((((dest & 0x0000FF) * oma) >> 8) + (((src & 0x0000FF) * blend_a * cb) >> 16) & 0x0000FF) |
+								((((dest & 0x00FF00) * oma) >> 8) + (((src & 0x00FF00) * blend_a * cg) >> 16) & 0x00FF00) |
+								((((dest & 0xFF0000) * oma) >> 8) + (((((src & 0xFF0000) * blend_a) >> 8) * cr) >> 8) & 0xFF0000);
 						}
+						else
+							aDestPixels++;
 					}
 
 					aDestPixelsRow += mWidth;

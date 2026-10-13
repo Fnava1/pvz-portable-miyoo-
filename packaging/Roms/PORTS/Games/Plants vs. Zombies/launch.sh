@@ -79,7 +79,7 @@ fi
 # 2. Hardware texture pool & blitter tuning
 export SDL_MMIYOO_TEXTURE_POOL=1
 export SDL_MMIYOO_TEXTURE_POOL_MAX_BYTES=16777216
-export SDL_MMIYOO_VSYNC_MODE=off
+export SDL_MMIYOO_VSYNC_MODE=adaptive
 export SDL_HINT_RENDER_SCALE_QUALITY=0
 export LD_LIBRARY_PATH="$GAMEDIR/libs:/mnt/SDCARD/Roms/PORTS/Games/Plants vs. Zombies/libs:./libs:$LD_LIBRARY_PATH"
 

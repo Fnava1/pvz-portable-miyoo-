@@ -7518,7 +7518,7 @@ void Board::Draw(Graphics* g)
 	if (mApp->GetDialog(Dialogs::DIALOG_STORE) || mApp->GetDialog(Dialogs::DIALOG_ALMANAC))
 		return;
 
-	g->SetLinearBlend(true);
+	g->SetLinearBlend(g->Is3D());
 
 	if (mDrawCount && mCutScene->mPreloaded)
 	{

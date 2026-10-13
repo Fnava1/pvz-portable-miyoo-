@@ -1279,7 +1279,9 @@ int GLInterface::Init(bool IsWindowed)
 	if (!mSdlRenderer && mApp && mApp->mWindow)
 	{
 		SDL_Window* win = (SDL_Window*)mApp->mWindow;
-		SDL_Renderer* ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
+		SDL_Renderer* ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+		if (!ren)
+			ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_PRESENTVSYNC);
 		if (!ren)
 			ren = SDL_CreateRenderer(win, -1, 0);
 		if (!ren)
