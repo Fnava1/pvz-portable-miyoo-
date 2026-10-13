@@ -364,7 +364,7 @@ def main():
     )
     parser.add_argument("source", nargs="?", default="", help="Path to PC Plants vs. Zombies installation")
     parser.add_argument("--output", "-o", default=os.path.join(REPO_ROOT, "dist"), help="Output destination folder")
-    parser.add_argument("--no-downscale", action="store_true", help="Do not downscale textures by 0.8x")
+    parser.add_argument("--downscale", action="store_true", help="Downscale textures by 0.8x (not recommended)")
     parser.add_argument("--no-resample", action="store_true", help="Do not resample audio to 22.05 kHz mono")
     parser.add_argument("--build", "-b", action="store_true", help="Compile ARM engine binary from source")
     args = parser.parse_args()
@@ -382,7 +382,7 @@ def main():
         build_package(
             source=src,
             output_dir=args.output,
-            downscale_textures=not args.no_downscale,
+            downscale_textures=args.downscale,
             resample_audio=not args.no_resample,
             build_from_source=args.build,
         )

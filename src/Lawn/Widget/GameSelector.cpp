@@ -550,7 +550,7 @@ void GameSelector::Draw(Graphics* g)
 	if (mApp->GetDialog(Dialogs::DIALOG_STORE) || mApp->GetDialog(Dialogs::DIALOG_ALMANAC))
 		return;
 
-	if (mSelectorState == SelectorAnimState::SELECTOR_OPEN || mSlideCounter > 0)
+	if (mSelectorState == SelectorAnimState::SELECTOR_OPEN && mSlideCounter == 0)
 	{
 		g->SetColor(Color(0, 0, 0, 255));
 		g->FillRect(0, 0, mWidth, mHeight);

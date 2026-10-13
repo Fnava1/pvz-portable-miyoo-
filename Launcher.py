@@ -131,17 +131,17 @@ class PvZLauncherGUI(tk.Tk):
         sec3.pack(fill=tk.X, pady=(0, 10))
 
         self.var_downscale = tk.BooleanVar(value=False)
-        chk_downscale = ttk.Checkbutton(
+        lbl_display = ttk.Label(
             sec3,
-            text="Downscale raw textures (Not recommended: causes double scaling with 640x480 display)",
-            variable=self.var_downscale,
+            text="• Visuals: Native 640x480 integer bilinear scaling handled by engine (original textures preserved)",
+            style="Status.TLabel",
         )
-        chk_downscale.pack(anchor=tk.W, pady=(0, 2))
+        lbl_display.pack(anchor=tk.W, pady=(0, 4))
 
         self.var_resample = tk.BooleanVar(value=True)
         chk_resample = ttk.Checkbutton(
             sec3,
-            text="Downsample audio SFX to 22.05 kHz mono 16-bit PCM (Eliminates audio stuttering)",
+            text="Downsample audio SFX to 22.05 kHz mono 16-bit PCM (Reduces RAM & eliminates audio stuttering)",
             variable=self.var_resample,
         )
         chk_resample.pack(anchor=tk.W)

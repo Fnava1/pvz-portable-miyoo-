@@ -622,7 +622,7 @@ void Reanimation::ReanimBltMatrix(Graphics* g, Image* theImage, SexyMatrix3& the
 		int aOldMode = g->GetDrawMode();
 		g->SetDrawMode(theDrawMode);
 		Rect aOldClipRect = g->mClipRect;
-		g->SetClipRect(theClipRect);
+		g->mClipRect = theClipRect;
 
 		Color aOldColor = g->GetColor();
 		bool aOldColorize = g->GetColorizeImages();
@@ -654,7 +654,7 @@ void Reanimation::ReanimBltMatrix(Graphics* g, Image* theImage, SexyMatrix3& the
 		}
 
 		g->SetDrawMode(aOldMode);
-		g->SetClipRect(aOldClipRect);
+		g->mClipRect = aOldClipRect;
 	}
 	else
 		PvzpBltMatrix(g, theImage, theTransform, theClipRect, theColor, theDrawMode, theSrcRect);
