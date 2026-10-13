@@ -294,6 +294,8 @@ bool SDLMusicInterface::IsPlaying(int theSongId)
 void SDLMusicInterface::SetVolume(double theVolume)
 {
 	mGlobalVolume = (int)(theVolume*80);
+	Mix_VolumeMusic(mGlobalVolume);
+	Mix_VolumeMusicGeneral(mGlobalVolume);
 }
 
 void SDLMusicInterface::SetMusicAmplify(int theSongId, double theAmp)
@@ -303,9 +305,6 @@ void SDLMusicInterface::SetMusicAmplify(int theSongId, double theAmp)
 
 void SDLMusicInterface::Update()
 {
-	Mix_VolumeMusic(mGlobalVolume);
-	Mix_VolumeMusicGeneral(mGlobalVolume);
-
 	std::scoped_lock anAutoCrit(mMusicMapMutex);
 
 	SDLMusicMap::iterator anItr = mMusicMap.begin();

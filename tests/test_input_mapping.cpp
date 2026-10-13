@@ -25,14 +25,14 @@ static void test_menu_key_translation() {
 
     HandheldInput input;
 
-    // Test static translation functions
-    assert(HandheldInput::TranslateSDLKeyToPopCap(SDLK_HOME, 102) == Sexy::KeyCode::KEYCODE_ESCAPE);
-    assert(HandheldInput::TranslateSDLKeyToPopCap(SDLK_RALT, 100) == Sexy::KeyCode::KEYCODE_ESCAPE);
+    // Test static translation functions: Menu key ignored to prevent OS conflicts
+    assert(HandheldInput::TranslateSDLKeyToPopCap(SDLK_HOME, 102) == Sexy::KeyCode::KEYCODE_UNKNOWN);
+    assert(HandheldInput::TranslateSDLKeyToPopCap(SDLK_RALT, 100) == Sexy::KeyCode::KEYCODE_UNKNOWN);
     assert(HandheldInput::TranslateSDLKeyToPopCap(SDLK_ESCAPE, 1) == Sexy::KeyCode::KEYCODE_ESCAPE);
 
-    // Verify scancode fallback even if sym is different
-    assert(HandheldInput::TranslateSDLKeyToPopCap(0, HandheldInput::MIYOO_SCANCODE_MENU_HOME) == Sexy::KeyCode::KEYCODE_ESCAPE);
-    assert(HandheldInput::TranslateSDLKeyToPopCap(0, HandheldInput::MIYOO_SCANCODE_MENU_RALT) == Sexy::KeyCode::KEYCODE_ESCAPE);
+    // Verify scancode fallback: Menu key ignored
+    assert(HandheldInput::TranslateSDLKeyToPopCap(0, HandheldInput::MIYOO_SCANCODE_MENU_HOME) == Sexy::KeyCode::KEYCODE_UNKNOWN);
+    assert(HandheldInput::TranslateSDLKeyToPopCap(0, HandheldInput::MIYOO_SCANCODE_MENU_RALT) == Sexy::KeyCode::KEYCODE_UNKNOWN);
 
     // Standard arrow keys and action keys
     assert(HandheldInput::TranslateSDLKeyToPopCap(SDLK_UP, 0) == Sexy::KeyCode::KEYCODE_UP);
@@ -42,23 +42,23 @@ static void test_menu_key_translation() {
     assert(HandheldInput::TranslateSDLKeyToPopCap(SDLK_RETURN, 0) == Sexy::KeyCode::KEYCODE_RETURN);
     assert(HandheldInput::TranslateSDLKeyToPopCap(SDLK_SPACE, 0) == Sexy::KeyCode::KEYCODE_SPACE);
 
-    // Test callback & event interception for physical Menu key
+    // Test callback & event interception for physical Menu key: must NOT trigger escape in-game
     bool menuEscaped = false;
     input.SetOnMenuEscapeCallback([&menuEscaped]() {
         menuEscaped = true;
     });
 
-    // Send SDLK_HOME
+    // Send SDLK_HOME: must be ignored
     menuEscaped = false;
     input.OnKeyDown(SDLK_HOME, HandheldInput::MIYOO_SCANCODE_MENU_HOME);
-    assert(menuEscaped == true);
-    assert(input.GetLastPopCapKeyCode() == Sexy::KeyCode::KEYCODE_ESCAPE);
+    assert(menuEscaped == false);
+    assert(input.GetLastPopCapKeyCode() == Sexy::KeyCode::KEYCODE_UNKNOWN);
 
-    // Send SDLK_RALT
+    // Send SDLK_RALT: must be ignored
     menuEscaped = false;
     input.OnKeyDown(SDLK_RALT, HandheldInput::MIYOO_SCANCODE_MENU_RALT);
-    assert(menuEscaped == true);
-    assert(input.GetLastPopCapKeyCode() == Sexy::KeyCode::KEYCODE_ESCAPE);
+    assert(menuEscaped == false);
+    assert(input.GetLastPopCapKeyCode() == Sexy::KeyCode::KEYCODE_UNKNOWN);
 
     // Verify unmapped keys return HandheldButton::Unknown and do NOT trigger inadvertent action callbacks
     assert(HandheldInput::MapSDLKeyToHandheldButton('z', 0) == HandheldButton::Unknown);
@@ -74,7 +74,7 @@ static void test_menu_key_translation() {
     input.OnKeyUp(9999, 0);
     assert(inadvertentPlant == false);
 
-    std::cout << "  -> PASS: Physical Menu keys (SDLK_HOME / SDLK_RALT) trigger KEYCODE_ESCAPE (27)" << std::endl;
+    std::cout << "  -> PASS: Physical Menu keys (SDLK_HOME / SDLK_RALT) ignored to prevent OnionOS conflicts" << std::endl;
 }
 
 // ---------------------------------------------------------------------------

@@ -130,10 +130,10 @@ class PvZLauncherGUI(tk.Tk):
         sec3 = ttk.LabelFrame(main_frame, text=" 3. Optimization Settings (MMP Hardware Match) ", padding="10")
         sec3.pack(fill=tk.X, pady=(0, 10))
 
-        self.var_downscale = tk.BooleanVar(value=True)
+        self.var_downscale = tk.BooleanVar(value=False)
         chk_downscale = ttk.Checkbutton(
             sec3,
-            text="Downscale textures by 0.8x (Matches native 640x480 screen, saves ~30MB RAM)",
+            text="Downscale raw textures (Not recommended: causes double scaling with 640x480 display)",
             variable=self.var_downscale,
         )
         chk_downscale.pack(anchor=tk.W, pady=(0, 2))

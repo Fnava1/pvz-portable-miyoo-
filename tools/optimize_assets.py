@@ -394,8 +394,8 @@ def downscale_image(img_bytes: bytes, scale_factor: float = 0.8) -> bytes:
 def optimize_assets(
     source_input: str,
     output_pak_path: str,
-    scale_factor: float = 0.8,
-    downscale_textures: bool = True,
+    scale_factor: float = 1.0,
+    downscale_textures: bool = False,
     resample_audio: bool = True,
     progress_cb: Optional[Callable[[int, str], None]] = None,
     log_cb: Optional[Callable[[str], None]] = None,

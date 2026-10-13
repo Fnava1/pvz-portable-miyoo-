@@ -327,11 +327,13 @@ class TestPakLib(unittest.TestCase):
             f.write(idat_len + b"IDAT" + compressed + idat_crc)
             f.write(struct.pack(">I", 0) + b"IEND" + struct.pack(">I", zlib.crc32(b"IEND") & 0xFFFFFFFF))
 
-        # 4. Optimize and pack
+        # 4. Optimize and pack (testing downscale feature)
         out_mmp_pak = os.path.join(self.temp_dir, "main_mmp.pak")
         stats = optimize_assets(
             stage_src,
             out_mmp_pak,
+            scale_factor=0.8,
+            downscale_textures=True,
             progress_cb=lambda *_: None,
             log_cb=lambda _: None,
         )

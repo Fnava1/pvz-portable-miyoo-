@@ -122,7 +122,7 @@ def resolve_arm_binary(log_fn: Optional[Callable[[str], None]] = None) -> Option
 def build_package(
     source: str,
     output_dir: Optional[str] = None,
-    downscale_textures: bool = True,
+    downscale_textures: bool = False,
     resample_audio: bool = True,
     build_from_source: bool = False,
     progress_cb: Optional[Callable[[int, str], None]] = None,

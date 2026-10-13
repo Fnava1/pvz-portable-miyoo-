@@ -572,23 +572,7 @@ int convert_pak_streaming(const char *in_pak_path, const char *out_pak_path,
         size_t file_mem = peak_memory + orig_sz;
 
         const char *fname = entries[i].name;
-        if (!is_preserved_image(fname) &&
-            (str_ends_with_case_insensitive(fname, ".png") ||
-             str_ends_with_case_insensitive(fname, ".jpg") ||
-             str_ends_with_case_insensitive(fname, ".jpeg"))) {
-            uint8_t *scaled_data = NULL;
-            size_t scaled_sz = 0;
-            if (convert_image_buffer(in_buf, orig_sz, fname, &scaled_data, &scaled_sz) == 0 && scaled_data) {
-                final_buf = scaled_data;
-                final_sz = scaled_sz;
-                free(in_buf);
-                converted = 1;
-                images_scaled++;
-                file_mem += scaled_sz;
-            } else {
-                passthrough_files++;
-            }
-        } else if (str_ends_with_case_insensitive(fname, ".wav")) {
+        if (str_ends_with_case_insensitive(fname, ".wav")) {
             uint8_t *resampled_data = NULL;
             size_t resampled_sz = 0;
             if (convert_wav_buffer(in_buf, orig_sz, &resampled_data, &resampled_sz) == 0 && resampled_data) {

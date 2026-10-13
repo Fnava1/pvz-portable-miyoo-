@@ -271,8 +271,8 @@ static void test_pak_streaming_conversion_and_peak_memory() {
             int w = 0, h = 0, ch = 0;
             uint8_t* dec = stbi_load_from_memory(payload.data(), static_cast<int>(payload.size()), &w, &h, &ch, 0);
             assert(dec != nullptr);
-            assert(w == 96); // 120 * 0.8
-            assert(h == 80); // 100 * 0.8
+            assert(w == 120); // Preserved 1:1 to avoid double scaling with 640x480 rasterizer
+            assert(h == 100);
             stbi_image_free(dec);
         } else if (rec.name == "data/_BrianneTod32Outline.png") {
             int w = 0, h = 0, ch = 0;

@@ -192,7 +192,6 @@ static KeyCode SDLKeyToKeyCode(SDL_Keycode theSDLKey)
 		case SDLK_CLEAR:        return KEYCODE_CLEAR;
 		case SDLK_RETURN:       return KEYCODE_RETURN;
 		case SDLK_AC_BACK:
-		case SDLK_HOME:
 		case SDLK_ESCAPE:       return KEYCODE_ESCAPE;
 		case SDLK_SPACE:        return KEYCODE_SPACE;
 		case SDLK_DELETE:       return KEYCODE_DELETE;
@@ -212,7 +211,9 @@ static KeyCode SDLKeyToKeyCode(SDL_Keycode theSDLKey)
 		case SDLK_LCTRL:
 		case SDLK_RCTRL:        return KEYCODE_CONTROL;
 		case SDLK_LALT:         return KEYCODE_MENU;
-		case SDLK_RALT:         return KEYCODE_ESCAPE; // Miyoo Mini Menu button
+		case SDLK_HOME:
+		case SDLK_RALT:
+		case SDLK_MENU:         return KEYCODE_UNKNOWN; // Reserved for Miyoo Mini / OnionOS system menu
 		case SDLK_PAUSE:        return KEYCODE_PAUSE;
 		case SDLK_CAPSLOCK:     return KEYCODE_CAPITAL;
 		case SDLK_NUMLOCKCLEAR: return KEYCODE_NUMLOCK;
@@ -767,9 +768,9 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 				}
 
 #if !PVZ_ENABLE_GLES
-				if (event.key.keysym.sym == SDLK_HOME || event.key.keysym.sym == SDLK_RALT)
+				if (event.key.keysym.sym == SDLK_HOME || event.key.keysym.sym == SDLK_RALT || event.key.keysym.sym == SDLK_MENU)
 				{
-					mWidgetManager->KeyDown(KeyCode::KEYCODE_ESCAPE);
+					// Miyoo central Menu key is reserved for OnionOS system functions; ignore silently
 					break;
 				}
 
@@ -798,9 +799,9 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 			case SDL_KEYUP:
 				mLastUserInputTick = mLastTimerTime;
 #if !PVZ_ENABLE_GLES
-				if (event.key.keysym.sym == SDLK_HOME || event.key.keysym.sym == SDLK_RALT)
+				if (event.key.keysym.sym == SDLK_HOME || event.key.keysym.sym == SDLK_RALT || event.key.keysym.sym == SDLK_MENU)
 				{
-					mWidgetManager->KeyUp(KeyCode::KEYCODE_ESCAPE);
+					// Miyoo central Menu key is reserved for OnionOS system functions; ignore silently
 					break;
 				}
 

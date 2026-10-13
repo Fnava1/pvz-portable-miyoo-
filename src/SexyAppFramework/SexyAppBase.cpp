@@ -1610,7 +1610,11 @@ void SexyAppBase::Shutdown()
 		// Blah
 
 		if (mMusicInterface != nullptr)
+		{
 			mMusicInterface->StopAllMusic();
+			mMusicInterface->UnloadAllMusic();
+			mMusicInterface.reset();
+		}
 
 		RestoreScreenResolution();
 

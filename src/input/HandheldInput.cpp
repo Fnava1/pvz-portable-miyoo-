@@ -41,9 +41,9 @@ bool HandheldInput::IsMenuKey(int sdlKey, int scancode) {
 }
 
 int HandheldInput::TranslateSDLKeyToPopCap(int sdlKey, int scancode) {
-    // Universal Menu key check: SDLK_HOME & SDLK_RALT -> KEYCODE_ESCAPE
+    // Miyoo physical Menu key: ignored in game to prevent conflict with OnionOS system daemon
     if (IsMenuKey(sdlKey, scancode)) {
-        return Sexy::KeyCode::KEYCODE_ESCAPE;
+        return Sexy::KeyCode::KEYCODE_UNKNOWN;
     }
 
     if (sdlKey == SDLK_ESCAPE) {
@@ -88,7 +88,7 @@ int HandheldInput::TranslateSDLKeyToPopCap(int sdlKey, int scancode) {
 
 HandheldButton HandheldInput::MapSDLKeyToHandheldButton(int sdlKey, int scancode) {
     if (IsMenuKey(sdlKey, scancode)) {
-        return HandheldButton::Menu;
+        return HandheldButton::Unknown;
     }
 
     if (sdlKey == SDLK_UP) return HandheldButton::Up;
@@ -179,12 +179,7 @@ void HandheldInput::OnKeyDown(int sdlKey, int scancode) {
     mLastPopCapKey = TranslateSDLKeyToPopCap(sdlKey, scancode);
 
     if (IsMenuKey(sdlKey, scancode)) {
-        if (mMode == InputMode::Shop) {
-            ShopExit();
-        }
-        if (mOnMenuEscapeCallback) {
-            mOnMenuEscapeCallback();
-        }
+        // Miyoo physical Menu key: ignored in game to prevent conflict with OnionOS
         return;
     }
 
@@ -195,6 +190,10 @@ void HandheldInput::OnKeyDown(int sdlKey, int scancode) {
 }
 
 void HandheldInput::OnKeyUp(int sdlKey, int scancode) {
+    if (IsMenuKey(sdlKey, scancode)) {
+        return;
+    }
+
     HandheldButton button = MapSDLKeyToHandheldButton(sdlKey, scancode);
     if (button != HandheldButton::Unknown) {
         OnButtonUp(button);
@@ -207,13 +206,7 @@ void HandheldInput::OnButtonDown(HandheldButton button) {
     }
 
     if (button == HandheldButton::Menu) {
-        mLastPopCapKey = Sexy::KeyCode::KEYCODE_ESCAPE;
-        if (mMode == InputMode::Shop) {
-            ShopExit();
-        }
-        if (mOnMenuEscapeCallback) {
-            mOnMenuEscapeCallback();
-        }
+        // Miyoo physical Menu key: ignored in game to prevent conflict with OnionOS
         return;
     }
 
