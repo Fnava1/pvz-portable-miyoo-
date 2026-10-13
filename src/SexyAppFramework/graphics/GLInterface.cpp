@@ -1169,6 +1169,8 @@ GLInterface::~GLInterface()
 	{
 		SDL_DestroyTexture((SDL_Texture*)mSdlTexture);
 		mSdlTexture = nullptr;
+		mTexWidth = 0;
+		mTexHeight = 0;
 	}
 	if (mSdlRenderer)
 	{
@@ -1221,7 +1223,13 @@ GLImage* GLInterface::GetScreenImage() { return mScreenImage.get(); }
 void GLInterface::UpdateViewport()
 {
 #if !PVZ_ENABLE_GLES
-	mPresentationRect = Rect(0, 0, mWidth, mHeight);
+	int winW = mWidth;
+	int winH = mHeight;
+	if (mApp && mApp->mWindow)
+	{
+		SDL_GetWindowSize((SDL_Window*)mApp->mWindow, &winW, &winH);
+	}
+	mPresentationRect = Rect(0, 0, winW, winH);
 #else
 	int vx = 0, vy = 0, vw, vh;
 
@@ -1254,7 +1262,13 @@ void GLInterface::UpdateViewport()
 int GLInterface::Init(bool IsWindowed)
 {
 #if !PVZ_ENABLE_GLES
-	mPresentationRect = Rect(0, 0, mWidth, mHeight);
+	int winW = mWidth;
+	int winH = mHeight;
+	if (mApp && mApp->mWindow)
+	{
+		SDL_GetWindowSize((SDL_Window*)mApp->mWindow, &winW, &winH);
+	}
+	mPresentationRect = Rect(0, 0, winW, winH);
 	mRGBBits   = 32;
 	mRedBits   = 8; mGreenBits = 8; mBlueBits  = 8;
 	mRedShift  = 0; mGreenShift = 8; mBlueShift = 16;
@@ -1273,11 +1287,13 @@ int GLInterface::Init(bool IsWindowed)
 		mSdlRenderer = (void*)ren;
 		if (ren)
 		{
-			SDL_Texture* tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, mWidth, mHeight);
+			SDL_Texture* tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, winW, winH);
 			if (tex)
 			{
 				SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_NONE);
 				mSdlTexture = (void*)tex;
+				mTexWidth = winW;
+				mTexHeight = winH;
 			}
 		}
 	}
@@ -1392,28 +1408,82 @@ void GLInterface::Flush()
 	{
 		SDL_Renderer* ren = (SDL_Renderer*)mSdlRenderer;
 		SDL_Texture* tex = (SDL_Texture*)mSdlTexture;
+		int texW = mTexWidth;
+		int texH = mTexHeight;
+		if (texW <= 0 || texH <= 0)
+		{
+			SDL_QueryTexture(tex, nullptr, nullptr, &texW, &texH);
+			mTexWidth = texW;
+			mTexHeight = texH;
+		}
+
 		void* texPixels = nullptr;
 		int texPitch = 0;
 		if (SDL_LockTexture(tex, nullptr, &texPixels, &texPitch) == 0)
 		{
-			if (texPitch == (int)(mWidth * sizeof(uint32_t)))
+			const uint32_t* srcBits = mScreenImage->GetBits();
+			uint8_t* dstRow = (uint8_t*)texPixels;
+
+			if (texW == mWidth && texH == mHeight)
 			{
-				memcpy(texPixels, mScreenImage->GetBits(), mWidth * mHeight * sizeof(uint32_t));
-			}
-			else
-			{
-				const uint32_t* src = mScreenImage->GetBits();
-				uint8_t* dst = (uint8_t*)texPixels;
-				for (int y = 0; y < mHeight; ++y)
+				if (texPitch == (int)(mWidth * sizeof(uint32_t)))
 				{
-					memcpy(dst, src, mWidth * sizeof(uint32_t));
-					dst += texPitch;
-					src += mWidth;
+					memcpy(texPixels, srcBits, mWidth * mHeight * sizeof(uint32_t));
+				}
+				else
+				{
+					for (int y = 0; y < mHeight; ++y)
+					{
+						memcpy(dstRow, srcBits + (y * mWidth), mWidth * sizeof(uint32_t));
+						dstRow += texPitch;
+					}
+				}
+			}
+			else if (texW == 640 && texH == 480 && mWidth == 800 && mHeight == 600)
+			{
+				static int sScaleX[640];
+				static bool sScaleXInit = false;
+				if (!sScaleXInit)
+				{
+					for (int x = 0; x < 640; ++x)
+						sScaleX[x] = (x * 5) / 4;
+					sScaleXInit = true;
+				}
+
+				for (int dy = 0; dy < 480; ++dy)
+				{
+					int sy = (dy * 5) / 4;
+					const uint32_t* srcRow = srcBits + (sy * 800);
+					uint32_t* dst = (uint32_t*)dstRow;
+
+					for (int dx = 0; dx < 640; dx += 4)
+					{
+						dst[dx + 0] = srcRow[sScaleX[dx + 0]];
+						dst[dx + 1] = srcRow[sScaleX[dx + 1]];
+						dst[dx + 2] = srcRow[sScaleX[dx + 2]];
+						dst[dx + 3] = srcRow[sScaleX[dx + 3]];
+					}
+					dstRow += texPitch;
+				}
+			}
+			else if (texW > 0 && texH > 0)
+			{
+				for (int dy = 0; dy < texH; ++dy)
+				{
+					int sy = (dy * mHeight) / texH;
+					const uint32_t* srcRow = srcBits + (sy * mWidth);
+					uint32_t* dst = (uint32_t*)dstRow;
+					for (int dx = 0; dx < texW; ++dx)
+					{
+						int sx = (dx * mWidth) / texW;
+						dst[dx] = srcRow[sx];
+					}
+					dstRow += texPitch;
 				}
 			}
 			SDL_UnlockTexture(tex);
 		}
-		else
+		else if (texW == mWidth && texH == mHeight)
 		{
 			SDL_UpdateTexture(tex, nullptr, mScreenImage->GetBits(), mWidth * sizeof(uint32_t));
 		}

@@ -40,6 +40,10 @@ NewUserDialog::NewUserDialog(LawnApp* theApp, bool isRename) : LawnDialog(
 	mNameEditWidget = CreateEditWidget(0, this, this);
 	mNameEditWidget->mMaxChars = 12;
 	mNameEditWidget->AddWidthCheckFont(FONT_BRIANNETOD16, 220);
+	if (!isRename)
+	{
+		mNameEditWidget->SetText("Miyoo");
+	}
 	CalcSize(110, 40);
 }
 

@@ -1199,6 +1199,16 @@ void LawnApp::Init()
 	{
 		mPlayerInfo = mProfileMgr->GetAnyProfile();
 	}
+	if (mPlayerInfo == nullptr)
+	{
+		mPlayerInfo = mProfileMgr->AddProfile("Miyoo");
+		if (mPlayerInfo)
+		{
+			mPlayerInfo->SaveDetails();
+			mProfileMgr->Save();
+			WriteToRegistry();
+		}
+	}
 
 	mMaxExecutions = GetInteger("MaxExecutions", 0);
 	mMaxPlays = GetInteger("MaxPlays", 0);

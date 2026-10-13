@@ -194,6 +194,8 @@ public:
 	std::unique_ptr<GLImage>	mScreenImage;
 	void*					mSdlRenderer = nullptr;
 	void*					mSdlTexture = nullptr;
+	int						mTexWidth = 0;
+	int						mTexHeight = 0;
 
 	int						mNextCursorX;
 	int						mNextCursorY;
