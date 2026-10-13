@@ -437,6 +437,10 @@ void LawnApp::NewGame()
 void LawnApp::ShowGameSelector()
 {
 	KillBoard();
+	if (mWidgetManager && mWidgetManager->mImage)
+	{
+		mWidgetManager->mImage->Clear();
+	}
 	//UpdateRegisterInfo();
 	if (mGameSelector)
 	{

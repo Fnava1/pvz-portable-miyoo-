@@ -785,9 +785,11 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 					mWidgetManager->MouseDown((int)sVirtualCursorX, (int)sVirtualCursorY, 1);
 					break;
 				}
-				else if (event.key.keysym.sym == SDLK_LALT || event.key.keysym.sym == 'x' || event.key.keysym.sym == 'X')
+				else if (event.key.keysym.sym == SDLK_LCTRL || event.key.keysym.sym == SDLK_LALT ||
+						 event.key.keysym.sym == 'x' || event.key.keysym.sym == 'X' ||
+						 event.key.keysym.sym == 'a' || event.key.keysym.sym == 'A')
 				{
-					// Button B: Right Click (Cancel / Drop / Deselect)
+					// Button B / Y: Right Click (Cancel / Drop / Deselect)
 					mWidgetManager->MouseMove((int)sVirtualCursorX, (int)sVirtualCursorY);
 					mWidgetManager->MouseDown((int)sVirtualCursorX, (int)sVirtualCursorY, -1);
 					break;
@@ -844,7 +846,9 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 					mWidgetManager->MouseUp((int)sVirtualCursorX, (int)sVirtualCursorY, 1);
 					break;
 				}
-				else if (event.key.keysym.sym == SDLK_LALT || event.key.keysym.sym == 'x' || event.key.keysym.sym == 'X')
+				else if (event.key.keysym.sym == SDLK_LCTRL || event.key.keysym.sym == SDLK_LALT ||
+						 event.key.keysym.sym == 'x' || event.key.keysym.sym == 'X' ||
+						 event.key.keysym.sym == 'a' || event.key.keysym.sym == 'A')
 				{
 					mWidgetManager->MouseUp((int)sVirtualCursorX, (int)sVirtualCursorY, -1);
 					break;

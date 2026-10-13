@@ -1403,6 +1403,48 @@ bool GLInterface::PreDraw()
 	return true;
 }
 
+#if !PVZ_ENABLE_GLES
+static inline uint32_t ScaleBlend2(uint32_t c1, uint32_t c2, uint32_t w1, uint32_t w2)
+{
+	uint32_t rb1 = c1 & 0x00FF00FF;
+	uint32_t ag1 = (c1 >> 8) & 0x00FF00FF;
+	uint32_t rb2 = c2 & 0x00FF00FF;
+	uint32_t ag2 = (c2 >> 8) & 0x00FF00FF;
+
+	uint32_t rb = ((rb1 * w1 + rb2 * w2) >> 8) & 0x00FF00FF;
+	uint32_t ag = (ag1 * w1 + ag2 * w2) & 0xFF00FF00;
+	return rb | ag;
+}
+
+static inline void DownscaleRow800To640(const uint32_t* src, uint32_t* dst)
+{
+	for (int i = 0; i < 160; ++i)
+	{
+		uint32_t s0 = src[0];
+		uint32_t s1 = src[1];
+		uint32_t s2 = src[2];
+		uint32_t s3 = src[3];
+		uint32_t s4 = src[4];
+
+		dst[0] = ScaleBlend2(s0, s1, 205, 51);
+		dst[1] = ScaleBlend2(s1, s2, 154, 102);
+		dst[2] = ScaleBlend2(s2, s3, 102, 154);
+		dst[3] = ScaleBlend2(s3, s4, 51, 205);
+
+		src += 5;
+		dst += 4;
+	}
+}
+
+static inline void BlendRow640(const uint32_t* r1, const uint32_t* r2, uint32_t* dst, uint32_t w1, uint32_t w2)
+{
+	for (int x = 0; x < 640; ++x)
+	{
+		dst[x] = ScaleBlend2(r1[x], r2[x], w1, w2);
+	}
+}
+#endif
+
 void GLInterface::Flush()
 {
 #if !PVZ_ENABLE_GLES
@@ -1443,29 +1485,62 @@ void GLInterface::Flush()
 			}
 			else if (texW == 640 && texH == 480 && mWidth == 800 && mHeight == 600)
 			{
-				static int sScaleX[640];
-				static bool sScaleXInit = false;
-				if (!sScaleXInit)
+				static bool sSmoothScale = true;
+				static bool sSmoothScaleInit = false;
+				if (!sSmoothScaleInit)
 				{
-					for (int x = 0; x < 640; ++x)
-						sScaleX[x] = (x * 5) / 4;
-					sScaleXInit = true;
+					const char* env = getenv("PVZ_SMOOTH_SCALE");
+					if (env && (strcmp(env, "0") == 0 || strcmp(env, "off") == 0 || strcmp(env, "false") == 0))
+						sSmoothScale = false;
+					sSmoothScaleInit = true;
 				}
 
-				for (int dy = 0; dy < 480; ++dy)
+				if (sSmoothScale)
 				{
-					int sy = (dy * 5) / 4;
-					const uint32_t* srcRow = srcBits + (sy * 800);
-					uint32_t* dst = (uint32_t*)dstRow;
-
-					for (int dx = 0; dx < 640; dx += 4)
+					static uint32_t sHRows[5][640];
+					for (int block = 0; block < 120; ++block)
 					{
-						dst[dx + 0] = srcRow[sScaleX[dx + 0]];
-						dst[dx + 1] = srcRow[sScaleX[dx + 1]];
-						dst[dx + 2] = srcRow[sScaleX[dx + 2]];
-						dst[dx + 3] = srcRow[sScaleX[dx + 3]];
+						int sy = block * 5;
+						DownscaleRow800To640(srcBits + (sy + 0) * 800, sHRows[0]);
+						DownscaleRow800To640(srcBits + (sy + 1) * 800, sHRows[1]);
+						DownscaleRow800To640(srcBits + (sy + 2) * 800, sHRows[2]);
+						DownscaleRow800To640(srcBits + (sy + 3) * 800, sHRows[3]);
+						DownscaleRow800To640(srcBits + (sy + 4) * 800, sHRows[4]);
+
+						BlendRow640(sHRows[0], sHRows[1], (uint32_t*)(dstRow + 0 * texPitch), 205, 51);
+						BlendRow640(sHRows[1], sHRows[2], (uint32_t*)(dstRow + 1 * texPitch), 154, 102);
+						BlendRow640(sHRows[2], sHRows[3], (uint32_t*)(dstRow + 2 * texPitch), 102, 154);
+						BlendRow640(sHRows[3], sHRows[4], (uint32_t*)(dstRow + 3 * texPitch), 51, 205);
+
+						dstRow += 4 * texPitch;
 					}
-					dstRow += texPitch;
+				}
+				else
+				{
+					static int sScaleX[640];
+					static bool sScaleXInit = false;
+					if (!sScaleXInit)
+					{
+						for (int x = 0; x < 640; ++x)
+							sScaleX[x] = (x * 5) / 4;
+						sScaleXInit = true;
+					}
+
+					for (int dy = 0; dy < 480; ++dy)
+					{
+						int sy = (dy * 5) / 4;
+						const uint32_t* srcRow = srcBits + (sy * 800);
+						uint32_t* dst = (uint32_t*)dstRow;
+
+						for (int dx = 0; dx < 640; dx += 4)
+						{
+							dst[dx + 0] = srcRow[sScaleX[dx + 0]];
+							dst[dx + 1] = srcRow[sScaleX[dx + 1]];
+							dst[dx + 2] = srcRow[sScaleX[dx + 2]];
+							dst[dx + 3] = srcRow[sScaleX[dx + 3]];
+						}
+						dstRow += texPitch;
+					}
 				}
 			}
 			else if (texW > 0 && texH > 0)

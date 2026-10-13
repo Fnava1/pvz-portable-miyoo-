@@ -101,16 +101,16 @@ HandheldButton HandheldInput::MapSDLKeyToHandheldButton(int sdlKey, int scancode
     if (sdlKey == SDLK_SPACE || sdlKey == 'c' || sdlKey == 'C') {
         return HandheldButton::A;
     }
-    // B button: LAlt or 'x'
-    if (sdlKey == SDLK_LALT || sdlKey == 'x' || sdlKey == 'X') {
+    // B button: LCtrl (Miyoo physical B), 'x', or LAlt fallback
+    if (sdlKey == SDLK_LCTRL || sdlKey == 'x' || sdlKey == 'X') {
         return HandheldButton::B;
     }
-    // X button: LShift or 'y'
+    // X button: LShift (Miyoo physical X) or 'y'
     if (sdlKey == SDLK_LSHIFT || sdlKey == 'y' || sdlKey == 'Y') {
         return HandheldButton::X;
     }
-    // Y button: LCtrl or 'a'
-    if (sdlKey == SDLK_LCTRL || sdlKey == 'a' || sdlKey == 'A') {
+    // Y button: LAlt (Miyoo physical Y) or 'a'
+    if (sdlKey == SDLK_LALT || sdlKey == 'a' || sdlKey == 'A') {
         return HandheldButton::Y;
     }
 
@@ -250,6 +250,7 @@ void HandheldInput::OnButtonDown(HandheldButton button) {
                 PlantOrConfirm();
                 break;
             case HandheldButton::B:
+            case HandheldButton::Y:
                 CancelOrDrop();
                 break;
             case HandheldButton::X:
@@ -284,6 +285,7 @@ void HandheldInput::OnButtonDown(HandheldButton button) {
                 ShopBuy();
                 break;
             case HandheldButton::B:
+            case HandheldButton::Y:
                 ShopExit();
                 break;
             default:
@@ -296,7 +298,8 @@ void HandheldInput::OnButtonDown(HandheldButton button) {
             case HandheldButton::Down:  mHoldDown = true; break;
             case HandheldButton::Up:    mHoldUp = true; break;
             case HandheldButton::A:     PlantOrConfirm(); break;
-            case HandheldButton::B:     CancelOrDrop(); break;
+            case HandheldButton::B:
+            case HandheldButton::Y:     CancelOrDrop(); break;
             case HandheldButton::X:     ToggleShovel(); break;
             default: break;
         }

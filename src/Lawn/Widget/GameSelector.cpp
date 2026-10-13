@@ -550,6 +550,17 @@ void GameSelector::Draw(Graphics* g)
 	if (mApp->GetDialog(Dialogs::DIALOG_STORE) || mApp->GetDialog(Dialogs::DIALOG_ALMANAC))
 		return;
 
+	if (mSlideCounter > 0)
+	{
+		g->SetColor(Color(0, 0, 0, 255));
+		g->FillRect(-mX, -mY, mApp->mWidth, mApp->mHeight);
+	}
+	else if (mSelectorState == SelectorAnimState::SELECTOR_OPEN)
+	{
+		g->SetColor(Color(0, 0, 0, 255));
+		g->FillRect(0, 0, mWidth, mHeight);
+	}
+
 	g->SetLinearBlend(false);
 	Reanimation* aSelectorReanim = mApp->ReanimationGet(mSelectorReanimID);
 	aSelectorReanim->DrawRenderGroup(g, 1);  // "SelectorScreen_BG"
@@ -750,7 +761,11 @@ void GameSelector::Update()
 
 		if (mZombatarWidget)
 			mZombatarWidget->Move(aNewX + BOARD_WIDTH, aNewY);
-		mAchievementsWidget->mY = aNewY + mApp->mHeight;
+		if (mAchievementsWidget)
+		{
+			mAchievementsWidget->Move(mAchievementsWidget->mX, aNewY + mApp->mHeight);
+			mAchievementsWidget->MarkDirty();
+		}
 
 		mSlideCounter--;
 	}

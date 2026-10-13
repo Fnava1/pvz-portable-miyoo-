@@ -80,9 +80,10 @@ AchievementsWidget::~AchievementsWidget() {
 }
 
 void AchievementsWidget::Update() {
-	MarkDirty();
 	if (mScrollValue <= 0)
 		return;
+
+	MarkDirty();
 
 	mScrollValue = std::min(mScrollValue, mDefaultScrollValue);
 
@@ -96,9 +97,8 @@ void AchievementsWidget::Update() {
 	int aMaxScroll = 2 * mApp->mHeight + 50 - mHeight;
 	aNewY = std::max(aNewY, aMaxScroll);
 
-	mY = aNewY;
-
 	int aDelta = aNewY - mY;
+	mY = aNewY;
 	mMoreRockRect.mY += aDelta;
 	aBackButtonRect.mY += aDelta;
 
@@ -106,24 +106,37 @@ void AchievementsWidget::Update() {
 }
 
 void AchievementsWidget::Draw(Graphics* g) {
+	g->SetColor(Color(0, 0, 0, 255));
+	g->FillRect(0, 0, mWidth, mHeight);
+
 	g->DrawImage(IMAGE_SELECTORSCREEN_ACHIEVEMENTS_BG, 0, 0);
 
 	int aHeight = IMAGE_SELECTORSCREEN_ACHIEVEMENTS_BG->mHeight;
-	for (int i = 1; i <= 70; i++)
+	int aVisibleMinY = -mY;
+	int aVisibleMaxY = -mY + mApp->mHeight;
+
+	int aStartTile = std::max(1, (aVisibleMinY / aHeight));
+	int aEndTile = std::min(70, (aVisibleMaxY / aHeight) + 1);
+	for (int i = aStartTile; i <= aEndTile; i++)
 		g->DrawImage(IMAGE_ACHEESEMENTS_HOLE_TILE, 0, aHeight * i);
 
-	g->DrawImage(IMAGE_ACHEESEMENTS_BOOKWORM, 0, 1125);
-	g->DrawImage(IMAGE_ACHEESEMENTS_BEJEWELED, 0, 2250);
-	g->DrawImage(IMAGE_ACHEESEMENTS_CHUZZLE, 0, 4500);
-	g->DrawImage(IMAGE_ACHEESEMENTS_PEGGLE, 0, 6750);
-	g->DrawImage(IMAGE_ACHEESEMENTS_PIPE, 0, 9000);
-	g->DrawImage(IMAGE_ACHEESEMENTS_ZUMA, 0, 11250);
+	auto DrawIfVisible = [&](Image* theImage, int theX, int theY) {
+		if (theImage && (theY + theImage->mHeight >= aVisibleMinY) && (theY <= aVisibleMaxY))
+			g->DrawImage(theImage, theX, theY);
+	};
 
-	g->DrawImage(IMAGE_ACHEESEMENTS_CHINA, 0, mHeight - IMAGE_ACHEESEMENTS_CHINA->mHeight - /*50*/ 650);
+	DrawIfVisible(IMAGE_ACHEESEMENTS_BOOKWORM, 0, 1125);
+	DrawIfVisible(IMAGE_ACHEESEMENTS_BEJEWELED, 0, 2250);
+	DrawIfVisible(IMAGE_ACHEESEMENTS_CHUZZLE, 0, 4500);
+	DrawIfVisible(IMAGE_ACHEESEMENTS_PEGGLE, 0, 6750);
+	DrawIfVisible(IMAGE_ACHEESEMENTS_PIPE, 0, 9000);
+	DrawIfVisible(IMAGE_ACHEESEMENTS_ZUMA, 0, 11250);
+	DrawIfVisible(IMAGE_ACHEESEMENTS_CHINA, 0, mHeight - IMAGE_ACHEESEMENTS_CHINA->mHeight - 650);
 
 	if (aBackButtonRect.Contains(mWidgetManager->mLastMouseX - mX, mWidgetManager->mLastMouseY - mY))
 		g->DrawImage(IMAGE_ACHEESEMENTS_BACK_HIGHLIGHT, 128, 55);
 
+	g->SetFastStretch(true);
 	for (int i = 0; i < MAX_ACHIEVEMENTS; i++) {
 		bool aHasAchievement;
 		if (mApp->mPlayerInfo) aHasAchievement = mApp->mPlayerInfo->mEarnedAchievements[i];
@@ -161,6 +174,7 @@ void AchievementsWidget::Draw(Graphics* g) {
 		std::string aDesc = mApp->GetString(gAchievementList[i].description, gAchievementList[i].description);
 		g->WriteWordWrapped(aPos, aDesc, 12);
 	}
+	g->SetFastStretch(false);
 
 	g->DrawImage(IMAGE_ACHEESEMENTS_MORE_ROCK, 700, 450);
 
@@ -177,14 +191,17 @@ void AchievementsWidget::KeyDown(KeyCode theKey) {
 	if (theKey == KEYCODE_UP) {
 		mScrollValue = mDefaultScrollValue;
 		mScrollDirection = 1;
+		MarkDirty();
 	}
 	else if (theKey == KEYCODE_DOWN) {
 		mScrollValue = mDefaultScrollValue;
 		mScrollDirection = -1;
+		MarkDirty();
 	}
 	else if (theKey == KEYCODE_ESCAPE) {
 		mApp->mGameSelector->SlideTo(0, 0);
 		mApp->mGameSelector->mWidgetManager->SetFocus(mApp->mGameSelector.get());
+		MarkDirty();
 	}
 }
 
@@ -194,6 +211,8 @@ void AchievementsWidget::MouseDown(int x, int y, [[maybe_unused]] int theClickCo
 
 	if (mMoreRockRect.Contains(x, y))
 		mApp->PlaySample(SOUND_GRAVEBUTTON);
+
+	MarkDirty();
 }
 
 void AchievementsWidget::MouseUp(int x, int y, [[maybe_unused]] int theClickCount) {
@@ -208,6 +227,8 @@ void AchievementsWidget::MouseUp(int x, int y, [[maybe_unused]] int theClickCoun
 		mScrollDirection = mDidPressMoreButton ? -1 : 1;
 		mScrollValue = 20;
 	}
+
+	MarkDirty();
 }
 
 void AchievementsWidget::MouseWheel(int theDelta) {
@@ -217,6 +238,8 @@ void AchievementsWidget::MouseWheel(int theDelta) {
 		mScrollDirection = 1;
 	else if (theDelta < 0)
 		mScrollDirection = -1;
+
+	MarkDirty();
 }
 
 void ReportAchievement::GiveAchievement(LawnApp* theApp, int theAchievement, bool theForceGive) {

@@ -228,6 +228,7 @@ def build_package(
                         "export SDL_MMIYOO_TEXTURE_POOL=1\n"
                         "export SDL_MMIYOO_TEXTURE_POOL_MAX_BYTES=16777216\n"
                         "export SDL_MMIYOO_VSYNC_MODE=adaptive\n"
+                        "export PVZ_SMOOTH_SCALE=1\n"
                         "export SDL_HINT_RENDER_SCALE_QUALITY=0\n"
                         "export LD_LIBRARY_PATH=\"./libs:$LD_LIBRARY_PATH\"\n"
                         "killall -9 audioserver 2>/dev/null\n"
