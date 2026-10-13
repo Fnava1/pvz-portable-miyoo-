@@ -1066,14 +1066,8 @@ void ZombatarWidget::DrawCreate(Graphics* g)
 			aPartIndex += aPartIndex / 17;
 		bool aSelected = mPart[mPage] == aPartIndex;
 		bool aHover = i == mHoverGridCell;
-		bool aDim = !aSelected && !aHover;
 
-		if (aDim)
-		{
-			g->SetColorizeImages(true);
-			g->SetColor(ZOMBATAR_CELL_DIM_COLOR);
-		}
-		g->DrawImage(aSelected ? IMAGE_ZOMBATAR_ACCESSORY_BG_HIGHLIGHT : IMAGE_ZOMBATAR_ACCESSORY_BG, aRect.mX, aRect.mY);
+		g->DrawImage((aSelected || aHover) ? IMAGE_ZOMBATAR_ACCESSORY_BG_HIGHLIGHT : IMAGE_ZOMBATAR_ACCESSORY_BG, aRect.mX, aRect.mY);
 
 		if (mPage == ZOMBATAR_PAGE_CLOTHES && IMAGE_ZOMBATAR_ZOMBIE_BLANK_SKIN && IMAGE_ZOMBATAR_ZOMBIE_BLANK)
 		{
@@ -1082,7 +1076,7 @@ void ZombatarWidget::DrawCreate(Graphics* g)
 				g->ClipRect(Rect(aRect.mX + ZOMBATAR_CELL_INSET, aRect.mY + ZOMBATAR_CELL_INSET,
 					aRect.mWidth - ZOMBATAR_CELL_INSET, aRect.mHeight - ZOMBATAR_CELL_INSET));
 				Color aSkinColor = ZombatarGetColor(mColor[ZOMBATAR_PAGE_SKIN]);
-				aSkinColor.mAlpha = aDim ? 0x80 : 0xff;
+				aSkinColor.mAlpha = 0xff;
 				g->SetColorizeImages(true);
 				g->SetColor(aSkinColor);
 				g->DrawImage(IMAGE_ZOMBATAR_ZOMBIE_BLANK_SKIN,
@@ -1092,11 +1086,6 @@ void ZombatarWidget::DrawCreate(Graphics* g)
 				g->DrawImage(IMAGE_ZOMBATAR_ZOMBIE_BLANK,
 					Rect(aRect.mX - ZOMBATAR_CELL_ZOMBIE_MARGIN, aRect.mY - ZOMBATAR_CELL_ZOMBIE_MARGIN, aRect.mWidth, aRect.mHeight),
 					Rect(0, 0, IMAGE_ZOMBATAR_ZOMBIE_BLANK->mWidth, IMAGE_ZOMBATAR_ZOMBIE_BLANK->mHeight));
-			}
-			if (aDim)
-			{
-				g->SetColorizeImages(true);
-				g->SetColor(ZOMBATAR_CELL_DIM_COLOR);
 			}
 		}
 
@@ -1116,12 +1105,6 @@ void ZombatarWidget::DrawCreate(Graphics* g)
 			}
 			g->DrawImage(aImage, aIconRect, Rect(0, 0, aImage->mWidth, aImage->mHeight));
 		}
-
-		if (aDim)
-		{
-			g->SetColorizeImages(false);
-			g->SetColor(Color::White);
-		}
 	}
 
 	if (PageAllowsNone())
@@ -1129,19 +1112,8 @@ void ZombatarWidget::DrawCreate(Graphics* g)
 		Rect aRect = GetItemRect(aItemCount);
 		bool aSelected = mPart[mPage] < 0;
 		bool aHover = mHoverGridCell == aItemCount;
-		bool aDim = !aSelected && !aHover;
-		if (aDim)
-		{
-			g->SetColorizeImages(true);
-			g->SetColor(ZOMBATAR_CELL_DIM_COLOR);
-		}
-		g->DrawImage(aSelected ? IMAGE_ZOMBATAR_ACCESSORY_BG_HIGHLIGHT : IMAGE_ZOMBATAR_ACCESSORY_BG, aRect.mX, aRect.mY);
+		g->DrawImage((aSelected || aHover) ? IMAGE_ZOMBATAR_ACCESSORY_BG_HIGHLIGHT : IMAGE_ZOMBATAR_ACCESSORY_BG, aRect.mX, aRect.mY);
 		g->DrawImage(IMAGE_ZOMBATAR_ACCESSORY_BG_NONE, aRect.mX, aRect.mY);
-		if (aDim)
-		{
-			g->SetColorizeImages(false);
-			g->SetColor(Color::White);
-		}
 	}
 
 	g->DrawImage(IMAGE_ZOMBATAR_COLORS_BG, ZOMBATAR_COLORS_X, ZOMBATAR_COLORS_Y);

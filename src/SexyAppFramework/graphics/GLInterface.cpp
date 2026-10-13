@@ -1404,6 +1404,78 @@ bool GLInterface::PreDraw()
 }
 
 #if !PVZ_ENABLE_GLES
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+#include <arm_neon.h>
+
+static inline void DownscaleRow800To640(const uint32_t* src, uint32_t* dst)
+{
+	static const uint8_t kW1_data[16] = {
+		205, 205, 205, 205,
+		154, 154, 154, 154,
+		102, 102, 102, 102,
+		51,  51,  51,  51
+	};
+	static const uint8_t kW2_data[16] = {
+		51,  51,  51,  51,
+		102, 102, 102, 102,
+		154, 154, 154, 154,
+		205, 205, 205, 205
+	};
+	const uint8x16_t kW1 = vld1q_u8(kW1_data);
+	const uint8x16_t kW2 = vld1q_u8(kW2_data);
+
+	for (int i = 0; i < 160; ++i)
+	{
+		uint8x16_t v1 = vld1q_u8(reinterpret_cast<const uint8_t*>(src));
+		uint8x16_t v2 = vld1q_u8(reinterpret_cast<const uint8_t*>(src) + 4);
+
+		uint16x8_t p_lo = vmull_u8(vget_low_u8(v1), vget_low_u8(kW1));
+		p_lo = vmlal_u8(p_lo, vget_low_u8(v2), vget_low_u8(kW2));
+
+		uint16x8_t p_hi = vmull_u8(vget_high_u8(v1), vget_high_u8(kW1));
+		p_hi = vmlal_u8(p_hi, vget_high_u8(v2), vget_high_u8(kW2));
+
+		uint8x8_t r_lo = vshrn_n_u16(p_lo, 8);
+		uint8x8_t r_hi = vshrn_n_u16(p_hi, 8);
+
+		vst1q_u8(reinterpret_cast<uint8_t*>(dst), vcombine_u8(r_lo, r_hi));
+
+		src += 5;
+		dst += 4;
+	}
+}
+
+static inline void BlendRow640(const uint32_t* r1, const uint32_t* r2, uint32_t* dst, uint32_t w1, uint32_t w2)
+{
+	const uint8_t* p1 = reinterpret_cast<const uint8_t*>(r1);
+	const uint8_t* p2 = reinterpret_cast<const uint8_t*>(r2);
+	uint8_t* d = reinterpret_cast<uint8_t*>(dst);
+
+	uint8x8_t vw1 = vdup_n_u8(static_cast<uint8_t>(w1));
+	uint8x8_t vw2 = vdup_n_u8(static_cast<uint8_t>(w2));
+
+	for (int i = 0; i < 160; ++i)
+	{
+		uint8x16_t v1 = vld1q_u8(p1);
+		uint8x16_t v2 = vld1q_u8(p2);
+
+		uint16x8_t p_lo = vmull_u8(vget_low_u8(v1), vw1);
+		p_lo = vmlal_u8(p_lo, vget_low_u8(v2), vw2);
+
+		uint16x8_t p_hi = vmull_u8(vget_high_u8(v1), vw1);
+		p_hi = vmlal_u8(p_hi, vget_high_u8(v2), vw2);
+
+		uint8x8_t r_lo = vshrn_n_u16(p_lo, 8);
+		uint8x8_t r_hi = vshrn_n_u16(p_hi, 8);
+
+		vst1q_u8(d, vcombine_u8(r_lo, r_hi));
+
+		p1 += 16;
+		p2 += 16;
+		d += 16;
+	}
+}
+#else
 static inline uint32_t ScaleBlend2(uint32_t c1, uint32_t c2, uint32_t w1, uint32_t w2)
 {
 	uint32_t rb1 = c1 & 0x00FF00FF;
@@ -1443,6 +1515,7 @@ static inline void BlendRow640(const uint32_t* r1, const uint32_t* r2, uint32_t*
 		dst[x] = ScaleBlend2(r1[x], r2[x], w1, w2);
 	}
 }
+#endif
 #endif
 
 void GLInterface::Flush()

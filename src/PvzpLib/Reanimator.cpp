@@ -617,8 +617,8 @@ void Reanimation::ReanimBltMatrix(Graphics* g, Image* theImage, SexyMatrix3& the
 	{
 		float aScaleX = theTransform.m00;
 		float aScaleY = theTransform.m11;
-		int aPosX = FloatRoundToInt(theTransform.m02 - aScaleX * theSrcRect.mWidth * 0.5f);
-		int aPosY = FloatRoundToInt(theTransform.m12 - aScaleY * theSrcRect.mHeight * 0.5f);
+		int aPosX = FloatRoundToInt(theTransform.m02 - g->mTransX - aScaleX * theSrcRect.mWidth * 0.5f);
+		int aPosY = FloatRoundToInt(theTransform.m12 - g->mTransY - aScaleY * theSrcRect.mHeight * 0.5f);
 		int aOldMode = g->GetDrawMode();
 		g->SetDrawMode(theDrawMode);
 		Rect aOldClipRect = g->mClipRect;
@@ -632,6 +632,9 @@ void Reanimation::ReanimBltMatrix(Graphics* g, Image* theImage, SexyMatrix3& the
 			g->SetColorizeImages(true);
 		}
 
+		bool aOldFastStretch = g->GetFastStretch();
+		g->SetFastStretch(true);
+
 		if (FloatApproxEqual(aScaleX, 1.0f) && FloatApproxEqual(aScaleY, 1.0f))  // no scaling
 			g->DrawImage(theImage, aPosX, aPosY, theSrcRect);
 		else
@@ -641,6 +644,8 @@ void Reanimation::ReanimBltMatrix(Graphics* g, Image* theImage, SexyMatrix3& the
 			Rect aDestRect(aPosX, aPosY, aWidth, aHeight);
 			g->DrawImage(theImage, aDestRect, theSrcRect);
 		}
+
+		g->SetFastStretch(aOldFastStretch);
 
 		if (theColor != Color::White)
 		{
