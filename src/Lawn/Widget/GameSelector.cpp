@@ -62,11 +62,13 @@ GameSelectorOverlay::GameSelectorOverlay(GameSelector* theGameSelector)
 
 GameSelector::GameSelector(LawnApp* theApp)
 {
+#ifndef LOW_MEMORY
 	mLoadedResourceNames.push_back("DelayLoad_Zombatar");
 	mLoadedResourceNames.push_back("DelayLoad_Almanac");
 
 	for (std::string& resource : mLoadedResourceNames)
 		PvzpLoadResources(resource.c_str());
+#endif
 
 	mApp = theApp;
 	mLevel = 1;
@@ -344,7 +346,9 @@ GameSelector::GameSelector(LawnApp* theApp)
 	mStartY = 0;
 	mDestX = 0;
 	mDestY = 0;
+#ifndef LOW_MEMORY
 	mZombatarWidget = std::make_unique<ZombatarWidget>(this);
+#endif
 	mAchievementsWidget = std::make_unique<AchievementsWidget>(this->mApp);
 	mAchievementsWidget->Move(0, mApp->mHeight);
 
@@ -744,7 +748,8 @@ void GameSelector::Update()
 		int aNewY = PvzpAnimateCurve(75, 0, mSlideCounter, mStartY, mDestY, PvzpCurves::CURVE_EASE_IN_OUT);
 		Move(aNewX, aNewY);
 
-		mZombatarWidget->Move(aNewX + BOARD_WIDTH, aNewY);
+		if (mZombatarWidget)
+			mZombatarWidget->Move(aNewX + BOARD_WIDTH, aNewY);
 		mAchievementsWidget->mY = aNewY + mApp->mHeight;
 
 		mSlideCounter--;
@@ -948,7 +953,8 @@ void GameSelector::AddedToManager(WidgetManager* theWidgetManager)
 {
 	Widget::AddedToManager(theWidgetManager);
 
-	theWidgetManager->AddWidget(mZombatarWidget.get());
+	if (mZombatarWidget)
+		theWidgetManager->AddWidget(mZombatarWidget.get());
 	theWidgetManager->AddWidget(mAchievementsWidget.get());
 }
 
@@ -956,14 +962,16 @@ void GameSelector::RemovedFromManager(WidgetManager* theWidgetManager)
 {
 	Widget::RemovedFromManager(theWidgetManager);
 
-	theWidgetManager->RemoveWidget(mZombatarWidget.get());
+	if (mZombatarWidget)
+		theWidgetManager->RemoveWidget(mZombatarWidget.get());
 	theWidgetManager->RemoveWidget(mAchievementsWidget.get());
 }
 
 void GameSelector::OrderInManagerChanged()
 {
 	mWidgetManager->PutInfront(mAchievementsWidget.get(), this);
-	mWidgetManager->BringToFront(mZombatarWidget.get());
+	if (mZombatarWidget)
+		mWidgetManager->BringToFront(mZombatarWidget.get());
 }
 
 void GameSelector::KeyDown(KeyCode theKey)
@@ -1373,6 +1381,16 @@ void GameSelector::SlideTo(int theX, int theY)
 
 void GameSelector::ShowZombatarScreen()
 {
+	if (!mZombatarWidget)
+	{
+		PvzpLoadResources("DelayLoad_Zombatar");
+		mZombatarWidget = std::make_unique<ZombatarWidget>(this);
+		if (mWidgetManager)
+		{
+			mWidgetManager->AddWidget(mZombatarWidget.get());
+			mWidgetManager->BringToFront(mZombatarWidget.get());
+		}
+	}
 	if (!mZombatarWidget)
 		return;
 	if (mApp->mPlayerInfo && !mApp->mPlayerInfo->mZombatarAccepted)

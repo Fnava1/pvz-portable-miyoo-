@@ -2953,6 +2953,7 @@ void LawnApp::DrawCrazyDave(Graphics* g)
 int LawnApp::GetNumPreloadingTasks()
 {
 	int aTaskCount = 10;
+#ifndef LOW_MEMORY
 	if (mPlayerInfo)
 	{
 		for (SeedType i = SeedType::SEED_PEASHOOTER; i < SeedType::NUM_SEED_TYPES; i = static_cast<SeedType>(static_cast<int>(i) + 1))
@@ -2978,6 +2979,7 @@ int LawnApp::GetNumPreloadingTasks()
 			}
 		}
 	}
+#endif
 	return aTaskCount * 68;
 }
 
@@ -3008,6 +3010,7 @@ void LawnApp::PreloadForUser()
 	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_HAND, true);
 	mCompletedLoadingThreadTasks += 68;
 
+#ifndef LOW_MEMORY
 	if (mPlayerInfo)
 	{
 		for (SeedType i = SeedType::SEED_PEASHOOTER; i < SeedType::NUM_SEED_TYPES; i = static_cast<SeedType>(static_cast<int>(i) + 1))
@@ -3065,6 +3068,7 @@ void LawnApp::PreloadForUser()
 			}
 		}
 	}
+#endif
 
 	if (mCompletedLoadingThreadTasks != aNumTasks)
 	{
