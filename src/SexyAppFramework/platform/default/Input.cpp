@@ -821,6 +821,15 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 						break;
 					}
 				}
+
+				if (event.key.keysym.sym == SDLK_LEFT || event.key.keysym.sym == SDLK_RIGHT ||
+					event.key.keysym.sym == SDLK_UP || event.key.keysym.sym == SDLK_DOWN)
+				{
+					if (gLawnApp && gLawnApp->mBoard && gLawnApp->mBoard->CanUseGridCursor())
+					{
+						break;
+					}
+				}
 #endif
 
 				mWidgetManager->KeyDown(SDLKeyToKeyCode(event.key.keysym.sym));
@@ -858,6 +867,14 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 						 event.key.keysym.sym == SDLK_BACKSPACE || event.key.keysym.sym == 't' || event.key.keysym.sym == 'T')
 				{
 					break;
+				}
+				else if (event.key.keysym.sym == SDLK_LEFT || event.key.keysym.sym == SDLK_RIGHT ||
+						 event.key.keysym.sym == SDLK_UP || event.key.keysym.sym == SDLK_DOWN)
+				{
+					if (gLawnApp && gLawnApp->mBoard && gLawnApp->mBoard->CanUseGridCursor())
+					{
+						break;
+					}
 				}
 #endif
 				mWidgetManager->KeyUp(SDLKeyToKeyCode(event.key.keysym.sym));

@@ -1612,6 +1612,86 @@ void LawnApp::UpdateFrames()
 	}
 }
 
+void LawnApp::UpdateVirtualCursor()
+{
+#if !PVZ_ENABLE_GLES
+	static int sHoldTicksLeft = 0;
+	static int sHoldTicksRight = 0;
+	static int sHoldTicksUp = 0;
+	static int sHoldTicksDown = 0;
+
+	if (mBoard && mBoard->CanUseGridCursor())
+	{
+		const Uint8* state = SDL_GetKeyboardState(nullptr);
+		if (!state)
+			return;
+
+		int moveX = 0;
+		int moveY = 0;
+
+		// Initial repeat delay: 16 frames (~260ms), repeat rate: every 7 frames (~115ms)
+		if (state[SDL_SCANCODE_LEFT])
+		{
+			if (sHoldTicksLeft == 0 || (sHoldTicksLeft >= 16 && (sHoldTicksLeft - 16) % 7 == 0))
+				moveX -= 1;
+			sHoldTicksLeft++;
+		}
+		else
+		{
+			sHoldTicksLeft = 0;
+		}
+
+		if (state[SDL_SCANCODE_RIGHT])
+		{
+			if (sHoldTicksRight == 0 || (sHoldTicksRight >= 16 && (sHoldTicksRight - 16) % 7 == 0))
+				moveX += 1;
+			sHoldTicksRight++;
+		}
+		else
+		{
+			sHoldTicksRight = 0;
+		}
+
+		if (state[SDL_SCANCODE_UP])
+		{
+			if (sHoldTicksUp == 0 || (sHoldTicksUp >= 16 && (sHoldTicksUp - 16) % 7 == 0))
+				moveY -= 1;
+			sHoldTicksUp++;
+		}
+		else
+		{
+			sHoldTicksUp = 0;
+		}
+
+		if (state[SDL_SCANCODE_DOWN])
+		{
+			if (sHoldTicksDown == 0 || (sHoldTicksDown >= 16 && (sHoldTicksDown - 16) % 7 == 0))
+				moveY += 1;
+			sHoldTicksDown++;
+		}
+		else
+		{
+			sHoldTicksDown = 0;
+		}
+
+		if (moveX != 0 || moveY != 0)
+		{
+			mBoard->GridCursorMove(moveX, moveY);
+		}
+		return;
+	}
+	else
+	{
+		sHoldTicksLeft = 0;
+		sHoldTicksRight = 0;
+		sHoldTicksUp = 0;
+		sHoldTicksDown = 0;
+	}
+#endif
+
+	SexyApp::UpdateVirtualCursor();
+}
+
 void LawnApp::ToggleSlowMo()
 {
 	gSlowMoCounter = 0;

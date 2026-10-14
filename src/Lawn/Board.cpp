@@ -95,6 +95,9 @@ Board::Board(LawnApp* theApp)
 	mCutScene = std::make_unique<CutScene>();
 	mSpecialGraveStoneX = -1;
 	mSpecialGraveStoneY = -1;
+	mGridCursorCol = 4;
+	mGridCursorRow = 2;
+	mGridCursorActive = false;
 	for (int i = 0; i < MAX_GRID_SIZE_X; i++)
 	{
 		for (int j = 0; j < MAX_GRID_SIZE_Y; j++)
@@ -235,7 +238,10 @@ Board::Board(LawnApp* theApp)
 	}
 }
 
-Board::~Board() = default;
+Board::~Board()
+{
+	SexyAppBase::sShowVirtualCursor = true;
+}
 
 void BoardInitForPlayer()
 {
@@ -2056,6 +2062,148 @@ void Board::ToggleShovel()
 		mCursorObject->mCursorType = CursorType::CURSOR_TYPE_SHOVEL;
 		mApp->PlayFoley(FoleyType::FOLEY_SHOVEL);
 	}
+}
+
+bool Board::CanUseGridCursor()
+{
+	if (mPaused || mApp->mGameScene != GameScenes::SCENE_PLAYING)
+		return false;
+
+	if (mApp->mGameScene == GameScenes::SCENE_LEVEL_INTRO)
+		return false;
+
+	if (IsScaryPotterDaveTalking() && mApp->mCrazyDaveMessageIndex != -1)
+		return false;
+
+	if (mApp->mGameMode == GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN ||
+		mApp->mGameMode == GameMode::GAMEMODE_TREE_OF_WISDOM ||
+		mApp->IsWhackAZombieLevel())
+	{
+		return false;
+	}
+
+	if (mApp->GetDialogCount() > 0)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+void Board::GridCursorMove(int theDeltaX, int theDeltaY)
+{
+	if (!CanUseGridCursor())
+		return;
+
+	int aMaxRows = StageHasPool() ? MAX_GRID_SIZE_Y : (MAX_GRID_SIZE_Y - 1);
+
+	mGridCursorCol = std::clamp(mGridCursorCol + theDeltaX, 0, MAX_GRID_SIZE_X - 1);
+	mGridCursorRow = std::clamp(mGridCursorRow + theDeltaY, 0, aMaxRows - 1);
+
+	GridCursorSnapToCell(mGridCursorCol, mGridCursorRow);
+}
+
+void Board::GridCursorSnapToCell(int theCol, int theRow)
+{
+	int aCellX = GridToPixelX(theCol, theRow);
+	int aCellY = GridToPixelY(theCol, theRow);
+	int aCellHeight = (StageHasPool() || StageHasRoof()) ? 85 : 100;
+
+	SexyAppBase::sVirtualCursorX = aCellX + 40.0f;
+	SexyAppBase::sVirtualCursorY = aCellY + (aCellHeight * 0.5f);
+
+	if (mApp->mWidgetManager)
+	{
+		mApp->mWidgetManager->MouseMove((int)SexyAppBase::sVirtualCursorX, (int)SexyAppBase::sVirtualCursorY);
+		mApp->mCustomCursorDirty = true;
+	}
+
+	for (Coin* aCoin : mCoins)
+	{
+		if (aCoin->mDead || aCoin->mIsBeingCollected)
+			continue;
+		if (aCoin->IsSun() || aCoin->IsMoney())
+		{
+			float cx = aCoin->mPosX + aCoin->mWidth * 0.5f;
+			float cy = aCoin->mPosY + aCoin->mHeight * 0.5f;
+			float dx = SexyAppBase::sVirtualCursorX - cx;
+			float dy = SexyAppBase::sVirtualCursorY - cy;
+			if ((dx * dx + dy * dy) <= (68.0f * 68.0f))
+			{
+				aCoin->PlayCollectSound();
+				aCoin->Collect();
+			}
+		}
+	}
+}
+
+void Board::DrawGridReticle(Graphics* g)
+{
+	if (!CanUseGridCursor())
+		return;
+
+	int aCellX = GridToPixelX(mGridCursorCol, mGridCursorRow);
+	int aCellY = GridToPixelY(mGridCursorCol, mGridCursorRow);
+	int aCellW = 80;
+	int aCellH = (StageHasPool() || StageHasRoof()) ? 85 : 100;
+
+	Color aColor(255, 235, 120, 230); // Default vibrant gold/amber highlight
+	bool aHasTool = false;
+
+	if (mCursorObject->mCursorType == CursorType::CURSOR_TYPE_SHOVEL)
+	{
+		aColor = Color(255, 170, 40, 240); // Amber orange for shovel
+		aHasTool = true;
+	}
+	else if (IsPlantInCursor())
+	{
+		SeedType aSeed = GetSeedTypeInCursor();
+		if (CanPlantAt(mGridCursorCol, mGridCursorRow, aSeed) == PlantingReason::PLANTING_OK)
+		{
+			aColor = Color(100, 255, 100, 240); // Bright green for valid planting
+		}
+		else
+		{
+			aColor = Color(255, 80, 80, 240); // Red for blocked spot
+		}
+		aHasTool = true;
+	}
+
+	// 1. Subtle tile interior tint for instant spatial awareness
+	Color aFillColor = aColor;
+	aFillColor.mAlpha = aHasTool ? 40 : 25;
+	g->SetColor(aFillColor);
+	g->FillRect(aCellX + 3, aCellY + 3, aCellW - 6, aCellH - 6);
+
+	// 2. High-contrast corner brackets (16px long, 3px thick)
+	auto DrawCornerBrackets = [&](Graphics* theG, int x, int y, int w, int h, int len, int thickness, const Color& c)
+	{
+		theG->SetColor(c);
+		// Top-Left corner
+		theG->FillRect(x, y, len, thickness);
+		theG->FillRect(x, y + thickness, thickness, len - thickness);
+
+		// Top-Right corner
+		theG->FillRect(x + w - len, y, len, thickness);
+		theG->FillRect(x + w - thickness, y + thickness, thickness, len - thickness);
+
+		// Bottom-Left corner
+		theG->FillRect(x, y + h - thickness, len, thickness);
+		theG->FillRect(x, y + h - len, thickness, len - thickness);
+
+		// Bottom-Right corner
+		theG->FillRect(x + w - len, y + h - thickness, len, thickness);
+		theG->FillRect(x + w - thickness, y + h - len, thickness, len - thickness);
+	};
+
+	const int cornerLen = 16;
+	const int cornerThick = 3;
+
+	// Draw 1-pixel dark outline drop shadow behind brackets for maximum readability
+	DrawCornerBrackets(g, aCellX - 1, aCellY - 1, aCellW + 2, aCellH + 2, cornerLen + 1, cornerThick + 2, Color(0, 0, 0, 160));
+
+	// Draw main bright brackets
+	DrawCornerBrackets(g, aCellX, aCellY, aCellW, aCellH, cornerLen, cornerThick, aColor);
 }
 
 bool Board::IsPoolSquare(int theGridX, int theGridY)
@@ -5770,9 +5918,17 @@ void Board::Update()
 	}
 
 #if !PVZ_ENABLE_GLES
-	// Handheld hover auto-collection: collect suns and coins when cursor hovers near them
-	if (mApp->mGameScene == GameScenes::SCENE_PLAYING)
+	// Handheld controller mode management: toggle virtual arrow cursor vs garden grid reticle
+	if (CanUseGridCursor())
 	{
+		SexyAppBase::sShowVirtualCursor = false;
+		if (!mGridCursorActive)
+		{
+			mGridCursorActive = true;
+			GridCursorSnapToCell(mGridCursorCol, mGridCursorRow);
+		}
+
+		// Handheld hover auto-collection: collect suns and coins falling onto or near the active grid cell
 		int curX = (int)SexyAppBase::sVirtualCursorX;
 		int curY = (int)SexyAppBase::sVirtualCursorY;
 		for (Coin* aCoin : mCoins)
@@ -5785,13 +5941,18 @@ void Board::Update()
 				float cy = aCoin->mPosY + aCoin->mHeight * 0.5f;
 				float dx = (float)curX - cx;
 				float dy = (float)curY - cy;
-				if ((dx * dx + dy * dy) <= (55.0f * 55.0f))
+				if ((dx * dx + dy * dy) <= (68.0f * 68.0f))
 				{
 					aCoin->PlayCollectSound();
 					aCoin->Collect();
 				}
 			}
 		}
+	}
+	else
+	{
+		SexyAppBase::sShowVirtualCursor = true;
+		mGridCursorActive = false;
 	}
 #endif
 
@@ -7501,6 +7662,8 @@ void Board::DrawUITop(Graphics* g)
 	{
 		mAdvice->Draw(g);
 	}
+
+	DrawGridReticle(g);
 
 	if (mTimeStopCounter == 0 && mCursorObject->BeginDraw(g))
 	{

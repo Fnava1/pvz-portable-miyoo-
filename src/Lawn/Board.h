@@ -248,6 +248,9 @@ public:
 	uint32_t						mDiamondsCollected;										//+0x57CC
 	uint32_t						mPottedPlantsCollected;
 	uint32_t						mChocolateCollected;
+	int32_t							mGridCursorCol;
+	int32_t							mGridCursorRow;
+	bool							mGridCursorActive;
 
 public:
 	Board(LawnApp* theApp);
@@ -430,6 +433,10 @@ public:
 	void							PickUpTool(GameObjectType theObjectType);
 	void							CycleSeedPacket(int theDelta);
 	void							ToggleShovel();
+	bool							CanUseGridCursor();
+	void							GridCursorMove(int theDeltaX, int theDeltaY);
+	void							GridCursorSnapToCell(int theCol, int theRow);
+	void							DrawGridReticle(Graphics* g);
 	void							TutorialArrowShow(int theX, int theY);
 	void							TutorialArrowRemove();
 	int								CountCoinsBeingCollected();

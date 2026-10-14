@@ -361,6 +361,7 @@ protected:
 	virtual void			UpdateFrames();
 	virtual bool			DoUpdateFrames();
 	virtual void			DoUpdateFramesF(float theFrac);
+	virtual void			UpdateVirtualCursor();
 	virtual void			MakeWindow();
 	virtual void			EnforceCursor();
 	void					ResetCustomCursorCache();
@@ -542,6 +543,7 @@ public:
 	void					SetTextInputRect(const Rect& theRect); // caret rect in logical coords; anchors the IME UI (candidate window, keyboard pan)
 	static inline float		sVirtualCursorX = 400.0f;
 	static inline float		sVirtualCursorY = 300.0f;
+	static inline bool		sShowVirtualCursor = true;
 
 #if PVZ_ENABLE_GLES
 	bool					Is3DAccelerated() { return true; }

@@ -219,6 +219,7 @@ public:
 	void							ButtonMouseLeave(int theId) override;
 	void							ButtonMouseMove(int theId, int theX, int theY) override;
 	void							UpdateFrames() override;
+	void							UpdateVirtualCursor() override;
 	bool							UpdateAppStep(bool* updated) override;
 	bool							UpdateApp() override;
 	bool					IsAdventureMode();

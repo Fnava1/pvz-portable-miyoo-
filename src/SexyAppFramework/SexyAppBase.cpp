@@ -1663,10 +1663,8 @@ void SexyAppBase::DoExit([[maybe_unused]] int theCode)
 #endif
 }
 
-void SexyAppBase::UpdateFrames()
+void SexyAppBase::UpdateVirtualCursor()
 {
-	mUpdateCount++;
-
 #if !PVZ_ENABLE_GLES
 	const Uint8* state = SDL_GetKeyboardState(nullptr);
 	if (state)
@@ -1712,6 +1710,13 @@ void SexyAppBase::UpdateFrames()
 		}
 	}
 #endif
+}
+
+void SexyAppBase::UpdateFrames()
+{
+	mUpdateCount++;
+
+	UpdateVirtualCursor();
 
 	if (!mMinimized)
 		mWidgetManager->UpdateFrame();
