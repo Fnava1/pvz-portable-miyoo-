@@ -1052,22 +1052,7 @@ int Challenge::MouseDown(int x, int y, int theClickCount, HitResult* theHitResul
 	if (mApp->IsSlotMachineLevel() && theHitResult->mObjectType == OBJECT_TYPE_SLOT_MACHINE_HANDLE &&
 		mBoard->mCursorObject->mCursorType == CURSOR_TYPE_NORMAL && mChallengeState == STATECHALLENGE_NORMAL)
 	{
-		if (mBoard->TakeSunMoney(25))
-		{
-			for (int i = 0; i < 3; i++)
-			{
-				mBoard->mSeedBank->mSeedPackets[i].SlotMachineStart();
-			}
-
-			mApp->ReanimationGet(mReanimChallenge)->PlayReanim("anim_pull", REANIM_PLAY_ONCE_AND_HOLD, 0, 36.0f);
-			mChallengeState = STATECHALLENGE_SLOT_MACHINE_ROLLING;
-			mBoard->SetTutorialState(TUTORIAL_SLOT_MACHINE_COMPLETED);
-			mBoard->ClearAdvice(ADVICE_NONE);
-
-			mSlotMachineRollCount++;
-			mApp->PlaySample(Sexy::SOUND_SLOT_MACHINE);
-		}
-
+		PullSlotMachineLever();
 		return true;
 	}
 
@@ -1100,6 +1085,33 @@ int Challenge::MouseDown(int x, int y, int theClickCount, HitResult* theHitResul
 Rect Challenge::SlotMachineGetHandleRect()
 {
 	return Rect(mBoard->mSeedBank->mX + 473, mBoard->mSeedBank->mY, 55, 80);
+}
+
+void Challenge::PullSlotMachineLever()
+{
+	if (mApp->IsSlotMachineLevel() && mBoard->mCursorObject->mCursorType == CURSOR_TYPE_NORMAL && mChallengeState == STATECHALLENGE_NORMAL)
+	{
+		if (mBoard->TakeSunMoney(25))
+		{
+			for (int i = 0; i < 3; i++)
+			{
+				mBoard->mSeedBank->mSeedPackets[i].SlotMachineStart();
+			}
+
+			mApp->ReanimationGet(mReanimChallenge)->PlayReanim("anim_pull", REANIM_PLAY_ONCE_AND_HOLD, 0, 36.0f);
+			mChallengeState = STATECHALLENGE_SLOT_MACHINE_ROLLING;
+			mBoard->SetTutorialState(TUTORIAL_SLOT_MACHINE_COMPLETED);
+			mBoard->ClearAdvice(ADVICE_NONE);
+
+			mSlotMachineRollCount++;
+			mApp->PlaySample(Sexy::SOUND_SLOT_MACHINE);
+		}
+		else
+		{
+			mApp->PlaySample(SOUND_BUZZER);
+			mBoard->DisplayAdvice("[ADVICE_CANT_AFFORD_PLANT]", MessageStyle::MESSAGE_STYLE_HINT_TALL_FAST, AdviceType::ADVICE_CANT_AFFORD_PLANT);
+		}
+	}
 }
 
 int Challenge::MouseUp([[maybe_unused]] int x, [[maybe_unused]] int y)

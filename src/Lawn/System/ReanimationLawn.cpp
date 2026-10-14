@@ -387,6 +387,48 @@ void ReanimatorCache::ReanimatorCacheDispose()
 	}
 }
 
+void ReanimatorCache::PrecacheAll()
+{
+	for (int i = 0; i < SeedType::NUM_SEED_TYPES; i++)
+	{
+		SeedType aSeed = static_cast<SeedType>(i);
+		const PlantDefinition& aDef = GetPlantDefinition(aSeed);
+		if (aDef.mReanimationType != ReanimationType::REANIM_NONE)
+		{
+			ReanimatorEnsureDefinitionLoaded(aDef.mReanimationType, true);
+			if (mPlantImages[aSeed] == nullptr)
+			{
+				mPlantImages[aSeed] = MakeCachedPlantFrame(aSeed, DrawVariation::VARIATION_NORMAL);
+				if (!mApp->Is3DAccelerated() && mPlantImages[aSeed] != nullptr)
+				{
+					mPlantImagesHalf[aSeed] = MakeHalfSizeImage(mPlantImages[aSeed].get());
+				}
+			}
+		}
+	}
+
+	for (int i = 0; i < ZombieType::NUM_CACHED_ZOMBIE_TYPES; i++)
+	{
+		ZombieType aZombie = static_cast<ZombieType>(i);
+		if (aZombie == ZombieType::ZOMBIE_INVALID)
+			continue;
+		ZombieType aUseZombieType = (aZombie == ZombieType::ZOMBIE_CACHED_POLEVAULTER_WITH_POLE) ? ZombieType::ZOMBIE_POLEVAULTER : aZombie;
+		const ZombieDefinition& aDef = GetZombieDefinition(aUseZombieType);
+		if (aDef.mReanimationType != ReanimationType::REANIM_NONE)
+		{
+			ReanimatorEnsureDefinitionLoaded(aDef.mReanimationType, true);
+			if (mZombieImages[aZombie] == nullptr)
+			{
+				mZombieImages[aZombie] = MakeCachedZombieFrame(aZombie);
+				if (!mApp->Is3DAccelerated() && mZombieImages[aZombie] != nullptr)
+				{
+					mZombieImagesHalf[aZombie] = MakeHalfSizeImage(mZombieImages[aZombie].get());
+				}
+			}
+		}
+	}
+}
+
 
 void ReanimatorCache::DrawCachedPlant(Graphics* g, float thePosX, float thePosY, SeedType theSeedType, DrawVariation theDrawVariation)
 {

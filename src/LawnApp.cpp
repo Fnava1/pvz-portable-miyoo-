@@ -1779,6 +1779,7 @@ void LawnApp::LoadingThreadProc()
 	mZenGarden = std::make_unique<ZenGarden>();
 	mReanimatorCache = std::make_unique<ReanimatorCache>();
 	mReanimatorCache->ReanimatorCacheInitialize();
+	mReanimatorCache->PrecacheAll();
 	PvzpFoleyInitialize(gLawnFoleyParamArray, LENGTH(gLawnFoleyParamArray));
 
 	PvzpLogLn("loading '{}' {} ms", "stuff", static_cast<int>(aTimer.GetDuration()));
@@ -3095,7 +3096,6 @@ void LawnApp::PreloadForUser()
 	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_HAND, true);
 	mCompletedLoadingThreadTasks += 68;
 
-#ifndef LOW_MEMORY
 	if (mPlayerInfo)
 	{
 		for (SeedType i = SeedType::SEED_PEASHOOTER; i < SeedType::NUM_SEED_TYPES; i = static_cast<SeedType>(static_cast<int>(i) + 1))
@@ -3153,7 +3153,6 @@ void LawnApp::PreloadForUser()
 			}
 		}
 	}
-#endif
 
 	if (mCompletedLoadingThreadTasks != aNumTasks)
 	{

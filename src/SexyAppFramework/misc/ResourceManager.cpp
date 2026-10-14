@@ -721,7 +721,7 @@ bool ResourceManager::DoLoadImage(ImageRes *theRes)
 
 		aGLImage->CommitBits();
 
-		if (!aGLImage->mHasAlpha)
+		if (!aGLImage->mHasAlpha && mApp->Is3DAccelerated())
 		{
 			aGLImage->mPurgeBits = true;
 		}
@@ -744,7 +744,7 @@ bool ResourceManager::DoLoadImage(ImageRes *theRes)
 	aGLImage->mNumRows = theRes->mRows;
 	aGLImage->mNumCols = theRes->mCols;
 
-	if (aGLImage->mPurgeBits)
+	if (aGLImage->mPurgeBits && mApp->Is3DAccelerated())
 		aGLImage->PurgeBits();
 
 	ResourceLoadedHook(theRes);

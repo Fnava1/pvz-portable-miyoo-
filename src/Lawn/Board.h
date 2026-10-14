@@ -433,6 +433,7 @@ public:
 	void							PickUpTool(GameObjectType theObjectType);
 	void							CycleSeedPacket(int theDelta);
 	void							ToggleShovel();
+	void							PullSlotMachineLever();
 	bool							CanUseGridCursor();
 	void							GridCursorMove(int theDeltaX, int theDeltaY);
 	void							GridCursorSnapToCell(int theCol, int theRow);

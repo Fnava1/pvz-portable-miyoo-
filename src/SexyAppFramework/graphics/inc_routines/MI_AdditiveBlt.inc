@@ -4,7 +4,7 @@
 
 	if (theColor == Color::White)
 	{
-		if (aSrcMemoryImage->mHasAlpha)
+		if (aSrcMemoryImage->mHasAlpha || aSrcMemoryImage->mHasTrans)
 		{
 			for (int y = 0; y < theSrcRect.mHeight; y++)
 			{
@@ -40,9 +40,16 @@
 					uint32_t src = NEXT_SRC_COLOR;
 					uint32_t dest = *aDestPixels;
 
-					int r = aMaxTable[((dest & 0xFF0000) + (src & 0xFF0000)) >> 16];
-					int g = aMaxTable[((dest & 0x00FF00) + (src & 0x00FF00)) >> 8 ];
-					int b = aMaxTable[((dest & 0x0000FF) + (src & 0x0000FF))      ];
+					int a = (src & 0xFF000000) >> 24;
+					if (a == 0)
+					{
+						aDestPixels++;
+						continue;
+					}
+
+					int r = aMaxTable[((dest & 0xFF0000) + (((src & 0xFF0000) * a) >> 8)) >> 16];
+					int g = aMaxTable[((dest & 0x00FF00) + (((src & 0x00FF00) * a) >> 8)) >> 8 ];
+					int b = aMaxTable[((dest & 0x0000FF) + (((src & 0x0000FF) * a) >> 8))      ];
 
 					*(aDestPixels++) = (dest & 0xFF000000) | (r << 16) | (g << 8) | (b);
 				}
@@ -59,7 +66,7 @@
 		int cg = (theColor.mGreen * ca) / 255;
 		int cb = (theColor.mBlue * ca) / 255;
 
-		if (aSrcMemoryImage->mHasAlpha)
+		if (aSrcMemoryImage->mHasAlpha || aSrcMemoryImage->mHasTrans)
 		{
 			for (int y = 0; y < theSrcRect.mHeight; y++)
 			{
@@ -95,9 +102,16 @@
 					uint32_t src = NEXT_SRC_COLOR;
 					uint32_t dest = *aDestPixels;
 
-					int r = aMaxTable[((dest & 0xFF0000) + (((src & 0xFF0000) * cr) >> 8)) >> 16];
-					int g = aMaxTable[((dest & 0x00FF00) + (((src & 0x00FF00) * cg) >> 8)) >>  8];
-					int b = aMaxTable[((dest & 0x0000FF) + (((src & 0x0000FF) * cb) >> 8))      ];
+					int a = (src & 0xFF000000) >> 24;
+					if (a == 0)
+					{
+						aDestPixels++;
+						continue;
+					}
+
+					int r = aMaxTable[((dest & 0xFF0000) + (((((src & 0xFF0000) * cr) >> 8) * a) >> 8)) >> 16];
+					int g = aMaxTable[((dest & 0x00FF00) + (((((src & 0x00FF00) * cg) >> 8) * a) >> 8)) >>  8];
+					int b = aMaxTable[((dest & 0x0000FF) + (((((src & 0x0000FF) * cb) >> 8) * a) >> 8))      ];
 
 					*(aDestPixels++) = (dest & 0xFF000000) | (r << 16) | (g << 8) | (b);
 				}

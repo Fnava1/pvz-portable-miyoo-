@@ -1001,22 +1001,15 @@ uchar* MemoryImage::GetRLAdditiveData(NativeDisplay *theNative)
 
 void MemoryImage::PurgeBits()
 {
+	if (!mApp->Is3DAccelerated())
+		return;
+
 	mPurgeBits = true;
 
-	if (mApp->Is3DAccelerated())
-	{
-		// Due to potential render backend threading issues we have to defer the texture creation
-		//  and therefore the actual purging
-		if (mRenderData == nullptr)
-			return;
-	}
-	else
-	{
-		if ((mBits == nullptr) && (mColorIndices == nullptr))
-			return;
-
-		GetNativeAlphaData(gSexyAppBase->mGLInterface.get());
-	}
+	// Due to potential render backend threading issues we have to defer the texture creation
+	//  and therefore the actual purging
+	if (mRenderData == nullptr)
+		return;
 
 	mBits.reset();
 

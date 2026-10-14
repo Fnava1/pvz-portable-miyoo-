@@ -2028,6 +2028,67 @@ void Board::CycleSeedPacket(int theDelta)
 		RefreshSeedPacketFromCursor();
 	}
 
+	bool aIsDirectActionChallenge = (
+		mApp->mGameMode == GameMode::GAMEMODE_CHALLENGE_BEGHOULED ||
+		mApp->mGameMode == GameMode::GAMEMODE_CHALLENGE_BEGHOULED_TWIST ||
+		mApp->mGameMode == GameMode::GAMEMODE_CHALLENGE_ZOMBIQUARIUM ||
+		mApp->IsSlotMachineLevel()
+	);
+
+	if (aIsDirectActionChallenge)
+	{
+		int aNumItems = mSeedBank->mNumPackets;
+		if (mApp->IsSlotMachineLevel())
+		{
+			aNumItems += 1;
+		}
+
+		int aCur = -1;
+		for (int i = 0; i < mSeedBank->mNumPackets; ++i)
+		{
+			SeedPacket& aPkt = mSeedBank->mSeedPackets[i];
+			int px = mSeedBank->mX + aPkt.mX;
+			int py = mSeedBank->mY + aPkt.mY;
+			if (SexyAppBase::sVirtualCursorX >= px && SexyAppBase::sVirtualCursorX <= px + aPkt.mWidth &&
+				SexyAppBase::sVirtualCursorY >= py && SexyAppBase::sVirtualCursorY <= py + aPkt.mHeight)
+			{
+				aCur = i;
+				break;
+			}
+		}
+
+		if (aCur == -1 && mApp->IsSlotMachineLevel())
+		{
+			Rect aHandle = mChallenge->SlotMachineGetHandleRect();
+			if (aHandle.Contains((int)SexyAppBase::sVirtualCursorX, (int)SexyAppBase::sVirtualCursorY))
+			{
+				aCur = mSeedBank->mNumPackets;
+			}
+		}
+
+		if (theDelta > 0)
+			aCur = (aCur + 1) % aNumItems;
+		else
+			aCur = (aCur - 1 + aNumItems) % aNumItems;
+
+		if (aCur < mSeedBank->mNumPackets)
+		{
+			SeedPacket& aPkt = mSeedBank->mSeedPackets[aCur];
+			SexyAppBase::sVirtualCursorX = mSeedBank->mX + aPkt.mX + aPkt.mWidth * 0.5f;
+			SexyAppBase::sVirtualCursorY = mSeedBank->mY + aPkt.mY + aPkt.mHeight * 0.5f;
+		}
+		else
+		{
+			Rect aHandle = mChallenge->SlotMachineGetHandleRect();
+			SexyAppBase::sVirtualCursorX = aHandle.mX + aHandle.mWidth * 0.5f;
+			SexyAppBase::sVirtualCursorY = aHandle.mY + aHandle.mHeight * 0.5f;
+		}
+
+		mApp->mWidgetManager->MouseMove((int)SexyAppBase::sVirtualCursorX, (int)SexyAppBase::sVirtualCursorY);
+		UpdateToolTip();
+		return;
+	}
+
 	int aIndex = aCurrentIndex;
 	for (int i = 0; i < mSeedBank->mNumPackets; ++i)
 	{
@@ -2061,6 +2122,14 @@ void Board::ToggleShovel()
 
 		mCursorObject->mCursorType = CursorType::CURSOR_TYPE_SHOVEL;
 		mApp->PlayFoley(FoleyType::FOLEY_SHOVEL);
+	}
+}
+
+void Board::PullSlotMachineLever()
+{
+	if (mChallenge && mApp->IsSlotMachineLevel())
+	{
+		mChallenge->PullSlotMachineLever();
 	}
 }
 
@@ -5943,8 +6012,16 @@ void Board::Update()
 			mGridCursorActive = true;
 			GridCursorSnapToCell(mGridCursorCol, mGridCursorRow);
 		}
+	}
+	else
+	{
+		SexyAppBase::sShowVirtualCursor = true;
+		mGridCursorActive = false;
+	}
 
-		// Handheld hover auto-collection: collect suns and coins falling onto or near the active grid cell
+	// Handheld hover auto-collection: collect suns and coins falling onto or near the active cursor
+	if (mApp->mGameScene == GameScenes::SCENE_PLAYING && !mPaused)
+	{
 		int curX = (int)SexyAppBase::sVirtualCursorX;
 		int curY = (int)SexyAppBase::sVirtualCursorY;
 		for (Coin* aCoin : mCoins)
@@ -5957,7 +6034,7 @@ void Board::Update()
 				float cy = aCoin->mPosY + aCoin->mHeight * 0.5f;
 				float dx = (float)curX - cx;
 				float dy = (float)curY - cy;
-				if ((dx * dx + dy * dy) <= (68.0f * 68.0f))
+				if ((dx * dx + dy * dy) <= (75.0f * 75.0f))
 				{
 					aCoin->PlayCollectSound();
 					aCoin->Collect();
@@ -5969,18 +6046,13 @@ void Board::Update()
 				float cy = aCoin->mPosY + aCoin->mHeight * 0.5f;
 				float dx = (float)curX - cx;
 				float dy = (float)curY - cy;
-				if ((dx * dx + dy * dy) <= (95.0f * 95.0f) || (mGridCursorCol == MAX_GRID_SIZE_X - 1 && aCoin->mPosX >= LAWN_XMIN + 8 * 80))
+				if ((dx * dx + dy * dy) <= (95.0f * 95.0f) || (mGridCursorActive && mGridCursorCol == MAX_GRID_SIZE_X - 1 && aCoin->mPosX >= LAWN_XMIN + 8 * 80))
 				{
 					aCoin->PlayCollectSound();
 					aCoin->Collect();
 				}
 			}
 		}
-	}
-	else
-	{
-		SexyAppBase::sShowVirtualCursor = true;
-		mGridCursorActive = false;
 	}
 #endif
 
@@ -7928,7 +8000,8 @@ void Board::KeyDown(KeyCode theKey)
 	}
 	else if (theKey == KeyCode::KEYCODE_ESCAPE)
 	{
-		if (mCursorObject->mCursorType != CursorType::CURSOR_TYPE_NORMAL)
+		if (mCursorObject->mCursorType != CursorType::CURSOR_TYPE_NORMAL &&
+			mCursorObject->mCursorType != CursorType::CURSOR_TYPE_HAMMER)
 		{
 			RefreshSeedPacketFromCursor();
 		}

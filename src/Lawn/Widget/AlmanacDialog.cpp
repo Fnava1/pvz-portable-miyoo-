@@ -326,15 +326,6 @@ void AlmanacDialog::DrawPlants(Graphics* g)
 			}
 			else
 			{
-				if (mApp->mReanimatorCache && mApp->mReanimatorCache->mPlantImages[aSeedType] == nullptr)
-				{
-					if (aCreatedPlants >= 2)
-					{
-						PvzpDrawImageCelScaledF(g, Sexy::IMAGE_SEEDS, aPosX, aPosY, 2, 0, g->mScaleX, g->mScaleY);
-						continue;
-					}
-					aCreatedPlants++;
-				}
 				DrawSeedPacket(g, aPosX, aPosY, aSeedType, SeedType::SEED_NONE, 0, 255, true, false);
 				if (aSeedType == aSeedMouseOn)
 					g->DrawImage(Sexy::IMAGE_SEEDPACKETFLASH, aPosX, aPosY);
@@ -427,16 +418,6 @@ void AlmanacDialog::DrawZombies(Graphics* g)
 				ZombieType aZombieTypeToDraw = aZombieType;
 				if (aZombieType == ZombieType::ZOMBIE_POLEVAULTER)
 					aZombieTypeToDraw = ZombieType::ZOMBIE_CACHED_POLEVAULTER_WITH_POLE;
-
-				if (mApp->mReanimatorCache && mApp->mReanimatorCache->mZombieImages[aZombieTypeToDraw] == nullptr)
-				{
-					if (aCreatedZombies >= 2)
-					{
-						g->DrawImage(Sexy::IMAGE_ALMANAC_ZOMBIEWINDOW2, aPosX, aPosY);
-						continue;
-					}
-					aCreatedZombies++;
-				}
 
 				Graphics aZombieGraphics = Graphics(*g);
 				aZombieGraphics.SetClipRect(aPosX + 2, aPosY + 2, 72, 72);

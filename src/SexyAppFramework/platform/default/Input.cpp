@@ -855,10 +855,17 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 				}
 				else if (event.key.keysym.sym == SDLK_LSHIFT || event.key.keysym.sym == 'y' || event.key.keysym.sym == 'Y')
 				{
-					// Button X: Toggle Shovel
+					// Button X: Toggle Shovel or Pull Slot Machine Lever
 					if (gLawnApp && gLawnApp->mBoard)
 					{
-						gLawnApp->mBoard->ToggleShovel();
+						if (gLawnApp->IsSlotMachineLevel())
+						{
+							gLawnApp->mBoard->PullSlotMachineLever();
+						}
+						else
+						{
+							gLawnApp->mBoard->ToggleShovel();
+						}
 						break;
 					}
 				}
