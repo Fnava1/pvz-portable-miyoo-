@@ -105,8 +105,9 @@ def resolve_arm_binary(log_fn: Optional[Callable[[str], None]] = None) -> Option
     """Resolve ARMv7 PvZ executable or return path to deployable binary."""
     log = log_fn or print
     candidates = [
-        os.path.join(REPO_ROOT, "bin", "PvZ"),
         os.path.join(REPO_ROOT, "build", "PvZ"),
+        os.path.join(REPO_ROOT, "ports", "Games", "Plants vs. Zombies", "PvZ"),
+        os.path.join(REPO_ROOT, "bin", "PvZ"),
         os.path.join(REPO_ROOT, "build-miyoo", "PvZ"),
         os.path.join(REPO_ROOT, "packaging", "Roms", "PORTS", "Games", "Plants vs. Zombies", "PvZ"),
     ]

@@ -263,6 +263,7 @@ def stage_release(
     # 4. ARM Binaries: PvZ & setup_miyoo
     b_dirs = [
         build_dir or os.path.join(REPO_ROOT, "build"),
+        os.path.join(REPO_ROOT, "ports", "Games", "Plants vs. Zombies"),
         os.path.join(REPO_ROOT, "bin"),
         os.path.join(REPO_ROOT, "build-miyoo"),
     ]
