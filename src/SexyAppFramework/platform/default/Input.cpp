@@ -780,7 +780,21 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 
 				if (event.key.keysym.sym == SDLK_SPACE || event.key.keysym.sym == 'c' || event.key.keysym.sym == 'C')
 				{
-					// Button A: Left Click (Primary Action) ONLY. Do NOT fall through to KeyDown(KEYCODE_SPACE) which paused the game!
+					// Button A: Left Click (Primary Action)
+					// If a level award has dropped on screen, prioritize collecting it on Button A
+					if (gLawnApp && gLawnApp->mBoard && gLawnApp->mBoard->HasLevelAwardDropped())
+					{
+						for (Coin* aCoin : gLawnApp->mBoard->mCoins)
+						{
+							if (aCoin->IsLevelAward() && !aCoin->mDead && !aCoin->mIsBeingCollected)
+							{
+								aCoin->PlayCollectSound();
+								aCoin->Collect();
+								break;
+							}
+						}
+					}
+
 					mWidgetManager->MouseMove((int)sVirtualCursorX, (int)sVirtualCursorY);
 					mWidgetManager->MouseDown((int)sVirtualCursorX, (int)sVirtualCursorY, 1);
 					break;

@@ -2134,6 +2134,18 @@ void Board::GridCursorSnapToCell(int theCol, int theRow)
 				aCoin->Collect();
 			}
 		}
+		else if (aCoin->IsLevelAward())
+		{
+			float cx = aCoin->mPosX + aCoin->mWidth * 0.5f;
+			float cy = aCoin->mPosY + aCoin->mHeight * 0.5f;
+			float dx = SexyAppBase::sVirtualCursorX - cx;
+			float dy = SexyAppBase::sVirtualCursorY - cy;
+			if ((dx * dx + dy * dy) <= (95.0f * 95.0f) || (theCol == MAX_GRID_SIZE_X - 1 && aCoin->mPosX >= LAWN_XMIN + 8 * 80))
+			{
+				aCoin->PlayCollectSound();
+				aCoin->Collect();
+			}
+		}
 	}
 }
 
@@ -2175,7 +2187,7 @@ void Board::DrawGridReticle(Graphics* g)
 	g->SetColor(aFillColor);
 	g->FillRect(aCellX + 3, aCellY + 3, aCellW - 6, aCellH - 6);
 
-	// 2. High-contrast corner brackets (16px long, 3px thick)
+	// 2. High-contrast corner brackets (18px long, 5px thick: +2px inwards)
 	auto DrawCornerBrackets = [&](Graphics* theG, int x, int y, int w, int h, int len, int thickness, const Color& c)
 	{
 		theG->SetColor(c);
@@ -2196,8 +2208,8 @@ void Board::DrawGridReticle(Graphics* g)
 		theG->FillRect(x + w - thickness, y + h - len, thickness, len - thickness);
 	};
 
-	const int cornerLen = 16;
-	const int cornerThick = 3;
+	const int cornerLen = 18;
+	const int cornerThick = 5;
 
 	// Draw 1-pixel dark outline drop shadow behind brackets for maximum readability
 	DrawCornerBrackets(g, aCellX - 1, aCellY - 1, aCellW + 2, aCellH + 2, cornerLen + 1, cornerThick + 2, Color(0, 0, 0, 160));
@@ -5942,6 +5954,18 @@ void Board::Update()
 				float dx = (float)curX - cx;
 				float dy = (float)curY - cy;
 				if ((dx * dx + dy * dy) <= (68.0f * 68.0f))
+				{
+					aCoin->PlayCollectSound();
+					aCoin->Collect();
+				}
+			}
+			else if (aCoin->IsLevelAward())
+			{
+				float cx = aCoin->mPosX + aCoin->mWidth * 0.5f;
+				float cy = aCoin->mPosY + aCoin->mHeight * 0.5f;
+				float dx = (float)curX - cx;
+				float dy = (float)curY - cy;
+				if ((dx * dx + dy * dy) <= (95.0f * 95.0f) || (mGridCursorCol == MAX_GRID_SIZE_X - 1 && aCoin->mPosX >= LAWN_XMIN + 8 * 80))
 				{
 					aCoin->PlayCollectSound();
 					aCoin->Collect();

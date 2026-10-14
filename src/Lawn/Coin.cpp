@@ -1426,6 +1426,11 @@ bool Coin::MouseHitTest(int theX, int theY, HitResult* theHitResult)
 	{
 		aExtraClickSize = 15;
 	}
+	if (IsLevelAward())
+	{
+		aExtraClickSize = 50;
+		aExtraClickHeight = 50;
+	}
 
 	bool aCanHitCoin = true;
 	if (mDead || mIsBeingCollected)

@@ -1641,7 +1641,7 @@ void GLInterface::Flush()
 		SDL_RenderCopy(ren, tex, nullptr, nullptr);
 
 		// Render virtual cursor overlay for handheld navigation (menus, dialogs, etc.)
-		if (SexyAppBase::sShowVirtualCursor)
+		if (SexyAppBase::sShowVirtualCursor || mApp->GetDialogCount() > 0)
 		{
 			int cx = (int)(SexyAppBase::sVirtualCursorX * 640.0f / 800.0f);
 			int cy = (int)(SexyAppBase::sVirtualCursorY * 480.0f / 600.0f);

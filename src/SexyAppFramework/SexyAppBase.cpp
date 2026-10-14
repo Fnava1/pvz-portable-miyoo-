@@ -915,6 +915,18 @@ void SexyAppBase::AddDialog(int theDialogId, Dialog* theDialog)
 		mWidgetManager->AddBaseModal(theDialog);
 		ModalOpen();
 	}
+
+	sShowVirtualCursor = true;
+	if (theDialog->mWidth > 0 && theDialog->mHeight > 0)
+	{
+		sVirtualCursorX = theDialog->mX + theDialog->mWidth / 2.0f;
+		sVirtualCursorY = theDialog->mY + theDialog->mHeight / 2.0f;
+		if (mWidgetManager)
+		{
+			mWidgetManager->MouseMove((int)sVirtualCursorX, (int)sVirtualCursorY);
+			mCustomCursorDirty = true;
+		}
+	}
 }
 
 void SexyAppBase::AddDialog(Dialog* theDialog)
