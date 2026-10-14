@@ -59,11 +59,20 @@
 					unsigned int db = (((p&0x0000FF)*da)>>8) & 0x0000FF;
 
 					int finalAlpha = 256 - (((256 - alpha)*(256 - da))>>8);
-					tr = ((tr + (256-alpha)*dr)/finalAlpha) & 0xFF0000;
-					tg = ((tg + (256-alpha)*dg)/finalAlpha) & 0x00FF00;
-					tb = ((tb + (256-alpha)*db)/finalAlpha) & 0x0000FF;
-
-					*pix = ((finalAlpha-1)<<24) | tr | tg | tb;
+					if (finalAlpha >= 256)
+					{
+						tr = ((tr + (256-alpha)*dr) >> 8) & 0xFF0000;
+						tg = ((tg + (256-alpha)*dg) >> 8) & 0x00FF00;
+						tb = ((tb + (256-alpha)*db) >> 8) & 0x0000FF;
+						*pix = 0xFF000000 | tr | tg | tb;
+					}
+					else if (finalAlpha > 0)
+					{
+						tr = ((tr + (256-alpha)*dr)/finalAlpha) & 0xFF0000;
+						tg = ((tg + (256-alpha)*dg)/finalAlpha) & 0x00FF00;
+						tb = ((tb + (256-alpha)*db)/finalAlpha) & 0x0000FF;
+						*pix = ((finalAlpha-1)<<24) | tr | tg | tb;
+					}
 				}
 				else
 				{
@@ -99,11 +108,20 @@
 			unsigned int db = (((p&0x0000FF)*da)>>8) & 0x0000FF;
 
 			int finalAlpha = 256 - (((256 - alpha)*(256 - da))>>8);
-			tr = ((tr + (256-alpha)*dr)/finalAlpha) & 0xFF0000;
-			tg = ((tg + (256-alpha)*dg)/finalAlpha) & 0x00FF00;
-			tb = ((tb + (256-alpha)*db)/finalAlpha) & 0x0000FF;
-
-			*pix = ((finalAlpha-1)<<24) | tr | tg | tb;
+			if (finalAlpha >= 256)
+			{
+				tr = ((tr + (256-alpha)*dr) >> 8) & 0xFF0000;
+				tg = ((tg + (256-alpha)*dg) >> 8) & 0x00FF00;
+				tb = ((tb + (256-alpha)*db) >> 8) & 0x0000FF;
+				*pix = 0xFF000000 | tr | tg | tb;
+			}
+			else if (finalAlpha > 0)
+			{
+				tr = ((tr + (256-alpha)*dr)/finalAlpha) & 0xFF0000;
+				tg = ((tg + (256-alpha)*dg)/finalAlpha) & 0x00FF00;
+				tb = ((tb + (256-alpha)*db)/finalAlpha) & 0x0000FF;
+				*pix = ((finalAlpha-1)<<24) | tr | tg | tb;
+			}
 		}
 	}
 	#endif

@@ -32,6 +32,7 @@
 #include "graphics/Graphics.h"
 #include "graphics/MemoryImage.h"
 #include "SexyAppBase.h"
+#include "graphics/CursorPixels.h"
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
@@ -1160,11 +1161,20 @@ GLInterface::GLInterface(SexyAppBase* theApp)
 #endif
 }
 
+#if !PVZ_ENABLE_GLES
+static SDL_Texture* sVirtualCursorTex = nullptr;
+#endif
+
 GLInterface::~GLInterface()
 {
 	mScreenImage.reset();
 	Flush();
 #if !PVZ_ENABLE_GLES
+	if (sVirtualCursorTex)
+	{
+		SDL_DestroyTexture(sVirtualCursorTex);
+		sVirtualCursorTex = nullptr;
+	}
 	if (mSdlTexture)
 	{
 		SDL_DestroyTexture((SDL_Texture*)mSdlTexture);
@@ -1646,61 +1656,25 @@ void GLInterface::Flush()
 			int cx = (int)(SexyAppBase::sVirtualCursorX * 640.0f / 800.0f);
 			int cy = (int)(SexyAppBase::sVirtualCursorY * 480.0f / 600.0f);
 
-			static const char* const sCursorShape[] = {
-				"#...............",
-				"##..............",
-				"#*#.............",
-				"#**#............",
-				"#***#...........",
-				"#****#..........",
-				"#*****#.........",
-				"#******#........",
-				"#*******#.......",
-				"#********#......",
-				"#*****####......",
-				"#**#**#.........",
-				"#*#.#**#........",
-				"##..#**#........",
-				"#....#**#.......",
-				".....#**#.......",
-				"......##........",
-				"................"
-			};
-
-			SDL_Point blackPoints[288];
-			SDL_Point whitePoints[288];
-			int numBlack = 0;
-			int numWhite = 0;
-
-			for (int r = 0; r < 18; ++r)
+			if (!sVirtualCursorTex)
 			{
-				for (int c = 0; c < 16; ++c)
+				SDL_Surface* cursorSurf = SDL_CreateRGBSurfaceWithFormatFrom(
+					(void*)sCursorPixels, sCursorW, sCursorH, 32, sCursorW * sizeof(uint32_t), SDL_PIXELFORMAT_ARGB8888);
+				if (cursorSurf)
 				{
-					char ch = sCursorShape[r][c];
-					if (ch == '#')
-					{
-						blackPoints[numBlack].x = cx + c;
-						blackPoints[numBlack].y = cy + r;
-						numBlack++;
-					}
-					else if (ch == '*')
-					{
-						whitePoints[numWhite].x = cx + c;
-						whitePoints[numWhite].y = cy + r;
-						numWhite++;
-					}
+					sVirtualCursorTex = SDL_CreateTextureFromSurface(ren, cursorSurf);
+					SDL_FreeSurface(cursorSurf);
 				}
 			}
 
-			if (numBlack > 0)
+			if (sVirtualCursorTex)
 			{
-				SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
-				SDL_RenderDrawPoints(ren, blackPoints, numBlack);
-			}
-			if (numWhite > 0)
-			{
-				SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
-				SDL_RenderDrawPoints(ren, whitePoints, numWhite);
+				SDL_Rect dstRect;
+				dstRect.x = cx - sCursorHotspotX;
+				dstRect.y = cy - sCursorHotspotY;
+				dstRect.w = sCursorW;
+				dstRect.h = sCursorH;
+				SDL_RenderCopy(ren, sVirtualCursorTex, nullptr, &dstRect);
 			}
 		}
 

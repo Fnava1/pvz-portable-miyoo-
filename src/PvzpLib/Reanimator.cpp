@@ -666,7 +666,7 @@ bool Reanimation::DrawTrack(Graphics* g, int theTrackIndex, [[maybe_unused]] int
 	ReanimatorTrackInstance* aTrackInstance = &mTrackInstances[theTrackIndex];
 	GetCurrentTransform(theTrackIndex, &aTransform, theFrameTime);
 	int aImageFrame = FloatRoundToInt(aTransform.mFrame);  // cel index within the image
-	if (aImageFrame < 0)  // no image to draw
+	if (aImageFrame < 0 || aTransform.mAlpha <= 0.005f)  // no image to draw or fully transparent
 		return false;
 
 	Color aColor = aTrackInstance->mTrackColor;

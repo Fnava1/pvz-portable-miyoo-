@@ -6373,6 +6373,8 @@ void Board::DrawGameObjects(Graphics* g)
 		{
 			if (aCoin->mDead)
 				continue;
+			if (aCoin->mPosX > 860.0f || aCoin->mPosX < -60.0f || aCoin->mPosY < -60.0f || aCoin->mPosY > 620.0f)
+				continue;
 			AddGameObjectRenderItemCoin(aRenderList, aRenderItemCount, RenderObjectType::RENDER_ITEM_COIN, aCoin);
 		}
 	}
@@ -6380,6 +6382,8 @@ void Board::DrawGameObjects(Graphics* g)
 		for (Zombie* aZombie : mZombies)
 		{
 			if (aZombie->mDead)
+				continue;
+			if (aZombie->mPosX > 860.0f || aZombie->mPosX < -260.0f)
 				continue;
 			if (aZombie->mZombieType == ZombieType::ZOMBIE_BOSS)
 			{
@@ -6413,6 +6417,8 @@ void Board::DrawGameObjects(Graphics* g)
 		for (Projectile* aProjectile : mProjectiles)
 		{
 			if (aProjectile->mDead)
+				continue;
+			if (aProjectile->mPosX > 820.0f || aProjectile->mPosX < -60.0f || aProjectile->mPosY < -60.0f || aProjectile->mPosY > 620.0f)
 				continue;
 			AddGameObjectRenderItemProjectile(aRenderList, aRenderItemCount, RenderObjectType::RENDER_ITEM_PROJECTILE, aProjectile);
 

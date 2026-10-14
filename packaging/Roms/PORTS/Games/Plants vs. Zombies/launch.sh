@@ -7,11 +7,9 @@
 GAMEDIR="$(dirname "$0")"
 cd "$GAMEDIR"
 
-# Redirect stdout and stderr to launch.log for live diagnostics on console
-exec > ./launch.log 2>&1
-echo "=== Starting Plants vs. Zombies (Miyoo Mini Plus) ==="
-date
-echo "GAMEDIR: $GAMEDIR"
+# Discard console output to eliminate SD card I/O wear and flash write latency
+exec > /dev/null 2>&1
+rm -f ./launch.log 2>/dev/null
 
 
 # ------------------------------------------------------------------------------
@@ -39,13 +37,16 @@ cleanup() {
     elif command -v audioserver >/dev/null 2>&1; then
         audioserver &
     fi
+
+    # 5. Purge any leftover diagnostic log files
+    rm -f ./launch.log 2>/dev/null
 }
 trap cleanup EXIT INT TERM HUP
 
 # ------------------------------------------------------------------------------
 # Autonomous On-Device Asset Detection & Converter Self-Cleanup
 # ------------------------------------------------------------------------------
-if [ -f "./main_mmp.pak" ]; then
+if [ -f "./main_mmp.pak" ] || [ -f "./.installed" ]; then
     # PC conversion complete or asset package present:
     # Remove setup_miyoo if present to save storage space on microSD card
     if [ -f "./setup_miyoo" ]; then
