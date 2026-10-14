@@ -33,6 +33,7 @@
 #include "../System/PlayerInfo.h"
 #include "../System/PoolEffect.h"
 #include "../System/ReanimationLawn.h"
+#include "graphics/MemoryImage.h"
 #include "../../PvzpLib/PvzpStringFile.h"
 #include "widget/WidgetManager.h"
 
@@ -44,6 +45,8 @@ AlmanacDialog::AlmanacDialog(LawnApp* theApp) : LawnDialog(theApp, DIALOG_ALMANA
 	mOpenPage = ALMANAC_PAGE_INDEX;
 	mSelectedSeed = SEED_PEASHOOTER;
 	mSelectedZombie = ZOMBIE_NORMAL;
+	mPrewarmPlantIndex = 0;
+	mPrewarmZombieIndex = 0;
 	mDrawStandardBack = false;
 	mLoadedResourceNames.push_back("DelayLoad_Almanac");
 	LawnDialog::Resize(0, 0, BOARD_WIDTH, BOARD_HEIGHT);
@@ -233,6 +236,35 @@ void AlmanacDialog::Update()
 		}
 	}
 
+	if (mApp->mReanimatorCache)
+	{
+		for (int i = 0; i < 2 && mPrewarmPlantIndex < NUM_ALMANAC_SEEDS; i++, mPrewarmPlantIndex++)
+		{
+			SeedType aSeed = static_cast<SeedType>(mPrewarmPlantIndex);
+			if (mApp->mReanimatorCache->mPlantImages[aSeed] == nullptr)
+			{
+				mApp->mReanimatorCache->mPlantImages[aSeed] = mApp->mReanimatorCache->MakeCachedPlantFrame(aSeed, DrawVariation::VARIATION_NORMAL);
+				if (!mApp->Is3DAccelerated() && mApp->mReanimatorCache->mPlantImages[aSeed] != nullptr)
+				{
+					mApp->mReanimatorCache->mPlantImagesHalf[aSeed] = mApp->mReanimatorCache->MakeHalfSizeImage(mApp->mReanimatorCache->mPlantImages[aSeed].get());
+				}
+			}
+		}
+
+		for (int i = 0; i < 2 && mPrewarmZombieIndex < NUM_ALMANAC_ZOMBIES; i++, mPrewarmZombieIndex++)
+		{
+			ZombieType aZombie = GetZombieType(mPrewarmZombieIndex);
+			if (aZombie != ZombieType::ZOMBIE_INVALID && mApp->mReanimatorCache->mZombieImages[aZombie] == nullptr)
+			{
+				mApp->mReanimatorCache->mZombieImages[aZombie] = mApp->mReanimatorCache->MakeCachedZombieFrame(aZombie);
+				if (!mApp->Is3DAccelerated() && mApp->mReanimatorCache->mZombieImages[aZombie] != nullptr)
+				{
+					mApp->mReanimatorCache->mZombieImagesHalf[aZombie] = mApp->mReanimatorCache->MakeHalfSizeImage(mApp->mReanimatorCache->mZombieImages[aZombie].get());
+				}
+			}
+		}
+	}
+
 	int aMouseX = mApp->mWidgetManager->mLastMouseX;
 	int aMouseY = mApp->mWidgetManager->mLastMouseY;
 	if (SeedHitTest(aMouseX, aMouseY) != SeedType::SEED_NONE || ZombieHitTest(aMouseX, aMouseY) != ZombieType::ZOMBIE_INVALID ||
@@ -278,6 +310,7 @@ void AlmanacDialog::DrawPlants(Graphics* g)
 	g->DrawImage(Sexy::IMAGE_ALMANAC_PLANTBACK, 0, 0);
 	PvzpDrawString(g, "[SUBURBAN_ALMANAC_PLANTS]", BOARD_WIDTH / 2, 48, Sexy::FONT_HOUSEOFTERROR20, Color(213, 159, 43), DrawStringJustification::DS_ALIGN_CENTER);
 
+	int aCreatedPlants = 0;
 	SeedType aSeedMouseOn = SeedHitTest(mApp->mWidgetManager->mLastMouseX, mApp->mWidgetManager->mLastMouseY);
 	for (SeedType aSeedType = SeedType::SEED_PEASHOOTER; aSeedType < NUM_ALMANAC_SEEDS; aSeedType = (SeedType)(aSeedType + 1))
 	{
@@ -293,6 +326,15 @@ void AlmanacDialog::DrawPlants(Graphics* g)
 			}
 			else
 			{
+				if (mApp->mReanimatorCache && mApp->mReanimatorCache->mPlantImages[aSeedType] == nullptr)
+				{
+					if (aCreatedPlants >= 2)
+					{
+						PvzpDrawImageCelScaledF(g, Sexy::IMAGE_SEEDS, aPosX, aPosY, 2, 0, g->mScaleX, g->mScaleY);
+						continue;
+					}
+					aCreatedPlants++;
+				}
 				DrawSeedPacket(g, aPosX, aPosY, aSeedType, SeedType::SEED_NONE, 0, 255, true, false);
 				if (aSeedType == aSeedMouseOn)
 					g->DrawImage(Sexy::IMAGE_SEEDPACKETFLASH, aPosX, aPosY);
@@ -358,6 +400,7 @@ void AlmanacDialog::DrawZombies(Graphics* g)
 	g->DrawImage(Sexy::IMAGE_ALMANAC_ZOMBIEBACK, 0, 0);
 	PvzpDrawString(g, "[SUBURBAN_ALMANAC_ZOMBIES]", BOARD_WIDTH / 2, 54, Sexy::FONT_DWARVENTODCRAFT24, Color(0, 196, 0), DS_ALIGN_CENTER);
 
+	int aCreatedZombies = 0;
 	ZombieType aZombieMouseOn = ZombieHitTest(mApp->mWidgetManager->mLastMouseX, mApp->mWidgetManager->mLastMouseY);
 	for (int i = 0; i < NUM_ALMANAC_ZOMBIES; i++)
 	{
@@ -371,7 +414,7 @@ void AlmanacDialog::DrawZombies(Graphics* g)
 			else
 			{
 				g->DrawImage(Sexy::IMAGE_ALMANAC_ZOMBIEWINDOW, aPosX, aPosY);
-				if (aZombieType == aZombieMouseOn)
+				if (aZombieType == aZombieMouseOn && mApp->Is3DAccelerated())
 				{
 					g->SetDrawMode(Graphics::DRAWMODE_ADDITIVE);
 					g->SetColor(Color(255, 255, 255, 48));
@@ -382,6 +425,19 @@ void AlmanacDialog::DrawZombies(Graphics* g)
 				}
 
 				ZombieType aZombieTypeToDraw = aZombieType;
+				if (aZombieType == ZombieType::ZOMBIE_POLEVAULTER)
+					aZombieTypeToDraw = ZombieType::ZOMBIE_CACHED_POLEVAULTER_WITH_POLE;
+
+				if (mApp->mReanimatorCache && mApp->mReanimatorCache->mZombieImages[aZombieTypeToDraw] == nullptr)
+				{
+					if (aCreatedZombies >= 2)
+					{
+						g->DrawImage(Sexy::IMAGE_ALMANAC_ZOMBIEWINDOW2, aPosX, aPosY);
+						continue;
+					}
+					aCreatedZombies++;
+				}
+
 				Graphics aZombieGraphics = Graphics(*g);
 				aZombieGraphics.SetClipRect(aPosX + 2, aPosY + 2, 72, 72);
 				aZombieGraphics.Translate(aPosX + 1, aPosY - 6);
@@ -391,7 +447,7 @@ void AlmanacDialog::DrawZombies(Graphics* g)
 				{
 				case ZombieType::ZOMBIE_POLEVAULTER:
 					aZombieGraphics.TranslateF(2, -3);
-					aZombieTypeToDraw = ZombieType::ZOMBIE_CACHED_POLEVAULTER_WITH_POLE;		break;
+					break;
 				case ZombieType::ZOMBIE_FLAG:			aZombieGraphics.TranslateF(2, 10);	break;
 				case ZombieType::ZOMBIE_TRAFFIC_CONE:	aZombieGraphics.TranslateF(0, 12);	break;
 				case ZombieType::ZOMBIE_PAIL:			aZombieGraphics.TranslateF(0, 9);		break;
@@ -420,7 +476,7 @@ void AlmanacDialog::DrawZombies(Graphics* g)
 				aZombieGraphics.SetColorizeImages(false);
 
 				g->DrawImage(Sexy::IMAGE_ALMANAC_ZOMBIEWINDOW2, aPosX, aPosY);
-				if (aZombieType == aZombieMouseOn)
+				if (aZombieType == aZombieMouseOn && mApp->Is3DAccelerated())
 				{
 					g->SetDrawMode(Graphics::DRAWMODE_ADDITIVE);
 					g->SetColor(Color(255, 255, 255, 48));

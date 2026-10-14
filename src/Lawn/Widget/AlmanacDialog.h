@@ -64,6 +64,8 @@ public:
 	Reanimation*				mReanim[4];
 	SeedType					mSelectedSeed;
 	ZombieType					mSelectedZombie;
+	int							mPrewarmPlantIndex;
+	int							mPrewarmZombieIndex;
 	std::unique_ptr<Plant>		mPlant;
 	std::unique_ptr<Zombie>		mZombie;
 	std::array<std::unique_ptr<Zombie>, 400>	mZombiePerfTest;

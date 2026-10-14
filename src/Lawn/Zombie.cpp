@@ -5174,9 +5174,12 @@ void Zombie::DrawZombiePart(Graphics* g, Image* theImage, int theFrame, int theR
 		g->SetColor(aMincontrolledColor);
 		g->DrawImageMirror(theImage, aDestRect, aSrcRect, aMirror);
 
-		g->SetDrawMode(Graphics::DRAWMODE_ADDITIVE);
-		g->DrawImageMirror(theImage, aDestRect, aSrcRect, aMirror);
-		g->SetDrawMode(Graphics::DRAWMODE_NORMAL);
+		if (mApp->Is3DAccelerated())
+		{
+			g->SetDrawMode(Graphics::DRAWMODE_ADDITIVE);
+			g->DrawImageMirror(theImage, aDestRect, aSrcRect, aMirror);
+			g->SetDrawMode(Graphics::DRAWMODE_NORMAL);
+		}
 	}
 	else if (mChilledCounter > 0 || mIceTrapCounter > 0)
 	{
@@ -5184,16 +5187,19 @@ void Zombie::DrawZombiePart(Graphics* g, Image* theImage, int theFrame, int theR
 		g->SetColor(Color(75, 75, 255, anAlpha));
 		g->DrawImageMirror(theImage, aDestRect, aSrcRect, aMirror);
 
-		g->SetDrawMode(Graphics::DRAWMODE_ADDITIVE);
-		g->DrawImageMirror(theImage, aDestRect, aSrcRect, aMirror);
-		g->SetDrawMode(Graphics::DRAWMODE_NORMAL);
+		if (mApp->Is3DAccelerated())
+		{
+			g->SetDrawMode(Graphics::DRAWMODE_ADDITIVE);
+			g->DrawImageMirror(theImage, aDestRect, aSrcRect, aMirror);
+			g->SetDrawMode(Graphics::DRAWMODE_NORMAL);
+		}
 	}
 	else
 	{
 		g->DrawImageMirror(theImage, aDestRect, aSrcRect, aMirror);
 	}
 
-	if (mJustGotShotCounter > 0)
+	if (mJustGotShotCounter > 0 && mApp->Is3DAccelerated())
 	{
 		g->SetDrawMode(Graphics::DRAWMODE_ADDITIVE);
 		g->SetColorizeImages(true);
@@ -5701,26 +5707,39 @@ void Zombie::DrawReanim(Graphics* g, const ZombieDrawPosition& theDrawPos, int t
 		aColorOverride = ZOMBIE_MINDCONTROLLED_COLOR;
 		aColorOverride.mAlpha = aFadeAlpha;
 		aExtraAdditiveColor = aColorOverride;
-		aEnableExtraAdditiveDraw = true;
+		aEnableExtraAdditiveDraw = mApp->Is3DAccelerated();
 	}
 	else if (mChilledCounter > 0 || mIceTrapCounter > 0)
 	{
 		aColorOverride = Color(75, 75, 255, aFadeAlpha);
 		aExtraAdditiveColor = aColorOverride;
-		aEnableExtraAdditiveDraw = true;
+		aEnableExtraAdditiveDraw = mApp->Is3DAccelerated();
 	}
 	else if (mZombieHeight == ZombieHeight::HEIGHT_ZOMBIQUARIUM && mBodyHealth < 100)
 	{
 		aColorOverride = Color(100, 150, 25, aFadeAlpha);
 		aExtraAdditiveColor = aColorOverride;
-		aEnableExtraAdditiveDraw = true;
+		aEnableExtraAdditiveDraw = mApp->Is3DAccelerated();
 	}
 	if (mJustGotShotCounter > 0 && !IsBobsledTeamWithSled())
 	{
-		int aGrayness = mJustGotShotCounter * 10;
-		Color aHighlightColor(aGrayness, aGrayness, aGrayness, 255);
-		aExtraAdditiveColor = ColorAdd(aHighlightColor, aExtraAdditiveColor);
-		aEnableExtraAdditiveDraw = true;
+		if (mApp->Is3DAccelerated())
+		{
+			int aGrayness = mJustGotShotCounter * 10;
+			Color aHighlightColor(aGrayness, aGrayness, aGrayness, 255);
+			aExtraAdditiveColor = ColorAdd(aHighlightColor, aExtraAdditiveColor);
+			aEnableExtraAdditiveDraw = true;
+		}
+		else
+		{
+			int aFlash = std::min(255, aColorOverride.mRed + mJustGotShotCounter * 45);
+			aColorOverride = Color(aFlash, aFlash, aFlash, aFadeAlpha);
+			aEnableExtraAdditiveDraw = false;
+		}
+	}
+	else if (!mApp->Is3DAccelerated())
+	{
+		aEnableExtraAdditiveDraw = false;
 	}
 	aBodyReanim->mColorOverride = aColorOverride;
 	aBodyReanim->mExtraAdditiveColor = aExtraAdditiveColor;
@@ -5758,7 +5777,7 @@ void Zombie::DrawReanim(Graphics* g, const ZombieDrawPosition& theDrawPos, int t
 			int aGrayness = mShieldJustGotShotCounter * 10;
 			aBodyReanim->mColorOverride = Color(aGrayness, aGrayness, aGrayness, aFadeAlpha);
 			aBodyReanim->mExtraAdditiveColor = Color::White;
-			aBodyReanim->mEnableExtraAdditiveDraw = true;
+			aBodyReanim->mEnableExtraAdditiveDraw = mApp->Is3DAccelerated();
 		}
 		else
 		{

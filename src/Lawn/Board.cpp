@@ -7431,7 +7431,7 @@ void Board::DrawUIBottom(Graphics* g)
 		g->SetDrawMode(Graphics::DRAWMODE_NORMAL);
 	}
 
-	if (mBackground == BackgroundType::BACKGROUND_GREENHOUSE || mBackground == BackgroundType::BACKGROUND_ZOMBIQUARIUM)
+	if (mApp->Is3DAccelerated() && (mBackground == BackgroundType::BACKGROUND_GREENHOUSE || mBackground == BackgroundType::BACKGROUND_ZOMBIQUARIUM))
 	{
 		g->SetDrawMode(Graphics::DRAWMODE_ADDITIVE);
 		g->DrawImage(

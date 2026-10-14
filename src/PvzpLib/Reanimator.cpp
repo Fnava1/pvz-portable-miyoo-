@@ -786,7 +786,7 @@ bool Reanimation::DrawTrack(Graphics* g, int theTrackIndex, [[maybe_unused]] int
 			aImage = FilterEffectGetImage(aImage, mFilterEffect);
 		}
 		theTriangleGroup->AddTriangle(g, aImage, aMatrix, aClipRect, aColor, g->mDrawMode, aSrcRect);
-		if (mEnableExtraAdditiveDraw && !aTrackInstance->mIgnoreExtraAdditiveColor)
+		if (mEnableExtraAdditiveDraw && !aTrackInstance->mIgnoreExtraAdditiveColor && gSexyAppBase->Is3DAccelerated())
 		{
 			theTriangleGroup->AddTriangle(g, aImage, aMatrix, aClipRect, aExtraAdditiveColor, Graphics::DRAWMODE_ADDITIVE, aSrcRect);
 		}
@@ -811,7 +811,7 @@ bool Reanimation::DrawTrack(Graphics* g, int theTrackIndex, [[maybe_unused]] int
 		int aCelWidth = aImage->GetCelWidth();
 		Rect aSrcRect(aImageFrame * aCelWidth, 0, aCelWidth, aImage->GetCelHeight());
 		ReanimBltMatrix(g, aImage, aMatrix, aClipRect, aColor, g->mDrawMode, aSrcRect);
-		if (mEnableExtraAdditiveDraw)
+		if (mEnableExtraAdditiveDraw && gSexyAppBase->Is3DAccelerated())
 		{
 			ReanimBltMatrix(g, aImage, aMatrix, aClipRect, aExtraAdditiveColor, Graphics::DRAWMODE_ADDITIVE, aSrcRect);
 		}
@@ -824,7 +824,7 @@ bool Reanimation::DrawTrack(Graphics* g, int theTrackIndex, [[maybe_unused]] int
 	else if (aTransform.mFont != nullptr && *aTransform.mText != '\0')
 	{
 		PvzpDrawStringMatrix(g, aTransform.mFont, aMatrix, aTransform.mText, aColor);
-		if (mEnableExtraAdditiveDraw)
+		if (mEnableExtraAdditiveDraw && gSexyAppBase->Is3DAccelerated())
 		{
 			int aOldMode = g->GetDrawMode();
 			g->SetDrawMode(Graphics::DRAWMODE_ADDITIVE);

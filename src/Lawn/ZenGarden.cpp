@@ -1880,12 +1880,14 @@ void ZenGarden::GotoNextGarden()
 	if (aGoToTree)
 	{
 		mApp->mResourceManager->ReleaseTrackedResources(mLoadedResourceNames);
+		mLoadedResourceNames.clear();
 		mApp->KillBoard();
 		mApp->PreNewGame(GameMode::GAMEMODE_TREE_OF_WISDOM, false);
 		return;
 	}
 
 	mApp->mResourceManager->ReleaseTrackedResources(mLoadedResourceNames);
+	mLoadedResourceNames.clear();
 
 	if (mBoard->mBackground == BackgroundType::BACKGROUND_MUSHROOM_GARDEN)
 	{
