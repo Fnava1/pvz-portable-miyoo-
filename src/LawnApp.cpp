@@ -995,10 +995,24 @@ void LawnApp::FinishNameError(int theId)
 
 void LawnApp::FinishRestartConfirmDialog()
 {
-	mSawYeti = mBoard->mKilledYeti;
+	mMusic->StopAllMusic();
+	if (mSoundSystem)
+		mSoundSystem->CancelPausedFoley();
 
-	KillDialog(Dialogs::DIALOG_CONTINUE);
+	if (mBoard)
+		mSawYeti = mBoard->mKilledYeti;
+
+	mBoardResult = BoardResult::BOARDRESULT_RESTART;
+
 	KillDialog(Dialogs::DIALOG_RESTARTCONFIRM);
+	KillDialog(Dialogs::DIALOG_CONTINUE);
+
+	if (mWidgetManager)
+	{
+		mWidgetManager->mBaseModalWidget = nullptr;
+		mWidgetManager->mPreModalInfoList.clear();
+	}
+
 	KillBoard();
 
 	PreNewGame(mGameMode, false);
@@ -1779,7 +1793,6 @@ void LawnApp::LoadingThreadProc()
 	mZenGarden = std::make_unique<ZenGarden>();
 	mReanimatorCache = std::make_unique<ReanimatorCache>();
 	mReanimatorCache->ReanimatorCacheInitialize();
-	mReanimatorCache->PrecacheAll();
 	PvzpFoleyInitialize(gLawnFoleyParamArray, LENGTH(gLawnFoleyParamArray));
 
 	PvzpLogLn("loading '{}' {} ms", "stuff", static_cast<int>(aTimer.GetDuration()));

@@ -1426,6 +1426,11 @@ bool Coin::MouseHitTest(int theX, int theY, HitResult* theHitResult)
 	{
 		aExtraClickSize = 15;
 	}
+	if (mType == CoinType::COIN_USABLE_SEED_PACKET)
+	{
+		aExtraClickSize = 25;
+		aExtraClickHeight = 25;
+	}
 	if (IsLevelAward())
 	{
 		aExtraClickSize = 50;

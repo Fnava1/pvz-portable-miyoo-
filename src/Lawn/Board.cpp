@@ -2181,6 +2181,24 @@ void Board::GridCursorSnapToCell(int theCol, int theRow)
 	SexyAppBase::sVirtualCursorX = aCellX + 40.0f;
 	SexyAppBase::sVirtualCursorY = aCellY + (aCellHeight * 0.5f);
 
+	for (Coin* aCoin : mCoins)
+	{
+		if (aCoin->mDead || aCoin->mIsBeingCollected)
+			continue;
+		if (aCoin->mType == CoinType::COIN_USABLE_SEED_PACKET)
+		{
+			float cx = aCoin->mPosX + aCoin->mWidth * 0.5f;
+			float cy = aCoin->mPosY + aCoin->mHeight * 0.5f;
+			if (std::abs(SexyAppBase::sVirtualCursorY - cy) <= (aCellHeight * 0.55f) &&
+				std::abs(SexyAppBase::sVirtualCursorX - cx) <= 55.0f)
+			{
+				SexyAppBase::sVirtualCursorX = cx;
+				SexyAppBase::sVirtualCursorY = cy;
+				break;
+			}
+		}
+	}
+
 	if (mApp->mWidgetManager)
 	{
 		mApp->mWidgetManager->MouseMove((int)SexyAppBase::sVirtualCursorX, (int)SexyAppBase::sVirtualCursorY);

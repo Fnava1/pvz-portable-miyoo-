@@ -210,77 +210,10 @@ void SeedPacket::Update()
 
 void SeedPacketDrawSeed(Graphics* g, float x, float y, SeedType theSeedType, SeedType theImitaterType, float theOffsetX, float theOffsetY, float theScale)
 {
-	Image* aImage = IMAGE_PACKET_PLANTS;
-	SeedType aSeedType = theSeedType;
-	if (theSeedType == SeedType::SEED_IMITATER && theImitaterType != SeedType::SEED_NONE)
-	{
-		aSeedType = theImitaterType;
-		FilterEffect aFilterEffect = FilterEffect::FILTER_EFFECT_WASHED_OUT;
-		if (theImitaterType == SeedType::SEED_HYPNOSHROOM || theImitaterType == SeedType::SEED_SQUASH || theImitaterType == SeedType::SEED_POTATOMINE ||
-			theImitaterType == SeedType::SEED_GARLIC || theImitaterType == SeedType::SEED_LILYPAD)
-			aFilterEffect = FilterEffect::FILTER_EFFECT_LESS_WASHED_OUT;
-		aImage = FilterEffectGetImage(aImage, aFilterEffect);
-	}
-
-	if (aSeedType == SeedType::SEED_POTATOMINE && g->mScaleX <= 1.0f)
-	{
-		PvzpDrawImageCelScaledF(g, aImage, x, y, 0, 0, g->mScaleX, g->mScaleY);
-	}
-	else if (aSeedType == SeedType::SEED_CHOMPER && g->mScaleX <= 1.0f)
-	{
-		PvzpDrawImageCelScaledF(g, aImage, x, y, 1, 0, g->mScaleX, g->mScaleY);
-	}
-	else if (aSeedType == SeedType::SEED_HYPNOSHROOM && g->mScaleX <= 1.0f)
-	{
-		PvzpDrawImageCelScaledF(g, aImage, x, y, 2, 0, g->mScaleX, g->mScaleY);
-	}
-	else if (aSeedType == SeedType::SEED_TALLNUT && g->mScaleX <= 1.0f)
-	{
-		PvzpDrawImageCelScaledF(g, aImage, x, y, 3, 0, g->mScaleX, g->mScaleY);
-	}
-	else if (aSeedType == SeedType::SEED_BLOVER && g->mScaleX <= 1.0f)
-	{
-		PvzpDrawImageCelScaledF(g, aImage, x, y, 4, 0, g->mScaleX, g->mScaleY);
-	}
-	else if (aSeedType == SeedType::SEED_PUMPKINSHELL && g->mScaleX <= 1.0f)
-	{
-		PvzpDrawImageCelScaledF(g, aImage, x, y, 5, 0, g->mScaleX, g->mScaleY);
-	}
-	else if (aSeedType == SeedType::SEED_TWINSUNFLOWER && g->mScaleX <= 1.0f)
-	{
-		PvzpDrawImageCelScaledF(g, aImage, x, y, 6, 0, g->mScaleX, g->mScaleY);
-	}
-	else if (aSeedType == SeedType::SEED_COBCANNON && g->mScaleX <= 1.0f)
-	{
-		PvzpDrawImageCelScaledF(g, aImage, x, y, 7, 0, g->mScaleX, g->mScaleY);
-	}
-	else if (aSeedType == SeedType::SEED_CABBAGEPULT && g->mScaleX <= 1.0f)
-	{
-		PvzpDrawImageCelScaledF(g, aImage, x, y, 8, 0, g->mScaleX, g->mScaleY);
-	}
-	else if (aSeedType == SeedType::SEED_KERNELPULT && g->mScaleX <= 1.0f)
-	{
-		PvzpDrawImageCelScaledF(g, aImage, x, y, 9, 0, g->mScaleX, g->mScaleY);
-	}
-	else if (aSeedType == SeedType::SEED_MELONPULT && g->mScaleX <= 1.0f)
-	{
-		PvzpDrawImageCelScaledF(g, aImage, x, y, 10, 0, g->mScaleX, g->mScaleY);
-	}
-	else if (aSeedType == SeedType::SEED_WINTERMELON && g->mScaleX <= 1.0f)
-	{
-		PvzpDrawImageCelScaledF(g, aImage, x, y, 11, 0, g->mScaleX, g->mScaleY);
-	}
-	else if (aSeedType == SeedType::SEED_SPIKEROCK && g->mScaleX <= 1.0f)
-	{
-		PvzpDrawImageCelScaledF(g, aImage, x, y, 12, 0, g->mScaleX, g->mScaleY);
-	}
-	else
-	{
-		Graphics aSeedG(*g);
-		aSeedG.mScaleX = theScale * g->mScaleX;
-		aSeedG.mScaleY = theScale * g->mScaleY;
-		Plant::DrawSeedType(&aSeedG, theSeedType, theImitaterType, DrawVariation::VARIATION_NORMAL, x + theOffsetX, y + theOffsetY);
-	}
+	Graphics aSeedG(*g);
+	aSeedG.mScaleX = theScale * g->mScaleX;
+	aSeedG.mScaleY = theScale * g->mScaleY;
+	Plant::DrawSeedType(&aSeedG, theSeedType, theImitaterType, DrawVariation::VARIATION_NORMAL, x + theOffsetX, y + theOffsetY);
 }
 
 void DrawSeedPacket(Graphics* g, float x, float y, SeedType theSeedType, SeedType theImitaterType, float thePercentDark, int theGrayness, bool theDrawCost, bool theUseCurrentCost)

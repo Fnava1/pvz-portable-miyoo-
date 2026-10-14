@@ -127,41 +127,6 @@ std::unique_ptr<MemoryImage> ReanimatorCache::MakeBlankMemoryImage(int theWidth,
 	return aImage;
 }
 
-std::unique_ptr<MemoryImage> ReanimatorCache::MakeHalfSizeImage(MemoryImage* theSrc)
-{
-	if (!theSrc)
-		return nullptr;
-
-	int aHalfW = theSrc->mWidth / 2;
-	int aHalfH = theSrc->mHeight / 2;
-	if (aHalfW <= 0 || aHalfH <= 0)
-		return nullptr;
-
-	auto aDst = MakeBlankMemoryImage(aHalfW, aHalfH);
-	uint32_t* srcBits = theSrc->GetBits();
-	uint32_t* dstBits = aDst->GetBits();
-	int srcStride = theSrc->mWidth;
-
-	for (int y = 0; y < aHalfH; y++)
-	{
-		for (int x = 0; x < aHalfW; x++)
-		{
-			uint32_t p00 = srcBits[(2 * y) * srcStride + (2 * x)];
-			uint32_t p01 = srcBits[(2 * y) * srcStride + (2 * x + 1)];
-			uint32_t p10 = srcBits[(2 * y + 1) * srcStride + (2 * x)];
-			uint32_t p11 = srcBits[(2 * y + 1) * srcStride + (2 * x + 1)];
-
-			uint32_t a = (((p00 >> 24) & 0xFF) + ((p01 >> 24) & 0xFF) + ((p10 >> 24) & 0xFF) + ((p11 >> 24) & 0xFF) + 2) >> 2;
-			uint32_t r = (((p00 >> 16) & 0xFF) + ((p01 >> 16) & 0xFF) + ((p10 >> 16) & 0xFF) + ((p11 >> 16) & 0xFF) + 2) >> 2;
-			uint32_t g = (((p00 >> 8) & 0xFF) + ((p01 >> 8) & 0xFF) + ((p10 >> 8) & 0xFF) + ((p11 >> 8) & 0xFF) + 2) >> 2;
-			uint32_t b = (((p00) & 0xFF) + ((p01) & 0xFF) + ((p10) & 0xFF) + ((p11) & 0xFF) + 2) >> 2;
-
-			dstBits[y * aHalfW + x] = (a << 24) | (r << 16) | (g << 8) | b;
-		}
-	}
-	return aDst;
-}
-
 void ReanimatorCache::GetPlantImageSize(SeedType theSeedType, int& theOffsetX, int& theOffsetY, int& theWidth, int& theHeight)
 {
 	theOffsetX = -20;
@@ -399,10 +364,6 @@ void ReanimatorCache::PrecacheAll()
 			if (mPlantImages[aSeed] == nullptr)
 			{
 				mPlantImages[aSeed] = MakeCachedPlantFrame(aSeed, DrawVariation::VARIATION_NORMAL);
-				if (!mApp->Is3DAccelerated() && mPlantImages[aSeed] != nullptr)
-				{
-					mPlantImagesHalf[aSeed] = MakeHalfSizeImage(mPlantImages[aSeed].get());
-				}
 			}
 		}
 	}
@@ -420,10 +381,6 @@ void ReanimatorCache::PrecacheAll()
 			if (mZombieImages[aZombie] == nullptr)
 			{
 				mZombieImages[aZombie] = MakeCachedZombieFrame(aZombie);
-				if (!mApp->Is3DAccelerated() && mZombieImages[aZombie] != nullptr)
-				{
-					mZombieImagesHalf[aZombie] = MakeHalfSizeImage(mZombieImages[aZombie].get());
-				}
 			}
 		}
 	}
@@ -469,21 +426,6 @@ void ReanimatorCache::DrawCachedPlant(Graphics* g, float thePosX, float thePosY,
 
 	int aOffsetX, aOffsetY, aWidth, aHeight;
 	GetPlantImageSize(theSeedType, aOffsetX, aOffsetY, aWidth, aHeight);
-
-	if (theDrawVariation == DrawVariation::VARIATION_NORMAL && !mApp->Is3DAccelerated() &&
-		std::abs(g->mScaleX - 0.5f) < 0.01f && std::abs(g->mScaleY - 0.5f) < 0.01f)
-	{
-		if (mPlantImagesHalf[theSeedType] == nullptr && aImage != nullptr)
-		{
-			mPlantImagesHalf[theSeedType] = MakeHalfSizeImage(aImage);
-		}
-		if (mPlantImagesHalf[theSeedType] != nullptr)
-		{
-			g->DrawImage(mPlantImagesHalf[theSeedType].get(), thePosX + (aOffsetX * 0.5f), thePosY + (aOffsetY * 0.5f));
-			return;
-		}
-	}
-
 	if (!mApp->Is3DAccelerated() && g->mScaleX == 1.0f && g->mScaleY == 1.0f)
 		g->DrawImage(aImage, thePosX + aOffsetX, thePosY + aOffsetY);
 	else
@@ -505,19 +447,6 @@ void ReanimatorCache::DrawCachedZombie(Graphics* g, float thePosX, float thePosY
 
 	if (mZombieImages[theZombieType] == nullptr)
 		mZombieImages[theZombieType] = MakeCachedZombieFrame(theZombieType);
-
-	if (!mApp->Is3DAccelerated() && std::abs(g->mScaleX - 0.5f) < 0.01f && std::abs(g->mScaleY - 0.5f) < 0.01f)
-	{
-		if (mZombieImagesHalf[theZombieType] == nullptr && mZombieImages[theZombieType] != nullptr)
-		{
-			mZombieImagesHalf[theZombieType] = MakeHalfSizeImage(mZombieImages[theZombieType].get());
-		}
-		if (mZombieImagesHalf[theZombieType] != nullptr)
-		{
-			g->DrawImage(mZombieImagesHalf[theZombieType].get(), thePosX, thePosY);
-			return;
-		}
-	}
 
 	PvzpDrawImageScaledF(g, mZombieImages[theZombieType].get(), thePosX, thePosY, g->mScaleX, g->mScaleY);
 }

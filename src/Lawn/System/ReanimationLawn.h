@@ -49,11 +49,9 @@ class ReanimatorCache
 {
 public:
 	std::array<std::unique_ptr<MemoryImage>, SeedType::NUM_SEED_TYPES> mPlantImages;
-	std::array<std::unique_ptr<MemoryImage>, SeedType::NUM_SEED_TYPES> mPlantImagesHalf;
 	ImageVariationList      mImageVariationList;
 	std::array<std::unique_ptr<MemoryImage>, LawnMowerType::NUM_MOWER_TYPES> mLawnMowers;
 	std::array<std::unique_ptr<MemoryImage>, ZombieType::NUM_CACHED_ZOMBIE_TYPES> mZombieImages;
-	std::array<std::unique_ptr<MemoryImage>, ZombieType::NUM_CACHED_ZOMBIE_TYPES> mZombieImagesHalf;
 	LawnApp*                mApp;
 
 public:
@@ -66,7 +64,6 @@ public:
 	void                    DrawCachedMower(Graphics* g, float thePosX, float thePosY, LawnMowerType theMowerType);
 	void                    DrawCachedZombie(Graphics* g, float thePosX, float thePosY, ZombieType theZombieType);
 	std::unique_ptr<MemoryImage> MakeBlankMemoryImage(int theWidth, int theHeight);
-	std::unique_ptr<MemoryImage> MakeHalfSizeImage(MemoryImage* theSrc);
 	std::unique_ptr<MemoryImage> MakeCachedPlantFrame(SeedType theSeedType, DrawVariation theDrawVariation);
 	std::unique_ptr<MemoryImage> MakeCachedMowerFrame(LawnMowerType theMowerType);
 	std::unique_ptr<MemoryImage> MakeCachedZombieFrame(ZombieType theZombieType);

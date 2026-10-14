@@ -244,10 +244,6 @@ void AlmanacDialog::Update()
 			if (mApp->mReanimatorCache->mPlantImages[aSeed] == nullptr)
 			{
 				mApp->mReanimatorCache->mPlantImages[aSeed] = mApp->mReanimatorCache->MakeCachedPlantFrame(aSeed, DrawVariation::VARIATION_NORMAL);
-				if (!mApp->Is3DAccelerated() && mApp->mReanimatorCache->mPlantImages[aSeed] != nullptr)
-				{
-					mApp->mReanimatorCache->mPlantImagesHalf[aSeed] = mApp->mReanimatorCache->MakeHalfSizeImage(mApp->mReanimatorCache->mPlantImages[aSeed].get());
-				}
 			}
 		}
 
@@ -257,10 +253,6 @@ void AlmanacDialog::Update()
 			if (aZombie != ZombieType::ZOMBIE_INVALID && mApp->mReanimatorCache->mZombieImages[aZombie] == nullptr)
 			{
 				mApp->mReanimatorCache->mZombieImages[aZombie] = mApp->mReanimatorCache->MakeCachedZombieFrame(aZombie);
-				if (!mApp->Is3DAccelerated() && mApp->mReanimatorCache->mZombieImages[aZombie] != nullptr)
-				{
-					mApp->mReanimatorCache->mZombieImagesHalf[aZombie] = mApp->mReanimatorCache->MakeHalfSizeImage(mApp->mReanimatorCache->mZombieImages[aZombie].get());
-				}
 			}
 		}
 	}

@@ -228,17 +228,10 @@ void TitleScreen::Update()
 		mApp->mMusic->MusicTitleScreenInit();
 		mApp->StartLoadingThread();
 
-		mTitleState = TitleState::TITLESTATE_POPCAP_LOGO;
-		if (mDisplayPartnerLogo)
-		{
-			mTitleStateDuration = 150;
-		}
-		else
-		{
-			mTitleStateDuration = 200;
-		}
-
-		mTitleStateCounter = mTitleStateDuration;
+		// Immediately show loader screen and loading bar on handheld console
+		mTitleState = TitleState::TITLESTATE_SCREEN;
+		mTitleStateDuration = 0;
+		mTitleStateCounter = 100;
 	}
 
 	if (mQuickLoadKey != KeyCode::KEYCODE_UNKNOWN && mTitleState != TitleState::TITLESTATE_SCREEN)
