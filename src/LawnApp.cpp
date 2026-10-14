@@ -1007,12 +1007,6 @@ void LawnApp::FinishRestartConfirmDialog()
 	KillDialog(Dialogs::DIALOG_RESTARTCONFIRM);
 	KillDialog(Dialogs::DIALOG_CONTINUE);
 
-	if (mWidgetManager)
-	{
-		mWidgetManager->mBaseModalWidget = nullptr;
-		mWidgetManager->mPreModalInfoList.clear();
-	}
-
 	KillBoard();
 
 	PreNewGame(mGameMode, false);
@@ -1203,6 +1197,8 @@ void LawnApp::Init()
 	{
 		return;
 	}
+
+	PvzpLoadResources("LoaderBar");
 
 	PerfTimer mTimer;
 	mTimer.Start();
@@ -1746,6 +1742,11 @@ void LawnApp::LoadingThreadProc()
 	if (!PvzpLoadResources("LoaderBar"))
 		return;
 
+	if (mTitleScreen)
+	{
+		mTitleScreen->mLoaderScreenIsLoaded = true;
+	}
+
 	PvzpStringListLoad("Properties/LawnStrings.txt");
 	PvzpStringListReadFile("Properties/ZombatarTOS.txt");
 
@@ -1794,6 +1795,7 @@ void LawnApp::LoadingThreadProc()
 	mReanimatorCache = std::make_unique<ReanimatorCache>();
 	mReanimatorCache->ReanimatorCacheInitialize();
 	PvzpFoleyInitialize(gLawnFoleyParamArray, LENGTH(gLawnFoleyParamArray));
+	PvzpLoadResources("DelayLoad_Almanac");
 
 	PvzpLogLn("loading '{}' {} ms", "stuff", static_cast<int>(aTimer.GetDuration()));
 	aTimer.Start();

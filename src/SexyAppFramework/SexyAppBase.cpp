@@ -2848,10 +2848,14 @@ bool SexyAppBase::Process(bool allowSleep)
 					return false;
 
 #ifndef __EMSCRIPTEN__
+#if defined(LOW_MEMORY)
+				SDL_Delay(1);
+#else
 				timespec ts;
 				ts.tv_sec = aLoadingYieldSleepTime / 1000;
 				ts.tv_nsec = (aLoadingYieldSleepTime % 1000) * 1000000;
 				nanosleep(&ts, &ts);
+#endif
 #endif
 			}
 		}

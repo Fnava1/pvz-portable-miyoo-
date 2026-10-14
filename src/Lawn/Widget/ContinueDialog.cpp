@@ -25,6 +25,7 @@
 #include "../../LawnApp.h"
 #include "ContinueDialog.h"
 #include "../../Resources.h"
+#include "../System/Music.h"
 #include "../../PvzpLib/PvzpFoley.h"
 #include "../../PvzpLib/PvzpStringFile.h"
 
@@ -161,31 +162,34 @@ void ContinueDialog::ButtonDepress(int theId)
 	}
 	else if (theId == ContinueDialog::ContinueDialog_NewGame)
 	{
-		if (mApp->IsAdventureMode())
+		std::string aDialogTitle = mApp->IsAdventureMode() ? "[RESTART_LEVEL_HEADER]" : mApp->GetString("NEW_GAME_HEADER", "New Game?");
+		std::string aDialogMessage = mApp->IsAdventureMode() ? "[RESTART_LEVEL_BODY]" : mApp->GetString("NEW_GAME", "Are you sure that you want to start a new game?");
+		std::string aYesLabel = mApp->IsAdventureMode() ? "[RESTART_BUTTON]" : "[NEW_GAME_BUTTON]";
+
+		LawnDialog* aDialog = (LawnDialog*)mApp->DoDialog(
+			Dialogs::DIALOG_CONFIRM_RESTART,
+			true,
+			aDialogTitle,
+			aDialogMessage,
+			"",
+			Dialog::BUTTONS_YES_NO
+		);
+		if (aDialog->mLawnYesButton)
+			aDialog->mLawnYesButton->mLabel = PvzpStringTranslate(aYesLabel);
+		if (aDialog->mLawnNoButton)
+			aDialog->mLawnNoButton->mLabel = PvzpStringTranslate("[DIALOG_BUTTON_CANCEL]");
+
+		if (aDialog->WaitForResult(true) == Dialog::ID_YES)
 		{
-			LawnDialog* aDialog = (LawnDialog*)mApp->DoDialog(
-				Dialogs::DIALOG_RESTARTCONFIRM,
-				true,
-				"[RESTART_LEVEL_HEADER]",
-				"[RESTART_LEVEL_BODY]",
-				"",
-				Dialog::BUTTONS_OK_CANCEL
-			);
-			aDialog->mLawnYesButton->mLabel = PvzpStringTranslate("[RESTART_BUTTON]");
-			//aDialog->CalcSize(0, 0);
-		}
-		else
-		{
-			LawnDialog* aDialog = (LawnDialog*)mApp->DoDialog(
-				Dialogs::DIALOG_RESTARTCONFIRM,
-				true,
-				mApp->GetString("NEW_GAME_HEADER", "New Game?"),
-				mApp->GetString("NEW_GAME", "Are you sure that you want to start a new game?"),
-				"",
-				Dialog::BUTTONS_OK_CANCEL
-			);
-			aDialog->mLawnYesButton->mLabel = PvzpStringTranslate("[NEW_GAME_BUTTON]");
-			//aDialog->CalcSize(0, 0);
+			mApp->mMusic->StopAllMusic();
+			if (mApp->mSoundSystem)
+				mApp->mSoundSystem->CancelPausedFoley();
+			if (mApp->mBoard)
+				mApp->mSawYeti = mApp->mBoard->mKilledYeti;
+
+			mApp->mBoardResult = BoardResult::BOARDRESULT_RESTART;
+			mApp->KillDialog(mId);
+			mApp->PreNewGame(mApp->mGameMode, false);
 		}
 	}
 	else

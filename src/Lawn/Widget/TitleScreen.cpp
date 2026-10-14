@@ -56,7 +56,7 @@ TitleScreen::TitleScreen(LawnApp* theApp)
 	mTitleState = TitleState::TITLESTATE_WAITING_FOR_FIRST_DRAW;
 	mTitleStateDuration = 0;
 	mTitleStateCounter = 0;
-	mLoaderScreenIsLoaded = false;
+	mLoaderScreenIsLoaded = (IMAGE_TITLESCREEN != nullptr);
 
 	mStartButton = std::make_unique<Sexy::HyperlinkWidget>(0, this);
 	mStartButton->mColor = Sexy::Color(218, 184, 33);
@@ -88,8 +88,15 @@ void TitleScreen::Draw(Graphics* g)
 
 	if (mTitleState == TitleState::TITLESTATE_WAITING_FOR_FIRST_DRAW)
 	{
-		g->SetColor(Color::Black);
-		g->FillRect(0, 0, mWidth, mHeight);
+		if (IMAGE_TITLESCREEN != nullptr)
+		{
+			g->DrawImage(IMAGE_TITLESCREEN, 0, 0);
+		}
+		else
+		{
+			g->SetColor(Color::Black);
+			g->FillRect(0, 0, mWidth, mHeight);
+		}
 
 		if (!mDrawnYet)
 		{
@@ -149,14 +156,17 @@ void TitleScreen::Draw(Graphics* g)
 		return;
 	}
 
-	if (!mLoaderScreenIsLoaded)
+	if (!mLoaderScreenIsLoaded && IMAGE_TITLESCREEN == nullptr)
 	{
 		g->SetColor(Color::Black);
 		g->FillRect(0, 0, mWidth, mHeight);
 		return;
 	}
 
-	g->DrawImage(IMAGE_TITLESCREEN, 0, 0);
+	if (IMAGE_TITLESCREEN != nullptr)
+	{
+		g->DrawImage(IMAGE_TITLESCREEN, 0, 0);
+	}
 	if (mNeedToInit)
 	{
 		return;

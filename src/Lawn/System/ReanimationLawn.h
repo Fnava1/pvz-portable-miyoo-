@@ -49,6 +49,7 @@ class ReanimatorCache
 {
 public:
 	std::array<std::unique_ptr<MemoryImage>, SeedType::NUM_SEED_TYPES> mPlantImages;
+	std::array<std::unique_ptr<MemoryImage>, SeedType::NUM_SEED_TYPES> mPlantImagesHalf;
 	ImageVariationList      mImageVariationList;
 	std::array<std::unique_ptr<MemoryImage>, LawnMowerType::NUM_MOWER_TYPES> mLawnMowers;
 	std::array<std::unique_ptr<MemoryImage>, ZombieType::NUM_CACHED_ZOMBIE_TYPES> mZombieImages;

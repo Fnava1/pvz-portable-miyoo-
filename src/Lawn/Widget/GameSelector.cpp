@@ -559,8 +559,13 @@ void GameSelector::Draw(Graphics* g)
 	g->SetLinearBlend(false);
 	Reanimation* aSelectorReanim = mApp->ReanimationGet(mSelectorReanimID);
 	aSelectorReanim->DrawRenderGroup(g, 1);  // "SelectorScreen_BG"
+#ifdef LOW_MEMORY
+	for (int i = 0; i < 2; i++)
+		mApp->ReanimationGet(mCloudReanimID[i])->Draw(g);
+#else
 	for (int i = 0; i < 6; i++)
 		mApp->ReanimationGet(mCloudReanimID[i])->Draw(g);
+#endif
 	aSelectorReanim->DrawRenderGroup(g, RENDER_GROUP_NORMAL);
 
 	if (mSelectorState == SelectorAnimState::SELECTOR_OPEN)
