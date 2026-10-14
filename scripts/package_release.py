@@ -484,6 +484,11 @@ def package_release(
 
     zip_size_mb = os.path.getsize(zip_path) / (1024 * 1024)
     print(f"Release package ready: {zip_path} ({zip_size_mb:.2f} MB)")
+
+    alias_zip = os.path.join(output_dir, "PvZ_MiyooMiniPlus.zip")
+    if os.path.normcase(zip_path) != os.path.normcase(alias_zip):
+        shutil.copy2(zip_path, alias_zip)
+
     return zip_path, staged_roms, audit
 
 
