@@ -5926,6 +5926,10 @@ void Board::Update()
 		mChallenge->Update();
 		mCursorPreview->mVisible = false;
 		mCursorObject->mVisible = false;
+#if !PVZ_ENABLE_GLES
+		SexyAppBase::sShowVirtualCursor = true;
+		mGridCursorActive = false;
+#endif
 		return;
 	}
 

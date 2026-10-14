@@ -180,6 +180,13 @@ EM_JS(int, WasmHasSoftKeyboardEvents, (), {
 
 using namespace Sexy;
 
+#if !PVZ_ENABLE_GLES
+static bool sSelectDown = false;
+static bool sStartDown = false;
+static bool sMenuDown = false;
+static uint32_t sMenuDownTime = 0;
+#endif
+
 // Map SDL_Keycode to internal KeyCode (Windows VK-compatible).
 static KeyCode SDLKeyToKeyCode(SDL_Keycode theSDLKey)
 {
@@ -217,7 +224,7 @@ static KeyCode SDLKeyToKeyCode(SDL_Keycode theSDLKey)
 		case SDLK_LALT:         return KEYCODE_MENU;
 		case SDLK_HOME:
 		case SDLK_RALT:
-		case SDLK_MENU:         return KEYCODE_UNKNOWN; // Reserved for Miyoo Mini / OnionOS system menu
+		case SDLK_MENU:         return KEYCODE_ESCAPE;
 		case SDLK_PAUSE:        return KEYCODE_PAUSE;
 		case SDLK_CAPSLOCK:     return KEYCODE_CAPITAL;
 		case SDLK_NUMLOCKCLEAR: return KEYCODE_NUMLOCK;
@@ -592,6 +599,15 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 	}
 #endif
 
+#if !PVZ_ENABLE_GLES
+	// Long-press Menu detection: holding Menu for >= 750ms triggers clean return to OnionOS
+	if (sMenuDown && (SDL_GetTicks() - sMenuDownTime >= 750))
+	{
+		sMenuDown = false;
+		CloseRequestAsync();
+	}
+#endif
+
 	SDL_Event event;
 	if (SDL_PollEvent(&event))
 	{
@@ -630,11 +646,13 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 
 			case SDL_APP_WILLENTERBACKGROUND:
 				mMinimized = true;
+				Mute(true);
 				RehupFocus();
 				break;
 
 			case SDL_APP_DIDENTERFOREGROUND:
 				mMinimized = false;
+				Unmute(true);
 				RehupFocus();
 				mWidgetManager->MarkAllDirty();
 				break;
@@ -654,11 +672,13 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 
 					case SDL_WINDOWEVENT_MINIMIZED:
 						mMinimized = true;
+						Mute(true);
 						RehupFocus();
 						break;
 
 					case SDL_WINDOWEVENT_RESTORED:
 						mMinimized = false;
+						Unmute(true);
 						RehupFocus();
 						mWidgetManager->MarkAllDirty();
 						break;
@@ -772,9 +792,34 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 				}
 
 #if !PVZ_ENABLE_GLES
+				// Universal emergency exit combo (SELECT + START held together)
+				if (event.key.keysym.sym == SDLK_ESCAPE)
+					sSelectDown = true;
+				if (event.key.keysym.sym == SDLK_RETURN || event.key.keysym.sym == SDLK_KP_ENTER)
+					sStartDown = true;
+
+				if (sSelectDown && sStartDown)
+				{
+					CloseRequestAsync();
+					break;
+				}
+
+				// Power button: mute audio and request clean exit
+				if (event.key.keysym.sym == SDLK_POWER)
+				{
+					Mute(true);
+					CloseRequestAsync();
+					break;
+				}
+
+				// Physical Menu button: record press time for hold detection, or forward to keyup for short press
 				if (event.key.keysym.sym == SDLK_HOME || event.key.keysym.sym == SDLK_RALT || event.key.keysym.sym == SDLK_MENU)
 				{
-					// Miyoo central Menu key is reserved for OnionOS system functions; ignore silently
+					if (!sMenuDown)
+					{
+						sMenuDown = true;
+						sMenuDownTime = SDL_GetTicks();
+					}
 					break;
 				}
 
@@ -858,9 +903,24 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 			case SDL_KEYUP:
 				mLastUserInputTick = mLastTimerTime;
 #if !PVZ_ENABLE_GLES
+				if (event.key.keysym.sym == SDLK_ESCAPE)
+					sSelectDown = false;
+				if (event.key.keysym.sym == SDLK_RETURN || event.key.keysym.sym == SDLK_KP_ENTER)
+					sStartDown = false;
+
 				if (event.key.keysym.sym == SDLK_HOME || event.key.keysym.sym == SDLK_RALT || event.key.keysym.sym == SDLK_MENU)
 				{
-					// Miyoo central Menu key is reserved for OnionOS system functions; ignore silently
+					if (sMenuDown)
+					{
+						uint32_t aHoldTime = SDL_GetTicks() - sMenuDownTime;
+						sMenuDown = false;
+						if (aHoldTime < 750)
+						{
+							// Short press (< 750ms): synthesize Escape (options menu / back / cancel)
+							mWidgetManager->KeyDown(KeyCode::KEYCODE_ESCAPE);
+							mWidgetManager->KeyUp(KeyCode::KEYCODE_ESCAPE);
+						}
+					}
 					break;
 				}
 

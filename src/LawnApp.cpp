@@ -1164,6 +1164,7 @@ void LawnApp::Init()
 	mSawYeti = false;
 
 	SexyApp::Init();
+	mMuteOnLostFocus = true;
 
 	if (mShutdown) // MakeWindow() failed
 		return;

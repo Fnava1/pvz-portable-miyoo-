@@ -31,6 +31,7 @@
 #include "../../PvzpLib/EffectSystem.h"
 #include "../../PvzpLib/PvzpStringFile.h"
 #include "graphics/ImageFont.h"
+#include "widget/WidgetManager.h"
 
 constexpr const int DIALOG_HEADER_OFFSET = 45;
 
@@ -159,6 +160,16 @@ void LawnDialog::AddedToManager(WidgetManager* theWidgetManager)
 	AddWidget(mReanimation.get());
 	if (mLawnYesButton) AddWidget(mLawnYesButton.get());
 	if (mLawnNoButton) AddWidget(mLawnNoButton.get());
+
+#if !PVZ_ENABLE_GLES
+	SexyAppBase::sShowVirtualCursor = true;
+	SexyAppBase::sVirtualCursorX = mX + mWidth / 2.0f;
+	SexyAppBase::sVirtualCursorY = mY + mHeight / 2.0f;
+	if (theWidgetManager)
+	{
+		theWidgetManager->MouseMove((int)SexyAppBase::sVirtualCursorX, (int)SexyAppBase::sVirtualCursorY);
+	}
+#endif
 }
 
 void LawnDialog::RemovedFromManager(WidgetManager* theWidgetManager)

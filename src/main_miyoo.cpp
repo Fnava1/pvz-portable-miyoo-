@@ -11,6 +11,9 @@
 #ifndef _WIN32
 #include <sys/ioctl.h>
 #include <linux/fb.h>
+#include <linux/input.h>
+#include <poll.h>
+#include <pthread.h>
 #endif
 
 #include <SDL.h>
@@ -97,6 +100,130 @@ static void InstallSignalHandlers() {
 #endif
 }
 
+#ifndef _WIN32
+static std::atomic<bool> sWatchdogRunning{false};
+static pthread_t sWatchdogThread;
+
+static void* HardwareWatchdogThreadFunc(void* arg) {
+    (void)arg;
+    int fds[4];
+    int numFds = 0;
+    for (int i = 0; i < 4; ++i) {
+        char devPath[32];
+        snprintf(devPath, sizeof(devPath), "/dev/input/event%d", i);
+        int fd = open(devPath, O_RDONLY | O_NONBLOCK);
+        if (fd >= 0) {
+            fds[numFds++] = fd;
+        }
+    }
+
+    if (numFds == 0) {
+        return nullptr;
+    }
+
+    bool selectHeld = false;
+    bool startHeld = false;
+    bool menuHeld = false;
+    uint32_t menuPressTime = 0;
+    bool emergencyTriggered = false;
+
+    struct pollfd pfd[4];
+    for (int i = 0; i < numFds; ++i) {
+        pfd[i].fd = fds[i];
+        pfd[i].events = POLLIN;
+    }
+
+    while (sWatchdogRunning.load(std::memory_order_relaxed)) {
+        int ret = poll(pfd, numFds, 50);
+        if (ret > 0) {
+            for (int i = 0; i < numFds; ++i) {
+                if (pfd[i].revents & POLLIN) {
+                    struct input_event ev;
+                    while (read(fds[i], &ev, sizeof(ev)) == sizeof(ev)) {
+                        if (ev.type == EV_KEY) {
+                            bool isDown = (ev.value == 1 || ev.value == 2);
+                            bool isUp = (ev.value == 0);
+
+                            // Select key: KEY_ESC (1) or BTN_SELECT (0x13a)
+                            if (ev.code == KEY_ESC || ev.code == 0x13a) {
+                                selectHeld = isDown;
+                            }
+                            // Start key: KEY_ENTER (28) or BTN_START (0x13b)
+                            else if (ev.code == KEY_ENTER || ev.code == 0x13b) {
+                                startHeld = isDown;
+                            }
+                            // Menu key: KEY_HOME (102), KEY_RIGHTALT (100), or KEY_MENU (139)
+                            else if (ev.code == 102 || ev.code == 100 || ev.code == 139) {
+                                if (isDown && !menuHeld) {
+                                    menuHeld = true;
+                                    menuPressTime = SDL_GetTicks();
+                                } else if (isUp) {
+                                    menuHeld = false;
+                                }
+                            }
+                            // Power key: KEY_POWER (116)
+                            else if (ev.code == 116) {
+                                if (isDown) {
+                                    emergencyTriggered = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (selectHeld && startHeld) {
+            emergencyTriggered = true;
+        }
+        if (menuHeld && (SDL_GetTicks() - menuPressTime >= 1000)) {
+            emergencyTriggered = true;
+        }
+
+        if (emergencyTriggered) {
+            gShutdownRequested = 1;
+#ifndef PVZ_UNIT_TEST
+            if (gLawnApp) {
+                gLawnApp->CloseRequestAsync();
+            }
+#endif
+            // Allow up to 1000ms for main loop to exit gracefully
+            for (int w = 0; w < 20 && sWatchdogRunning.load(std::memory_order_relaxed); ++w) {
+                usleep(50000);
+            }
+
+            // If main loop is still frozen/hung, force safe immediate exit to OnionOS
+            if (sWatchdogRunning.load(std::memory_order_relaxed)) {
+                sync();
+                ResetFramebuffer();
+                _exit(0);
+            }
+            break;
+        }
+    }
+
+    for (int i = 0; i < numFds; ++i) {
+        close(fds[i]);
+    }
+    return nullptr;
+}
+
+static void StartHardwareWatchdog() {
+    sWatchdogRunning.store(true);
+    pthread_create(&sWatchdogThread, nullptr, HardwareWatchdogThreadFunc, nullptr);
+}
+
+static void StopHardwareWatchdog() {
+    if (sWatchdogRunning.load()) {
+        sWatchdogRunning.store(false);
+        pthread_join(sWatchdogThread, nullptr);
+    }
+}
+#else
+static void StartHardwareWatchdog() {}
+static void StopHardwareWatchdog() {}
+#endif
+
 static void SetupWorkingDirectory() {
 #ifndef _WIN32
     char exePath[1024] = {0};
@@ -145,7 +272,9 @@ int main(int argc, char* argv[]) {
     gLawnApp->SetArgs(argc, argv);
     gLawnApp->Init();
     InstallSignalHandlers();
+    StartHardwareWatchdog();
     gLawnApp->Start();
+    StopHardwareWatchdog();
     gLawnApp->Shutdown();
     delete gLawnApp;
     gLawnApp = nullptr;

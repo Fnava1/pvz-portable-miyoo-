@@ -41,9 +41,9 @@ bool HandheldInput::IsMenuKey(int sdlKey, int scancode) {
 }
 
 int HandheldInput::TranslateSDLKeyToPopCap(int sdlKey, int scancode) {
-    // Miyoo physical Menu key: ignored in game to prevent conflict with OnionOS system daemon
+    // Miyoo physical Menu key: translates to Escape for UI cancellation and in-game pause menu
     if (IsMenuKey(sdlKey, scancode)) {
-        return Sexy::KeyCode::KEYCODE_UNKNOWN;
+        return Sexy::KeyCode::KEYCODE_ESCAPE;
     }
 
     if (sdlKey == SDLK_ESCAPE) {
@@ -88,7 +88,7 @@ int HandheldInput::TranslateSDLKeyToPopCap(int sdlKey, int scancode) {
 
 HandheldButton HandheldInput::MapSDLKeyToHandheldButton(int sdlKey, int scancode) {
     if (IsMenuKey(sdlKey, scancode)) {
-        return HandheldButton::Unknown;
+        return HandheldButton::Menu;
     }
 
     if (sdlKey == SDLK_UP) return HandheldButton::Up;
@@ -178,11 +178,6 @@ bool HandheldInput::HandleSDLEvent(const SDL_Event& event) {
 void HandheldInput::OnKeyDown(int sdlKey, int scancode) {
     mLastPopCapKey = TranslateSDLKeyToPopCap(sdlKey, scancode);
 
-    if (IsMenuKey(sdlKey, scancode)) {
-        // Miyoo physical Menu key: ignored in game to prevent conflict with OnionOS
-        return;
-    }
-
     HandheldButton button = MapSDLKeyToHandheldButton(sdlKey, scancode);
     if (button != HandheldButton::Unknown) {
         OnButtonDown(button);
@@ -190,10 +185,6 @@ void HandheldInput::OnKeyDown(int sdlKey, int scancode) {
 }
 
 void HandheldInput::OnKeyUp(int sdlKey, int scancode) {
-    if (IsMenuKey(sdlKey, scancode)) {
-        return;
-    }
-
     HandheldButton button = MapSDLKeyToHandheldButton(sdlKey, scancode);
     if (button != HandheldButton::Unknown) {
         OnButtonUp(button);
@@ -206,7 +197,9 @@ void HandheldInput::OnButtonDown(HandheldButton button) {
     }
 
     if (button == HandheldButton::Menu) {
-        // Miyoo physical Menu key: ignored in game to prevent conflict with OnionOS
+        if (mOnMenuEscapeCallback) {
+            mOnMenuEscapeCallback();
+        }
         return;
     }
 

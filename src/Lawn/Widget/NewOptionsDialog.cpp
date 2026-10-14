@@ -33,6 +33,7 @@
 #include "widget/Slider.h"
 #include "widget/Checkbox.h"
 #include "../../PvzpLib/PvzpStringFile.h"
+#include "widget/WidgetManager.h"
 
 using namespace Sexy;
 
@@ -129,6 +130,16 @@ void NewOptionsDialog::AddedToManager(Sexy::WidgetManager* theWidgetManager)
 	AddWidget(mHardwareAccelerationCheckbox.get());
 	AddWidget(mFullscreenCheckbox.get());
 	AddWidget(mBackToGameButton.get());
+
+#if !PVZ_ENABLE_GLES
+	SexyAppBase::sShowVirtualCursor = true;
+	SexyAppBase::sVirtualCursorX = mX + mWidth / 2.0f;
+	SexyAppBase::sVirtualCursorY = mY + mHeight / 2.0f;
+	if (theWidgetManager)
+	{
+		theWidgetManager->MouseMove((int)SexyAppBase::sVirtualCursorX, (int)SexyAppBase::sVirtualCursorY);
+	}
+#endif
 }
 
 void NewOptionsDialog::RemovedFromManager(Sexy::WidgetManager* theWidgetManager)
