@@ -344,9 +344,6 @@ void ReanimatorCache::ReanimatorCacheInitialize()
 
 void ReanimatorCache::ReanimatorCacheDispose()
 {
-	for (auto& img : mPlantImagesHalf)
-		img.reset();
-
 	while (mImageVariationList.mSize != 0)
 	{
 		ReanimCacheImageVariation aImageVariation = mImageVariationList.RemoveHead();
@@ -432,19 +429,6 @@ void ReanimatorCache::DrawCachedPlant(Graphics* g, float thePosX, float thePosY,
 	if (!mApp->Is3DAccelerated() && g->mScaleX == 1.0f && g->mScaleY == 1.0f)
 	{
 		g->DrawImage(aImage, thePosX + aOffsetX, thePosY + aOffsetY);
-	}
-	else if (!mApp->Is3DAccelerated() && theDrawVariation == DrawVariation::VARIATION_NORMAL &&
-			 std::abs(g->mScaleX - 0.5f) < 0.01f && std::abs(g->mScaleY - 0.5f) < 0.01f)
-	{
-		if (mPlantImagesHalf[theSeedType] == nullptr)
-		{
-			int aHalfW = std::max(1, static_cast<int>(aImage->mWidth * 0.5f + 0.5f));
-			int aHalfH = std::max(1, static_cast<int>(aImage->mHeight * 0.5f + 0.5f));
-			mPlantImagesHalf[theSeedType] = MakeBlankMemoryImage(aHalfW, aHalfH);
-			Graphics aG(mPlantImagesHalf[theSeedType].get());
-			aG.DrawImage(aImage, Rect(0, 0, aHalfW, aHalfH), Rect(0, 0, aImage->mWidth, aImage->mHeight));
-		}
-		g->DrawImage(mPlantImagesHalf[theSeedType].get(), thePosX + (aOffsetX * 0.5f), thePosY + (aOffsetY * 0.5f));
 	}
 	else
 	{

@@ -136,6 +136,7 @@ public:
 	TrialType						mTrialType;
 	bool							mDebugTrialLocked;
 	bool							mMuteSoundsForCutscene;
+	bool							mDeferredNewGame;
 
 public:
 	LawnApp();

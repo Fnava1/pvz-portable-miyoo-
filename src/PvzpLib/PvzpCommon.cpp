@@ -774,18 +774,6 @@ void PvzpDrawImageScaledF(Graphics* g, Image* theImage, float thePosX, float the
 	}
 
 	Rect aSrcRect(0, 0, theImage->mWidth, theImage->mHeight);
-	if (gSexyAppBase && !gSexyAppBase->Is3DAccelerated() && theScaleX > 0.0f && theScaleY > 0.0f)
-	{
-		int aDestW = static_cast<int>(theImage->mWidth * theScaleX + 0.5f);
-		int aDestH = static_cast<int>(theImage->mHeight * theScaleY + 0.5f);
-		if (aDestW > 0 && aDestH > 0)
-		{
-			Rect aDestRect(static_cast<int>(thePosX + 0.5f), static_cast<int>(thePosY + 0.5f), aDestW, aDestH);
-			g->DrawImage(theImage, aDestRect, aSrcRect);
-			return;
-		}
-	}
-
 	float aTransX = theImage->mWidth * 0.5f * theScaleX + thePosX + g->mTransX;
 	float aTransY = theImage->mHeight * 0.5f * theScaleY + thePosY + g->mTransY;
 
@@ -813,20 +801,6 @@ void PvzpDrawImageCenterScaledF(Graphics* g, Image* theImage, float thePosX, flo
 	}
 
 	Rect aSrcRect(0, 0, theImage->mWidth, theImage->mHeight);
-	if (gSexyAppBase && !gSexyAppBase->Is3DAccelerated() && theScaleX > 0.0f && theScaleY > 0.0f)
-	{
-		int aDestW = static_cast<int>(theImage->mWidth * theScaleX + 0.5f);
-		int aDestH = static_cast<int>(theImage->mHeight * theScaleY + 0.5f);
-		if (aDestW > 0 && aDestH > 0)
-		{
-			float aCenterX = theImage->mWidth * 0.5f + thePosX;
-			float aCenterY = theImage->mHeight * 0.5f + thePosY;
-			Rect aDestRect(static_cast<int>(aCenterX - aDestW * 0.5f + 0.5f), static_cast<int>(aCenterY - aDestH * 0.5f + 0.5f), aDestW, aDestH);
-			g->DrawImage(theImage, aDestRect, aSrcRect);
-			return;
-		}
-	}
-
 	float aTransX = theImage->mWidth * 0.5f + thePosX + g->mTransX;
 	float aTransY = theImage->mHeight * 0.5f + thePosY + g->mTransY;
 

@@ -167,7 +167,7 @@ void ContinueDialog::ButtonDepress(int theId)
 		std::string aYesLabel = mApp->IsAdventureMode() ? "[RESTART_BUTTON]" : "[NEW_GAME_BUTTON]";
 
 		LawnDialog* aDialog = (LawnDialog*)mApp->DoDialog(
-			Dialogs::DIALOG_CONFIRM_RESTART,
+			Dialogs::DIALOG_RESTARTCONFIRM,
 			true,
 			aDialogTitle,
 			aDialogMessage,
@@ -178,19 +178,6 @@ void ContinueDialog::ButtonDepress(int theId)
 			aDialog->mLawnYesButton->mLabel = PvzpStringTranslate(aYesLabel);
 		if (aDialog->mLawnNoButton)
 			aDialog->mLawnNoButton->mLabel = PvzpStringTranslate("[DIALOG_BUTTON_CANCEL]");
-
-		if (aDialog->WaitForResult(true) == Dialog::ID_YES)
-		{
-			mApp->mMusic->StopAllMusic();
-			if (mApp->mSoundSystem)
-				mApp->mSoundSystem->CancelPausedFoley();
-			if (mApp->mBoard)
-				mApp->mSawYeti = mApp->mBoard->mKilledYeti;
-
-			mApp->mBoardResult = BoardResult::BOARDRESULT_RESTART;
-			mApp->KillDialog(mId);
-			mApp->PreNewGame(mApp->mGameMode, false);
-		}
 	}
 	else
 	{

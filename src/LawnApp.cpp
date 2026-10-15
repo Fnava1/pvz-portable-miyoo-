@@ -134,6 +134,7 @@ LawnApp::LawnApp()
 	mTrialType = TrialType::TRIALTYPE_NONE;
 	mDebugTrialLocked = false;
 	mMuteSoundsForCutscene = false;
+	mDeferredNewGame = false;
 	mMusicVolume = 0.85;
 	mSfxVolume = 0.5525;
 	mAutoStartLoadingThread = false;
@@ -1007,9 +1008,13 @@ void LawnApp::FinishRestartConfirmDialog()
 	KillDialog(Dialogs::DIALOG_RESTARTCONFIRM);
 	KillDialog(Dialogs::DIALOG_CONTINUE);
 
-	KillBoard();
+	if (mWidgetManager)
+	{
+		mWidgetManager->mBaseModalWidget = nullptr;
+		mWidgetManager->mPreModalInfoList.clear();
+	}
 
-	PreNewGame(mGameMode, false);
+	mDeferredNewGame = true;
 }
 
 void LawnApp::DoCheatDialog()
@@ -1575,6 +1580,14 @@ void LawnApp::UpdatePlayTimeStats()
 
 void LawnApp::UpdateFrames()
 {
+	if (mDeferredNewGame)
+	{
+		mDeferredNewGame = false;
+		KillBoard();
+		PreNewGame(mGameMode, false);
+		return;
+	}
+
 	if ((!mActive || mMinimized) && mBoard)
 	{
 		mBoard->ResetFPSStats();
