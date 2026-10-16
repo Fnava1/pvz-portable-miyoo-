@@ -683,6 +683,55 @@ void PvzpBltMatrix(Graphics* g, Image* theImage, const SexyMatrix3& theTransform
 
 	PvzpSandImageIfNeeded(theImage);
 
+	if (!gSexyAppBase->Is3DAccelerated() &&
+		FloatApproxEqual(theTransform.m01, 0.0f) && FloatApproxEqual(theTransform.m10, 0.0f) &&
+		theTransform.m00 > 0.0f && theTransform.m11 > 0.0f)
+	{
+		float aScaleX = theTransform.m00;
+		float aScaleY = theTransform.m11;
+		int aPosX = FloatRoundToInt(theTransform.m02 - g->mTransX - aScaleX * theSrcRect.mWidth * 0.5f);
+		int aPosY = FloatRoundToInt(theTransform.m12 - g->mTransY - aScaleY * theSrcRect.mHeight * 0.5f);
+		int aWidth = FloatRoundToInt(aScaleX * theSrcRect.mWidth);
+		int aHeight = FloatRoundToInt(aScaleY * theSrcRect.mHeight);
+
+		int aOldMode = g->GetDrawMode();
+		g->SetDrawMode(theDrawMode);
+		Rect aOldClipRect = g->mClipRect;
+		g->mClipRect = theClipRect;
+
+		Color aOldColor = g->GetColor();
+		bool aOldColorize = g->GetColorizeImages();
+		if (theColor != Color::White)
+		{
+			g->SetColor(theColor);
+			g->SetColorizeImages(true);
+		}
+
+		bool aOldFastStretch = g->GetFastStretch();
+		g->SetFastStretch(true);
+
+		if (FloatApproxEqual(aScaleX, 1.0f) && FloatApproxEqual(aScaleY, 1.0f))
+			g->DrawImage(theImage, aPosX, aPosY, theSrcRect);
+		else
+		{
+			Rect aDestRect(aPosX, aPosY, aWidth, aHeight);
+			g->DrawImage(theImage, aDestRect, theSrcRect);
+		}
+
+		g->SetFastStretch(aOldFastStretch);
+
+		if (theColor != Color::White)
+		{
+			g->SetColor(aOldColor);
+			g->SetColorizeImages(aOldColorize);
+		}
+
+		g->SetDrawMode(aOldMode);
+		g->mClipRect = aOldClipRect;
+		gPvzpTriangleDrawAdditive = false;
+		return;
+	}
+
 	if (theClipRect.mX != 0 || theClipRect.mY != 0 || theClipRect.mWidth != BOARD_WIDTH || theClipRect.mHeight != BOARD_HEIGHT)
 	{
 		g->mDestImage->BltMatrix(theImage, aOffsetX, aOffsetY, theTransform, theClipRect, theColor, theDrawMode, theSrcRect, g->mLinearBlend);

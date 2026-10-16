@@ -46,6 +46,11 @@
 
 #include <SDL.h>
 
+#ifndef _WIN32
+#include <sched.h>
+#include <pthread.h>
+#endif
+
 #ifdef __SWITCH__
 #include <switch.h>
 #include <locale>
@@ -94,6 +99,46 @@ static bool gScreenSaverActive = false;
 #endif
 
 static GLImage* gFPSImage = nullptr;
+
+static void PaceWaitMs(int theMs)
+{
+	if (theMs <= 0)
+		return;
+
+#ifndef _WIN32
+	struct timespec tsStart;
+	clock_gettime(CLOCK_MONOTONIC, &tsStart);
+	uint64_t t0 = static_cast<uint64_t>(tsStart.tv_sec) * 1000000000ULL + static_cast<uint64_t>(tsStart.tv_nsec);
+	uint64_t until = t0 + static_cast<uint64_t>(theMs) * 1000000ULL;
+
+	for (;;)
+	{
+		struct timespec tsNow;
+		clock_gettime(CLOCK_MONOTONIC, &tsNow);
+		uint64_t now = static_cast<uint64_t>(tsNow.tv_sec) * 1000000000ULL + static_cast<uint64_t>(tsNow.tv_nsec);
+		if (now >= until)
+			break;
+
+		uint64_t remaining = until - now;
+		// If remaining sleep > 12ms (more than 1 scheduler tick on HZ=100), sleep the excess in kernel
+		if (remaining > 12000000ULL)
+		{
+			uint64_t sleepNs = remaining - 12000000ULL;
+			struct timespec tsSleep;
+			tsSleep.tv_sec = static_cast<time_t>(sleepNs / 1000000000ULL);
+			tsSleep.tv_nsec = static_cast<long>(sleepNs % 1000000000ULL);
+			nanosleep(&tsSleep, nullptr);
+		}
+		else
+		{
+			// The final <= 12ms are waited yielding without sleeping in kernel tick
+			sched_yield();
+		}
+	}
+#else
+	SDL_Delay(static_cast<uint32_t>(theMs));
+#endif
+}
 
 static SDL_SystemCursor CursorNumToSystemCursor(int theCursorNum)
 {
@@ -2384,6 +2429,13 @@ void SexyAppBase::LoadingThreadCompleted()
 
 void SexyAppBase::LoadingThreadProcStub(SexyAppBase *theArg)
 {
+#ifndef _WIN32
+	cpu_set_t cpuset;
+	CPU_ZERO(&cpuset);
+	CPU_SET(1, &cpuset);
+	pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+#endif
+
 	SexyAppBase* aSexyApp = theArg;
 
 	aSexyApp->LoadingThreadProc();
@@ -2585,7 +2637,7 @@ void SexyAppBase::UpdateFTimeAcc()
 	{
 		int aDeltaTime = aCurTime - mLastTimeCheck;
 
-		mUpdateFTimeAcc = std::min(mUpdateFTimeAcc + aDeltaTime, 200.0);
+		mUpdateFTimeAcc = std::min(mUpdateFTimeAcc + aDeltaTime, 34.0);
 
 		if (mRelaxUpdateBacklogCount > 0)
 			mRelaxUpdateBacklogCount = std::max(mRelaxUpdateBacklogCount - aDeltaTime, 0);
@@ -2822,10 +2874,7 @@ bool SexyAppBase::Process(bool allowSleep)
 					++mSleepCount;
 
 #ifndef __EMSCRIPTEN__
-					timespec ts;
-					ts.tv_sec = aTimeToNextFrame / 1000;
-					ts.tv_nsec = (aTimeToNextFrame % 1000) * 1000000;
-					nanosleep(&ts, &ts);
+					PaceWaitMs(aTimeToNextFrame);
 #endif
 
 					aCumSleepTime += aTimeToNextFrame;
@@ -2849,12 +2898,13 @@ bool SexyAppBase::Process(bool allowSleep)
 
 #ifndef __EMSCRIPTEN__
 #if defined(LOW_MEMORY)
-				SDL_Delay(1);
+#ifndef _WIN32
+				sched_yield();
 #else
-				timespec ts;
-				ts.tv_sec = aLoadingYieldSleepTime / 1000;
-				ts.tv_nsec = (aLoadingYieldSleepTime % 1000) * 1000000;
-				nanosleep(&ts, &ts);
+				SDL_Delay(1);
+#endif
+#else
+				PaceWaitMs(aLoadingYieldSleepTime);
 #endif
 #endif
 			}

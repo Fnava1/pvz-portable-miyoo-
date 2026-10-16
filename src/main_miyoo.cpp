@@ -106,6 +106,12 @@ static pthread_t sWatchdogThread;
 
 static void* HardwareWatchdogThreadFunc(void* arg) {
     (void)arg;
+#ifndef _WIN32
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(1, &cpuset); // Pin watchdog to Core 1
+    pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+#endif
     int fds[4];
     int numFds = 0;
     for (int i = 0; i < 4; ++i) {
@@ -262,6 +268,12 @@ int main(int argc, char* argv[]) {
     }
 
     SetupWorkingDirectory();
+#ifndef _WIN32
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(0, &cpuset); // Pin main game & software rasterizer thread to Core 0
+    pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+#endif
     SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
     InstallSignalHandlers();
 

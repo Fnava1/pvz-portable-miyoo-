@@ -269,7 +269,10 @@ void AlmanacDialog::Update()
 		mApp->SetCursor(CURSOR_POINTER);
 	}
 
-	mApp->mPoolEffect->PoolEffectUpdate();
+	if (mApp->Is3DAccelerated())
+	{
+		mApp->mPoolEffect->PoolEffectUpdate();
+	}
 	MarkDirty();
 }
 
