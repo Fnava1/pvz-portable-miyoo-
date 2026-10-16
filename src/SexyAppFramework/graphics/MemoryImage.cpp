@@ -1602,6 +1602,82 @@ void MemoryImage::FastStretchBlt(Image* theImage, const Rect& theDestRect, const
 		}
 		else
 		{
+			int ca = theColor.mAlpha;
+			int cr = theColor.mRed;
+			int cg = theColor.mGreen;
+			int cb = theColor.mBlue;
+
+			if (cr == cg && cg == cb)
+			{
+				for (int y = 0; y < theDestRect.mHeight; y++)
+				{
+					double aSrcX = theSrcRect.mX;
+					uint32_t* aDestPixels = aDestPixelsRow;
+
+					for (int x = 0; x < theDestRect.mWidth; x++)
+					{
+						aSrcX += anAddX;
+
+						uint32_t* aSrcPixels = aSrcPixelsRow + ((int) aSrcX) + (aSrcMemoryImage->mWidth * ((int) aSrcY));
+						uint32_t src = *aSrcPixels;
+						uint32_t a = ((src >> 24) * ca) / 255;
+
+						if (a != 0)
+						{
+							uint32_t dest = *aDestPixels;
+							uint32_t aDestAlpha = dest >> 24;
+							uint32_t aNewDestAlpha = aDestAlpha + ((255 - aDestAlpha) * a) / 255;
+							uint32_t blend_a = 255 * a / aNewDestAlpha;
+							int oma = 256 - blend_a;
+
+							*(aDestPixels++) = (aNewDestAlpha << 24) |
+								((((dest & 0xFF00FF) * oma >> 8) + ((((src & 0xFF00FF) * cr >> 8) & 0xFF00FF) * blend_a >> 8)) & 0xFF00FF) |
+								((((dest & 0x00FF00) * oma >> 8) + ((src & 0x00FF00) * cr * blend_a >> 16)) & 0x00FF00);
+						}
+						else
+							aDestPixels++;
+					}
+
+					aDestPixelsRow += mWidth;
+					aSrcY += anAddY;
+				}
+			}
+			else
+			{
+				for (int y = 0; y < theDestRect.mHeight; y++)
+				{
+					double aSrcX = theSrcRect.mX;
+					uint32_t* aDestPixels = aDestPixelsRow;
+
+					for (int x = 0; x < theDestRect.mWidth; x++)
+					{
+						aSrcX += anAddX;
+
+						uint32_t* aSrcPixels = aSrcPixelsRow + ((int) aSrcX) + (aSrcMemoryImage->mWidth * ((int) aSrcY));
+						uint32_t src = *aSrcPixels;
+						uint32_t a = ((src >> 24) * ca) / 255;
+
+						if (a != 0)
+						{
+							uint32_t dest = *aDestPixels;
+							uint32_t aDestAlpha = dest >> 24;
+							uint32_t aNewDestAlpha = aDestAlpha + ((255 - aDestAlpha) * a) / 255;
+							uint32_t blend_a = 255 * a / aNewDestAlpha;
+							int oma = 256 - blend_a;
+
+							*(aDestPixels++) = (aNewDestAlpha << 24) |
+								((((dest & 0x0000FF) * oma >> 8) + (((src & 0x0000FF) * blend_a * cb) >> 16)) & 0x0000FF) |
+								((((dest & 0x00FF00) * oma >> 8) + (((src & 0x00FF00) * blend_a * cg) >> 16)) & 0x00FF00) |
+								((((dest & 0xFF0000) * oma >> 8) + (((((src & 0xFF0000) * blend_a) >> 8) * cr) >> 8)) & 0xFF0000);
+						}
+						else
+							aDestPixels++;
+					}
+
+					aDestPixelsRow += mWidth;
+					aSrcY += anAddY;
+				}
+			}
 		}
 	}
 

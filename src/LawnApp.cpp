@@ -357,6 +357,7 @@ void LawnApp::PreNewGame(GameMode theGameMode, bool theLookForSavedGame)
 void LawnApp::MakeNewBoard()
 {
 	KillBoard();
+	ProcessSafeDeleteList();
 	if (mWidgetManager && mWidgetManager->mImage)
 	{
 		mWidgetManager->mImage->Clear();
@@ -1026,6 +1027,11 @@ void LawnApp::FinishRestartConfirmDialog()
 	{
 		mWidgetManager->mBaseModalWidget = nullptr;
 		mWidgetManager->mPreModalInfoList.clear();
+		mWidgetManager->mFocusWidget = nullptr;
+		mWidgetManager->mLastDownWidget = nullptr;
+		mWidgetManager->mOverWidget = nullptr;
+		mWidgetManager->mPopupCommandWidget = nullptr;
+		mWidgetManager->mDeferredOverlayWidgets.clear();
 		if (mWidgetManager->mImage)
 			mWidgetManager->mImage->Clear();
 		mWidgetManager->MarkAllDirty();
@@ -1601,10 +1607,16 @@ void LawnApp::UpdateFrames()
 	{
 		mDeferredNewGame = false;
 		KillBoard();
+		ProcessSafeDeleteList();
 		if (mWidgetManager)
 		{
 			mWidgetManager->mBaseModalWidget = nullptr;
 			mWidgetManager->mPreModalInfoList.clear();
+			mWidgetManager->mFocusWidget = nullptr;
+			mWidgetManager->mLastDownWidget = nullptr;
+			mWidgetManager->mOverWidget = nullptr;
+			mWidgetManager->mPopupCommandWidget = nullptr;
+			mWidgetManager->mDeferredOverlayWidgets.clear();
 			if (mWidgetManager->mImage)
 				mWidgetManager->mImage->Clear();
 			mWidgetManager->MarkAllDirty();
@@ -3408,6 +3420,8 @@ void LawnApp::FinishModelessDialogs()
 {
 	// Kill dialogs bound to the board; a killed dialog counts as cancelled and deletion is deferred
 	KillDialog(Dialogs::DIALOG_CONFIRM_RESTART);
+	KillDialog(Dialogs::DIALOG_RESTARTCONFIRM);
+	KillDialog(Dialogs::DIALOG_CONTINUE);
 	KillDialog(Dialogs::DIALOG_CONFIRM_BACK_TO_MAIN);
 	KillDialog(Dialogs::DIALOG_PAUSED);
 	KillDialog(Dialogs::DIALOG_ALMANAC);  // may be mid-WaitForResult with the options dialog parked under it
