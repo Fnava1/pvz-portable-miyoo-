@@ -357,11 +357,19 @@ void LawnApp::PreNewGame(GameMode theGameMode, bool theLookForSavedGame)
 void LawnApp::MakeNewBoard()
 {
 	KillBoard();
+	if (mWidgetManager && mWidgetManager->mImage)
+	{
+		mWidgetManager->mImage->Clear();
+	}
 	mBoard = new Board(this);
 	mBoard->Resize(0, 0, mWidth, mHeight);
 	mWidgetManager->AddWidget(mBoard);
 	mWidgetManager->BringToBack(mBoard);
 	mWidgetManager->SetFocus(mBoard);
+	if (mWidgetManager)
+	{
+		mWidgetManager->MarkAllDirty();
+	}
 }
 
 void LawnApp::StartPlaying()
@@ -433,6 +441,10 @@ void LawnApp::NewGame()
 
 	ShowSeedChooserScreen();
 	mBoard->mCutScene->StartLevelIntro();
+	if (mWidgetManager)
+	{
+		mWidgetManager->MarkAllDirty();
+	}
 }
 
 void LawnApp::ShowGameSelector()
@@ -1010,6 +1022,15 @@ void LawnApp::FinishRestartConfirmDialog()
 	KillDialog(Dialogs::DIALOG_CONTINUE);
 	KillNewOptionsDialog();
 
+	if (mWidgetManager)
+	{
+		mWidgetManager->mBaseModalWidget = nullptr;
+		mWidgetManager->mPreModalInfoList.clear();
+		if (mWidgetManager->mImage)
+			mWidgetManager->mImage->Clear();
+		mWidgetManager->MarkAllDirty();
+	}
+
 	mDeferredNewGame = true;
 }
 
@@ -1580,7 +1601,19 @@ void LawnApp::UpdateFrames()
 	{
 		mDeferredNewGame = false;
 		KillBoard();
+		if (mWidgetManager)
+		{
+			mWidgetManager->mBaseModalWidget = nullptr;
+			mWidgetManager->mPreModalInfoList.clear();
+			if (mWidgetManager->mImage)
+				mWidgetManager->mImage->Clear();
+			mWidgetManager->MarkAllDirty();
+		}
 		PreNewGame(mGameMode, false);
+		if (mWidgetManager)
+		{
+			mWidgetManager->MarkAllDirty();
+		}
 		return;
 	}
 

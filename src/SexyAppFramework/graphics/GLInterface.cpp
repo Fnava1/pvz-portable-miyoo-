@@ -1568,13 +1568,13 @@ void GLInterface::Flush()
 			}
 			else if (texW == 640 && texH == 480 && mWidth == 800 && mHeight == 600)
 			{
-				static bool sSmoothScale = true;
+				static bool sSmoothScale = false;
 				static bool sSmoothScaleInit = false;
 				if (!sSmoothScaleInit)
 				{
 					const char* env = getenv("PVZ_SMOOTH_SCALE");
-					if (env && (strcmp(env, "0") == 0 || strcmp(env, "off") == 0 || strcmp(env, "false") == 0))
-						sSmoothScale = false;
+					if (env && (strcmp(env, "1") == 0 || strcmp(env, "on") == 0 || strcmp(env, "true") == 0))
+						sSmoothScale = true;
 					sSmoothScaleInit = true;
 				}
 

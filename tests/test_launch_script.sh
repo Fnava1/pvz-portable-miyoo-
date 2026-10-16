@@ -87,7 +87,7 @@ for script in "$LAUNCH_SH" "$PKG_LAUNCH_SH"; do
     assert_pattern "$script" 'SDL_MMIYOO_TEXTURE_POOL=1' "${script_name} exports SDL_MMIYOO_TEXTURE_POOL=1"
     assert_pattern "$script" 'SDL_MMIYOO_TEXTURE_POOL_MAX_BYTES=16777216' "${script_name} exports 16MB texture pool"
     assert_pattern "$script" 'SDL_MMIYOO_VSYNC_MODE=adaptive' "${script_name} exports SDL_MMIYOO_VSYNC_MODE=adaptive"
-    assert_pattern "$script" 'PVZ_SMOOTH_SCALE=1' "${script_name} exports PVZ_SMOOTH_SCALE=1"
+    assert_pattern "$script" 'PVZ_SMOOTH_SCALE=0' "${script_name} exports PVZ_SMOOTH_SCALE=0"
     assert_pattern "$script" 'setup_miyoo' "${script_name} handles setup_miyoo lifecycle"
     assert_pattern "$script" 'main_mmp\.pak' "${script_name} detects main_mmp.pak"
 done

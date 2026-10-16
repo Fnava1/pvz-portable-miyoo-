@@ -1333,6 +1333,11 @@ void Board::InitLevel()
 	mEnableGraveStones = false;
 	mSodPosition = 0;
 	mPrevBoardResult = mApp->mBoardResult;
+	mClip = false;
+	if (mApp->mWidgetManager)
+	{
+		mApp->mWidgetManager->MarkAllDirty();
+	}
 
 	GameMode aGameMode = mApp->mGameMode;
 	if (aGameMode != GameMode::GAMEMODE_TREE_OF_WISDOM && aGameMode != GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN)

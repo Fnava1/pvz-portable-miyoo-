@@ -120,10 +120,10 @@ static void PaceWaitMs(int theMs)
 			break;
 
 		uint64_t remaining = until - now;
-		// If remaining sleep > 12ms (more than 1 scheduler tick on HZ=100), sleep the excess in kernel
-		if (remaining > 12000000ULL)
+		// If remaining sleep > 1.5ms, sleep in kernel so we don't spin-burn Core 0
+		if (remaining > 1500000ULL)
 		{
-			uint64_t sleepNs = remaining - 12000000ULL;
+			uint64_t sleepNs = remaining - 1000000ULL;
 			struct timespec tsSleep;
 			tsSleep.tv_sec = static_cast<time_t>(sleepNs / 1000000000ULL);
 			tsSleep.tv_nsec = static_cast<long>(sleepNs % 1000000000ULL);
@@ -131,7 +131,7 @@ static void PaceWaitMs(int theMs)
 		}
 		else
 		{
-			// The final <= 12ms are waited yielding without sleeping in kernel tick
+			// The final <= 1ms is waited yielding
 			sched_yield();
 		}
 	}
@@ -2637,7 +2637,7 @@ void SexyAppBase::UpdateFTimeAcc()
 	{
 		int aDeltaTime = aCurTime - mLastTimeCheck;
 
-		mUpdateFTimeAcc = std::min(mUpdateFTimeAcc + aDeltaTime, 34.0);
+		mUpdateFTimeAcc = std::min(mUpdateFTimeAcc + aDeltaTime, 120.0);
 
 		if (mRelaxUpdateBacklogCount > 0)
 			mRelaxUpdateBacklogCount = std::max(mRelaxUpdateBacklogCount - aDeltaTime, 0);
