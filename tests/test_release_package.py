@@ -159,6 +159,11 @@ class TestReleasePackage(unittest.TestCase):
             self.assertIn("Roms/PORTS/Games/Plants vs. Zombies/launcher.sh", namelist)
             self.assertIn("Roms/PORTS/Games/Plants vs. Zombies/HOW_TO_INSTALL.txt", namelist)
 
+            # Runtime markers and game archives must NOT be present in clean distribution
+            self.assertNotIn("Roms/PORTS/Games/Plants vs. Zombies/.installed", namelist)
+            self.assertNotIn("Roms/PORTS/Games/Plants vs. Zombies/main.pak", namelist)
+            self.assertNotIn("Roms/PORTS/Games/Plants vs. Zombies/main_mmp.pak", namelist)
+
     def test_posix_permissions_in_zip(self):
         """Verify normalized POSIX permissions inside the release ZIP archive."""
         build_dir = os.path.join(REPO_ROOT, "build")

@@ -180,6 +180,15 @@ def stage_release(
     for d in (staging_imgs, staging_shortcuts, staging_game, staging_libs, staging_userdata, staging_properties):
         os.makedirs(d, exist_ok=True)
 
+    # Clean any stale runtime files from prior runs in staging directory
+    for stale_f in (".installed", "main.pak", "main_mmp.pak", "main.pak.bak", "main_mmp.pak.tmp"):
+        stale_p = os.path.join(staging_game, stale_f)
+        if os.path.isfile(stale_p):
+            try:
+                os.remove(stale_p)
+            except OSError:
+                pass
+
     # 1. Boxart icon
     boxart_src = os.path.join(REPO_ROOT, "packaging", "Roms", "PORTS", "Imgs", f"{GAME_NAME}.png")
     if os.path.isfile(boxart_src):
@@ -216,7 +225,18 @@ def stage_release(
                 'else\n'
                 f'    GAMEDIR="/mnt/SDCARD/Roms/PORTS/Games/{GAME_NAME}"\n'
                 'fi\n'
-                'cd "$GAMEDIR" && ./launch.sh\n'
+                'if [ -f "$GAMEDIR/main_mmp.pak" ]; then\n'
+                '    GameDataFile="main_mmp.pak"\n'
+                'elif [ -f "$GAMEDIR/main.pak" ]; then\n'
+                '    GameDataFile="main.pak"\n'
+                'else\n'
+                '    GameDataFile="main_mmp.pak"\n'
+                'fi\n'
+                'if [ -f "/mnt/SDCARD/Emu/PORTS/launch_standalone.sh" ]; then\n'
+                '    /mnt/SDCARD/Emu/PORTS/launch_standalone.sh "$GameName" "$GameDir" "$GameExecutable" "$Arguments" "$GameDataFile" 1 0\n'
+                'else\n'
+                '    cd "$GAMEDIR" && ./launch.sh\n'
+                'fi\n'
             )
 
     # 3. Launch Scripts (launch.sh & launcher.sh alias)
@@ -240,10 +260,11 @@ def stage_release(
                 '    /customer/app/audioserver &\n'
                 '}\n'
                 'trap cleanup EXIT INT TERM HUP\n'
-                'if [ -f "./main_mmp.pak" ] || [ -f "./.installed" ]; then\n'
+                'if [ -f "./main_mmp.pak" ]; then\n'
                 '    [ -f "./setup_miyoo" ] && rm -f ./setup_miyoo\n'
+                '    touch .installed\n'
                 'elif [ -f "./main.pak" ]; then\n'
-                '    [ -f "./setup_miyoo" ] && chmod +x ./setup_miyoo && ./setup_miyoo && rm -f ./setup_miyoo && touch .installed\n'
+                '    [ -f "./setup_miyoo" ] && chmod +x ./setup_miyoo && ./setup_miyoo && [ -f "./main_mmp.pak" ] && rm -f ./setup_miyoo && touch .installed\n'
                 'fi\n'
                 'IS_PLUS=0\n'
                 'if [ -d /sys/class/net/wlan0 ] || grep -qi "plus" /proc/cmdline 2>/dev/null; then IS_PLUS=1; fi\n'
@@ -415,8 +436,8 @@ def create_release_zip(
 
             for f in files:
                 full_path = os.path.join(root, f)
-                # Ignore any archive files
-                if full_path == abs_zip_path or f.endswith(".zip"):
+                # Ignore any archive files or runtime markers
+                if full_path == abs_zip_path or f.endswith((".zip", ".pak", ".bak", ".tmp")) or f == ".installed":
                     continue
 
                 rel_path = os.path.relpath(full_path, staged_root).replace("\\", "/")

@@ -176,8 +176,9 @@ else
     fail "Scenario A: PvZ executable did not run"
 fi
 
-# --- Scenario B: .installed exists + setup_miyoo present -> remove setup_miyoo ---
+# --- Scenario B: main_mmp.pak exists + .installed exists + setup_miyoo present -> remove setup_miyoo ---
 run_sandbox_test "Scenario B"
+touch "${MOCK_GAME_DIR}/main_mmp.pak"
 touch "${MOCK_GAME_DIR}/.installed"
 touch "${MOCK_GAME_DIR}/setup_miyoo"
 cat <<EOF > "${MOCK_GAME_DIR}/PvZ"
@@ -193,9 +194,9 @@ chmod +x "${MOCK_GAME_DIR}/PvZ"
 )
 
 if [ ! -f "${MOCK_GAME_DIR}/setup_miyoo" ]; then
-    pass "Scenario B: setup_miyoo removed when .installed exists"
+    pass "Scenario B: setup_miyoo removed when main_mmp.pak exists"
 else
-    fail "Scenario B: setup_miyoo still present despite .installed"
+    fail "Scenario B: setup_miyoo still present despite main_mmp.pak"
 fi
 
 # --- Scenario C: Only raw main.pak exists -> run setup_miyoo, create .installed, delete setup_miyoo ---
@@ -237,6 +238,36 @@ if [ -f "${MOCK_GAME_DIR}/.installed" ]; then
     pass "Scenario C: .installed flag was created after setup"
 else
     fail "Scenario C: .installed flag was not created"
+fi
+
+# --- Scenario E: Stray .installed exists + raw main.pak exists (main_mmp.pak missing) -> MUST run setup_miyoo ---
+run_sandbox_test "Scenario E"
+touch "${MOCK_GAME_DIR}/.installed"
+touch "${MOCK_GAME_DIR}/main.pak"
+cat <<EOF > "${MOCK_GAME_DIR}/setup_miyoo"
+#!/bin/sh
+echo "MOCK_SETUP_MIYOO_EXECUTED_SCENARIO_E" >> "${SANDBOX_DIR}/mock_log.txt"
+touch main_mmp.pak
+exit 0
+EOF
+chmod +x "${MOCK_GAME_DIR}/setup_miyoo"
+
+cat <<EOF > "${MOCK_GAME_DIR}/PvZ"
+#!/bin/sh
+echo "MOCK_PVZ_RUNNING" >> "${SANDBOX_DIR}/mock_log.txt"
+EOF
+chmod +x "${MOCK_GAME_DIR}/PvZ"
+
+(
+    export PATH="${MOCK_BIN_DIR}:$PATH"
+    cd "${MOCK_GAME_DIR}"
+    ./launch.sh >/dev/null 2>&1 || true
+)
+
+if grep -q "MOCK_SETUP_MIYOO_EXECUTED_SCENARIO_E" "${SANDBOX_DIR}/mock_log.txt"; then
+    pass "Scenario E: setup_miyoo executed even when stray .installed is present"
+else
+    fail "Scenario E: stray .installed incorrectly blocked setup_miyoo execution"
 fi
 
 # --- Scenario D: Trap cleanup verification (sync, cpuclock 1200, audioserver) ---

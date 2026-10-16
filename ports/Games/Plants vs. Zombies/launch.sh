@@ -46,24 +46,28 @@ trap cleanup EXIT INT TERM HUP
 # ------------------------------------------------------------------------------
 # Autonomous On-Device Asset Detection & Converter Self-Cleanup
 # ------------------------------------------------------------------------------
-if [ -f "./main_mmp.pak" ] || [ -f "./.installed" ]; then
-    # PC conversion complete or asset package present:
+if [ -f "./main_mmp.pak" ]; then
+    # Converted asset package present:
     # Remove setup_miyoo if present to save storage space on microSD card
     if [ -f "./setup_miyoo" ]; then
         rm -f ./setup_miyoo
     fi
+    touch .installed
 elif [ -f "./main.pak" ]; then
     # Only raw PC main.pak detected: run on-device converter first
     if [ -f "./setup_miyoo" ]; then
         chmod +x ./setup_miyoo
         ./setup_miyoo
-        if [ $? -eq 0 ]; then
+        if [ $? -eq 0 ] && [ -f "./main_mmp.pak" ]; then
             rm -f ./setup_miyoo
             touch .installed
         else
             echo "setup_miyoo conversion failed!"
             exit 1
         fi
+    else
+        echo "Error: setup_miyoo missing and main_mmp.pak not found!"
+        exit 1
     fi
 fi
 

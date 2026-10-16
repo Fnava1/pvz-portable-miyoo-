@@ -23,6 +23,18 @@ else
     GAMEDIR="/mnt/SDCARD/Roms/PORTS/Games/Plants vs. Zombies"
 fi
 
+# Dynamic game data file detection for OnionOS Ports verification:
+# If main_mmp.pak is already generated, check for it.
+# If only raw PC main.pak exists, check for main.pak so launch_standalone.sh
+# allows execution to proceed to launch.sh and setup_miyoo!
+if [ -f "$GAMEDIR/main_mmp.pak" ]; then
+    GameDataFile="main_mmp.pak"
+elif [ -f "$GAMEDIR/main.pak" ]; then
+    GameDataFile="main.pak"
+else
+    GameDataFile="main_mmp.pak"
+fi
+
 if [ -f "/mnt/SDCARD/Emu/PORTS/launch_standalone.sh" ]; then
     /mnt/SDCARD/Emu/PORTS/launch_standalone.sh "$GameName" "$GameDir" "$GameExecutable" "$Arguments" "$GameDataFile" "$KillAudioserver" "$PerformanceMode"
 else
