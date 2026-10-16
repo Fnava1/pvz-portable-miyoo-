@@ -150,7 +150,10 @@ void TitleScreen::Draw(Graphics* g)
 			anAlpha = PvzpAnimateCurve(35, 0, mTitleStateCounter, 255, 0, PvzpCurves::CURVE_LINEAR);
 		}
 		g->SetColor(Color(255, 255, 255, anAlpha));
-		g->DrawImage(IMAGE_PARTNER_LOGO, (mWidth - IMAGE_PARTNER_LOGO->mWidth) / 2, (mHeight - IMAGE_PARTNER_LOGO->mHeight) / 2);
+		if (IMAGE_PARTNER_LOGO != nullptr && IMAGE_PARTNER_LOGO != IMAGE_BLANK)
+		{
+			g->DrawImage(IMAGE_PARTNER_LOGO, (mWidth - IMAGE_PARTNER_LOGO->mWidth) / 2, (mHeight - IMAGE_PARTNER_LOGO->mHeight) / 2);
+		}
 		g->SetColorizeImages(false);
 
 		return;

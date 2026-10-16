@@ -158,6 +158,8 @@ class TestReleasePackage(unittest.TestCase):
             self.assertIn("Roms/PORTS/Games/Plants vs. Zombies/launch.sh", namelist)
             self.assertIn("Roms/PORTS/Games/Plants vs. Zombies/launcher.sh", namelist)
             self.assertIn("Roms/PORTS/Games/Plants vs. Zombies/HOW_TO_INSTALL.txt", namelist)
+            self.assertIn("Roms/PORTS/Games/Plants vs. Zombies/properties/default.xml", namelist)
+            self.assertIn("Roms/PORTS/Games/Plants vs. Zombies/properties/partner.xml", namelist)
 
             # Runtime markers and game archives must NOT be present in clean distribution
             self.assertNotIn("Roms/PORTS/Games/Plants vs. Zombies/.installed", namelist)

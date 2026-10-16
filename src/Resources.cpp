@@ -1120,13 +1120,22 @@ bool Sexy::ExtractInitResources(ResourceManager* theManager)
 	try
 	{
 		IMAGE_BLANK = aMgr.GetImageThrow("IMAGE_BLANK");
-		IMAGE_PARTNER_LOGO = aMgr.GetImageThrow("IMAGE_PARTNER_LOGO");
 		IMAGE_POPCAP_LOGO = aMgr.GetImageThrow("IMAGE_POPCAP_LOGO");
 	}
 	catch (ResourceManagerException&)
 	{
 		return false;
 	}
+
+	try
+	{
+		IMAGE_PARTNER_LOGO = aMgr.GetImageThrow("IMAGE_PARTNER_LOGO");
+	}
+	catch (ResourceManagerException&)
+	{
+		IMAGE_PARTNER_LOGO = IMAGE_BLANK;
+	}
+
 	return true;
 }
 

@@ -314,7 +314,19 @@ def stage_release(
             if lib_file.endswith(".so") or ".so." in lib_file:
                 shutil.copy2(os.path.join(sdl2_lib_dir, lib_file), os.path.join(staging_libs, lib_file))
 
-    # 6. Directory placeholders & BYOD instructions
+    # 6. Properties definitions (default.xml, Layout.xml, partner.xml, partner_logo.jpg)
+    props_candidates = [
+        os.path.join(REPO_ROOT, "packaging", "Roms", "PORTS", "Games", GAME_NAME, "properties"),
+        os.path.join(REPO_ROOT, "ports", "Games", GAME_NAME, "properties"),
+    ]
+    props_src = next((p for p in props_candidates if os.path.isdir(p)), None)
+    if props_src:
+        for p_file in os.listdir(props_src):
+            src_f = os.path.join(props_src, p_file)
+            if os.path.isfile(src_f):
+                shutil.copy2(src_f, os.path.join(staging_properties, p_file))
+
+    # 7. Directory placeholders & BYOD instructions
     for d, tag in [(staging_libs, "Shared libraries"), (staging_userdata, "Save data"), (staging_properties, "Game properties")]:
         keep = os.path.join(d, ".gitkeep")
         if not os.path.isfile(keep):
