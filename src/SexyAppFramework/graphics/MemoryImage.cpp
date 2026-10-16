@@ -36,6 +36,7 @@
 #include "imagelib/ImageLib.h"
 
 #include <math.h>
+#include <algorithm>
 
 using namespace Sexy;
 
@@ -1552,27 +1553,30 @@ void MemoryImage::FastStretchBlt(Image* theImage, const Rect& theDestRect, const
 	if (aSrcMemoryImage != nullptr)
 	{
 		uint32_t* aDestPixelsRow = ((uint32_t*) GetBits()) + (theDestRect.mY * mWidth) + theDestRect.mX;
-		uint32_t* aSrcPixelsRow = (uint32_t*) aSrcMemoryImage->GetBits();;
+		uint32_t* aSrcPixelsRow = (uint32_t*) aSrcMemoryImage->GetBits();
 
 		double aSrcY = theSrcRect.mY;
 
 		double anAddX = theSrcRect.mWidth / theDestRect.mWidth;
 		double anAddY = theSrcRect.mHeight / theDestRect.mHeight;
 
+		int maxSrcX = aSrcMemoryImage->mWidth - 1;
+		int maxSrcY = aSrcMemoryImage->mHeight - 1;
+
 		if (theColor == Color::White)
 		{
 			for (int y = 0; y < theDestRect.mHeight; y++)
 			{
 				double aSrcX = theSrcRect.mX;
-
 				uint32_t* aDestPixels = aDestPixelsRow;
+				int sy = std::clamp((int) aSrcY, 0, maxSrcY);
+				uint32_t* aSrcRow = aSrcPixelsRow + (aSrcMemoryImage->mWidth * sy);
 
 				for (int x = 0; x < theDestRect.mWidth; x++)
 				{
+					int sx = std::clamp((int) aSrcX, 0, maxSrcX);
+					uint32_t src = aSrcRow[sx];
 					aSrcX += anAddX;
-
-					uint32_t* aSrcPixels = aSrcPixelsRow + ((int) aSrcX) + (aSrcMemoryImage->mWidth * ((int) aSrcY));
-					uint32_t src = *aSrcPixels;
 
 					uint32_t dest = *aDestPixels;
 
@@ -1613,13 +1617,15 @@ void MemoryImage::FastStretchBlt(Image* theImage, const Rect& theDestRect, const
 				{
 					double aSrcX = theSrcRect.mX;
 					uint32_t* aDestPixels = aDestPixelsRow;
+					int sy = std::clamp((int) aSrcY, 0, maxSrcY);
+					uint32_t* aSrcRow = aSrcPixelsRow + (aSrcMemoryImage->mWidth * sy);
 
 					for (int x = 0; x < theDestRect.mWidth; x++)
 					{
+						int sx = std::clamp((int) aSrcX, 0, maxSrcX);
+						uint32_t src = aSrcRow[sx];
 						aSrcX += anAddX;
 
-						uint32_t* aSrcPixels = aSrcPixelsRow + ((int) aSrcX) + (aSrcMemoryImage->mWidth * ((int) aSrcY));
-						uint32_t src = *aSrcPixels;
 						uint32_t a = ((src >> 24) * ca) / 255;
 
 						if (a != 0)
@@ -1648,13 +1654,15 @@ void MemoryImage::FastStretchBlt(Image* theImage, const Rect& theDestRect, const
 				{
 					double aSrcX = theSrcRect.mX;
 					uint32_t* aDestPixels = aDestPixelsRow;
+					int sy = std::clamp((int) aSrcY, 0, maxSrcY);
+					uint32_t* aSrcRow = aSrcPixelsRow + (aSrcMemoryImage->mWidth * sy);
 
 					for (int x = 0; x < theDestRect.mWidth; x++)
 					{
+						int sx = std::clamp((int) aSrcX, 0, maxSrcX);
+						uint32_t src = aSrcRow[sx];
 						aSrcX += anAddX;
 
-						uint32_t* aSrcPixels = aSrcPixelsRow + ((int) aSrcX) + (aSrcMemoryImage->mWidth * ((int) aSrcY));
-						uint32_t src = *aSrcPixels;
 						uint32_t a = ((src >> 24) * ca) / 255;
 
 						if (a != 0)
