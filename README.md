@@ -81,7 +81,7 @@ This repository strictly complies with the **Bring Your Own Data (BYOD)** legal 
 *No PC setup tools required—drag and drop your raw game file straight to your SD card.*
 
 1. **Download Release Package:**
-   Download `PvZ_MiyooMiniPlus_v1.0.0.zip` from the [Releases](https://github.com/Francisco/PVZ/releases) page.
+   Download `PvZ_MiyooMiniPlus_v1.0.1.zip` from the [Releases](https://github.com/Francisco/PVZ/releases) page.
 2. **Extract to SD Card:**
    Extract the ZIP archive directly to the root of your microSD card. It will stage:
    ```text
@@ -132,9 +132,9 @@ docker run --rm -v "$(pwd):/root/workspace" -w /root/workspace/build \
 
 ### 3. Generate Release Package
 ```bash
-python scripts/package_release.py --version 1.0.0
+python scripts/package_release.py --version 1.0.1
 ```
-This generates the Pure Ports tree in `dist/Roms/PORTS/` and produces `dist/PvZ_MiyooMiniPlus_v1.0.0.zip`.
+This generates the Pure Ports tree in `dist/Roms/PORTS/` and produces `dist/PvZ_MiyooMiniPlus_v1.0.1.zip`.
 
 ---
 

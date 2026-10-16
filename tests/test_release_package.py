@@ -285,6 +285,8 @@ class TestReleasePackage(unittest.TestCase):
 
         self.assertIn('GameName="Plants vs. Zombies"', port_content)
         self.assertIn('GameExecutable="launch.sh"', port_content)
+        self.assertIn('GameDataFile="main*.pak"', port_content)
+        self.assertEqual(port_content.count("GameDataFile="), 1)
         self.assertIn("launch.sh", port_content)
 
 

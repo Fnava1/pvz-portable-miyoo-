@@ -249,7 +249,7 @@ static void SetupWorkingDirectory() {
 int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--version") == 0 || std::strcmp(argv[i], "-v") == 0) {
-            std::printf("Plants vs. Zombies (Miyoo Mini Plus Edition) v1.0.0\n");
+            std::printf("Plants vs. Zombies (Miyoo Mini Plus Edition) v1.0.1\n");
             return 0;
         }
         if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {

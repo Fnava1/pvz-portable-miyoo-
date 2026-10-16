@@ -103,6 +103,15 @@ for port in "$PORT_FILE" "$PKG_PORT_FILE"; do
     assert_pattern "$port" 'Games/Plants vs\. Zombies' "${port_name} references Games/Plants vs. Zombies"
     assert_pattern "$port" '/mnt/SDCARD/Roms/PORTS/Games/Plants vs\. Zombies' "${port_name} contains /mnt/SDCARD fallback"
     assert_pattern "$port" 'launch_standalone\.sh' "${port_name} checks launch_standalone.sh fallback"
+    assert_pattern "$port" 'GameDataFile="main\*\.pak"' "${port_name} uses single wildcard GameDataFile pattern"
+    
+    # Verify exactly one GameDataFile= line exists to prevent OnionOS ~Import ports parsing failures
+    gdf_count=$(grep -c "GameDataFile=" "$port" || true)
+    if [ "$gdf_count" -eq 1 ]; then
+        pass "${port_name} contains exactly one GameDataFile= assignment"
+    else
+        fail "${port_name} contains ${gdf_count} GameDataFile= assignments (expected 1)"
+    fi
 done
 
 # ------------------------------------------------------------------------------

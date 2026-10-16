@@ -26,7 +26,7 @@ from typing import Dict, List, Optional, Tuple, Any
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 
-DEFAULT_VERSION = "1.0.0"
+DEFAULT_VERSION = "1.0.1"
 
 # Target pure ports directory layout definitions
 PORTS_REL_PATH = os.path.join("Roms", "PORTS")
@@ -216,26 +216,35 @@ def stage_release(
                 f'GameName="{GAME_NAME}"\n'
                 f'GameDir="{GAME_NAME}"\n'
                 'GameExecutable="launch.sh"\n'
-                'GameDataFile="main_mmp.pak"\n'
-                'PORTDIR="$(dirname "$0")"\n'
+                'GameDataFile="main*.pak"\n'
+                'KillAudioserver=1\n'
+                'PerformanceMode=0\n'
+                'Arguments=""\n\n'
+                'unset LD_PRELOAD\n'
+                'PORTDIR="$(dirname "$0")"\n\n'
+                '# Dynamic game directory lookup (relative to Shortcuts/Strategy or ports root)\n'
                 f'if [ -d "$PORTDIR/Games/{GAME_NAME}" ]; then\n'
                 f'    GAMEDIR="$PORTDIR/Games/{GAME_NAME}"\n'
                 f'elif [ -d "$PORTDIR/../../Games/{GAME_NAME}" ]; then\n'
                 f'    GAMEDIR="$PORTDIR/../../Games/{GAME_NAME}"\n'
+                f'elif [ -d "$PORTDIR/../Games/{GAME_NAME}" ]; then\n'
+                f'    GAMEDIR="$PORTDIR/../Games/{GAME_NAME}"\n'
                 'else\n'
                 f'    GAMEDIR="/mnt/SDCARD/Roms/PORTS/Games/{GAME_NAME}"\n'
-                'fi\n'
-                'if [ -f "$GAMEDIR/main_mmp.pak" ]; then\n'
-                '    GameDataFile="main_mmp.pak"\n'
-                'elif [ -f "$GAMEDIR/main.pak" ]; then\n'
-                '    GameDataFile="main.pak"\n'
-                'else\n'
-                '    GameDataFile="main_mmp.pak"\n'
-                'fi\n'
+                'fi\n\n'
+                '# "main*.pak" matches either the raw PC main.pak (converted on first launch)\n'
+                '# or the converted main_mmp.pak, for both \'~Import ports\' and the launcher.\n'
                 'if [ -f "/mnt/SDCARD/Emu/PORTS/launch_standalone.sh" ]; then\n'
-                '    /mnt/SDCARD/Emu/PORTS/launch_standalone.sh "$GameName" "$GameDir" "$GameExecutable" "$Arguments" "$GameDataFile" 1 0\n'
+                '    /mnt/SDCARD/Emu/PORTS/launch_standalone.sh "$GameName" "$GameDir" "$GameExecutable" "$Arguments" "$GameDataFile" "$KillAudioserver" "$PerformanceMode"\n'
                 'else\n'
-                '    cd "$GAMEDIR" && ./launch.sh\n'
+                '    cd "$GAMEDIR"\n'
+                '    if [ -f "./launch.sh" ]; then\n'
+                '        ./launch.sh\n'
+                '    elif [ -f "./launcher.sh" ]; then\n'
+                '        ./launcher.sh\n'
+                '    else\n'
+                '        ./PvZ\n'
+                '    fi\n'
                 'fi\n'
             )
 

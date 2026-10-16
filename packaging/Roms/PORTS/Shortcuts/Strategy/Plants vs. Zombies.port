@@ -2,7 +2,7 @@
 GameName="Plants vs. Zombies"
 GameDir="Plants vs. Zombies"
 GameExecutable="launch.sh"
-GameDataFile="main_mmp.pak"
+GameDataFile="main*.pak"
 KillAudioserver=1
 PerformanceMode=0
 Arguments=""
@@ -17,24 +17,12 @@ elif [ -d "$PORTDIR/../../Games/Plants vs. Zombies" ]; then
     GAMEDIR="$PORTDIR/../../Games/Plants vs. Zombies"
 elif [ -d "$PORTDIR/../Games/Plants vs. Zombies" ]; then
     GAMEDIR="$PORTDIR/../Games/Plants vs. Zombies"
-elif [ -d "/mnt/SDCARD/Roms/PORTS/Games/Plants vs. Zombies" ]; then
-    GAMEDIR="/mnt/SDCARD/Roms/PORTS/Games/Plants vs. Zombies"
 else
     GAMEDIR="/mnt/SDCARD/Roms/PORTS/Games/Plants vs. Zombies"
 fi
 
-# Dynamic game data file detection for OnionOS Ports verification:
-# If main_mmp.pak is already generated, check for it.
-# If only raw PC main.pak exists, check for main.pak so launch_standalone.sh
-# allows execution to proceed to launch.sh and setup_miyoo!
-if [ -f "$GAMEDIR/main_mmp.pak" ]; then
-    GameDataFile="main_mmp.pak"
-elif [ -f "$GAMEDIR/main.pak" ]; then
-    GameDataFile="main.pak"
-else
-    GameDataFile="main_mmp.pak"
-fi
-
+# "main*.pak" matches either the raw PC main.pak (converted on first launch)
+# or the converted main_mmp.pak, for both '~Import ports' and the launcher.
 if [ -f "/mnt/SDCARD/Emu/PORTS/launch_standalone.sh" ]; then
     /mnt/SDCARD/Emu/PORTS/launch_standalone.sh "$GameName" "$GameDir" "$GameExecutable" "$Arguments" "$GameDataFile" "$KillAudioserver" "$PerformanceMode"
 else
