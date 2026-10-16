@@ -1005,14 +1005,10 @@ void LawnApp::FinishRestartConfirmDialog()
 
 	mBoardResult = BoardResult::BOARDRESULT_RESTART;
 
+	KillDialog(Dialogs::DIALOG_CONFIRM_RESTART);
 	KillDialog(Dialogs::DIALOG_RESTARTCONFIRM);
 	KillDialog(Dialogs::DIALOG_CONTINUE);
-
-	if (mWidgetManager)
-	{
-		mWidgetManager->mBaseModalWidget = nullptr;
-		mWidgetManager->mPreModalInfoList.clear();
-	}
+	KillNewOptionsDialog();
 
 	mDeferredNewGame = true;
 }
@@ -1809,6 +1805,7 @@ void LawnApp::LoadingThreadProc()
 	mReanimatorCache->ReanimatorCacheInitialize();
 	PvzpFoleyInitialize(gLawnFoleyParamArray, LENGTH(gLawnFoleyParamArray));
 	PvzpLoadResources("DelayLoad_Almanac");
+	mReanimatorCache->PrecacheAll();
 
 	PvzpLogLn("loading '{}' {} ms", "stuff", static_cast<int>(aTimer.GetDuration()));
 	aTimer.Start();
@@ -2003,6 +2000,7 @@ void LawnApp::ButtonDepress(int theId)
 			FinishCheatDialog(true);
 			return;
 
+		case Dialogs::DIALOG_CONFIRM_RESTART:
 		case Dialogs::DIALOG_RESTARTCONFIRM:
 			FinishRestartConfirmDialog();
 			return;

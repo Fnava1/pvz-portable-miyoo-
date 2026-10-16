@@ -177,9 +177,13 @@ void TitleScreen::Draw(Graphics* g)
 	{
 		aLogoY = PvzpAnimateCurve(100, 60, mTitleStateCounter, -150, 10, CURVE_EASE_IN);
 	}
-	else
+	else if (mTitleStateCounter > 0)
 	{
 		aLogoY = PvzpAnimateCurve(60, 50, mTitleStateCounter, 10, 15, CURVE_BOUNCE);
+	}
+	else
+	{
+		aLogoY = 15;
 	}
 	g->DrawImage(IMAGE_PVZ_LOGO, mWidth / 2 - IMAGE_PVZ_LOGO->mWidth / 2, aLogoY);
 
@@ -201,7 +205,7 @@ void TitleScreen::Draw(Graphics* g)
 	else
 	{
 		Graphics aClipG(*g);
-		aClipG.ClipRect(240, aGrassY, mCurBarWidth, IMAGE_LOADBAR_GRASS->mHeight);
+		aClipG.ClipRect(aGrassX, aGrassY, mCurBarWidth, IMAGE_LOADBAR_GRASS->mHeight);
 		aClipG.DrawImage(IMAGE_LOADBAR_GRASS, aGrassX, aGrassY);
 
 		float aRollLen = mCurBarWidth * 0.94f;
@@ -241,14 +245,14 @@ void TitleScreen::Update()
 		// Immediately show loader screen and loading bar on handheld console
 		mTitleState = TitleState::TITLESTATE_SCREEN;
 		mTitleStateDuration = 0;
-		mTitleStateCounter = 100;
+		mTitleStateCounter = 0;
 	}
 
 	if (mQuickLoadKey != KeyCode::KEYCODE_UNKNOWN && mTitleState != TitleState::TITLESTATE_SCREEN)
 	{
 		mTitleState = TitleState::TITLESTATE_SCREEN;
 		mTitleStateDuration = 0;
-		mTitleStateCounter = 100;
+		mTitleStateCounter = 0;
 	}
 
 	mTitleAge++;
@@ -301,7 +305,7 @@ void TitleScreen::Update()
 
 		mStartButton->mLabel = PvzpStringTranslate("[LOADING]");
 		mStartButton->SetFont(FONT_BRIANNETOD16);
-		mStartButton->Resize((mWidth - IMAGE_LOADBAR_DIRT->mWidth) / 2, 650, mTotalBarWidth, 50);
+		mStartButton->Resize((mWidth - IMAGE_LOADBAR_DIRT->mWidth) / 2, 529, mTotalBarWidth, 50);
 		mStartButton->mVisible = true;
 
 		float aEstimatedTotalLoadTime;
@@ -327,9 +331,13 @@ void TitleScreen::Update()
 	{
 		aButtonY = PvzpAnimateCurve(60, 10, mTitleStateCounter, 650, 534, PvzpCurves::CURVE_EASE_IN);
 	}
-	else
+	else if (mTitleStateCounter > 0)
 	{
 		aButtonY = PvzpAnimateCurve(10, 0, mTitleStateCounter, 534, 529, PvzpCurves::CURVE_BOUNCE);
+	}
+	else
+	{
+		aButtonY = 529;
 	}
 	mStartButton->Resize(mStartButton->mX, aButtonY, mTotalBarWidth, mStartButton->mHeight);
 
