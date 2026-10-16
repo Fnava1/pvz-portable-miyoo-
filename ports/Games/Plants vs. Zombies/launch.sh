@@ -70,11 +70,24 @@ fi
 # ------------------------------------------------------------------------------
 # Performance & Subsystem Configuration
 # ------------------------------------------------------------------------------
-# 1. Apply safe 1700 MHz overclock for Miyoo Mini Plus via OnionOS cpuclock
+# 1. Dynamic Hardware Detection & Safe Overclocking
+# Miyoo Mini Plus: 1800 MHz (AXP223 PMIC, large battery, WiFi present)
+# Miyoo Mini (v1/v2/v3/v4 non-Plus): 1400 MHz (conservative ceiling avoiding PMIC panic)
+IS_PLUS=0
+if [ -d /sys/class/net/wlan0 ] || grep -qi "plus" /proc/cmdline 2>/dev/null; then
+    IS_PLUS=1
+fi
+
+if [ "$IS_PLUS" -eq 1 ]; then
+    CPU_FREQ=1800
+else
+    CPU_FREQ=1400
+fi
+
 if [ -f "/mnt/SDCARD/.tmp_update/bin/cpuclock" ]; then
-    /mnt/SDCARD/.tmp_update/bin/cpuclock 1700 2>/dev/null
+    /mnt/SDCARD/.tmp_update/bin/cpuclock $CPU_FREQ 2>/dev/null
 elif command -v cpuclock >/dev/null 2>&1; then
-    cpuclock 1700 2>/dev/null
+    cpuclock $CPU_FREQ 2>/dev/null
 fi
 
 # 2. Hardware texture pool & blitter tuning

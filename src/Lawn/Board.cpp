@@ -2019,6 +2019,12 @@ void Board::RefreshSeedPacketFromCursor()
 
 void Board::CycleSeedPacket(int theDelta)
 {
+	if (mApp->mGameMode == GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN || mApp->mGameMode == GameMode::GAMEMODE_TREE_OF_WISDOM)
+	{
+		CycleZenTool(theDelta);
+		return;
+	}
+
 	if (!mSeedBank || mSeedBank->mNumPackets <= 0 || mPaused || mApp->mGameScene != GameScenes::SCENE_PLAYING)
 		return;
 
@@ -2107,6 +2113,97 @@ void Board::CycleSeedPacket(int theDelta)
 		{
 			aPacket.MouseDown(0, 0, 1);
 			break;
+		}
+	}
+}
+
+void Board::CycleZenTool(int theDelta)
+{
+	if (mPaused || mApp->mGameScene != GameScenes::SCENE_PLAYING)
+		return;
+
+	struct ZenToolMapping {
+		GameObjectType mTool;
+		CursorType mCursor;
+	};
+
+	static const ZenToolMapping sZenTools[] = {
+		{ GameObjectType::OBJECT_TYPE_WATERING_CAN, CursorType::CURSOR_TYPE_WATERING_CAN },
+		{ GameObjectType::OBJECT_TYPE_FERTILIZER, CursorType::CURSOR_TYPE_FERTILIZER },
+		{ GameObjectType::OBJECT_TYPE_BUG_SPRAY, CursorType::CURSOR_TYPE_BUG_SPRAY },
+		{ GameObjectType::OBJECT_TYPE_PHONOGRAPH, CursorType::CURSOR_TYPE_PHONOGRAPH },
+		{ GameObjectType::OBJECT_TYPE_CHOCOLATE, CursorType::CURSOR_TYPE_CHOCOLATE },
+		{ GameObjectType::OBJECT_TYPE_GLOVE, CursorType::CURSOR_TYPE_GLOVE },
+		{ GameObjectType::OBJECT_TYPE_MONEY_SIGN, CursorType::CURSOR_TYPE_MONEY_SIGN },
+		{ GameObjectType::OBJECT_TYPE_WHEELBARROW, CursorType::CURSOR_TYPE_WHEEELBARROW },
+	};
+
+	std::vector<ZenToolMapping> aAvailableTools;
+	if (mApp->mGameMode == GameMode::GAMEMODE_TREE_OF_WISDOM)
+	{
+		if (CanUseGameObject(GameObjectType::OBJECT_TYPE_TREE_FOOD) && mChallenge->TreeOfWisdomCanFeed() &&
+			mApp->mPlayerInfo->mPurchases[StoreItem::STORE_ITEM_TREE_FOOD] > PURCHASE_COUNT_OFFSET)
+		{
+			aAvailableTools.push_back({ GameObjectType::OBJECT_TYPE_TREE_FOOD, CursorType::CURSOR_TYPE_TREE_FOOD });
+		}
+	}
+	else
+	{
+		for (const auto& mapping : sZenTools)
+		{
+			if (!CanUseGameObject(mapping.mTool))
+				continue;
+
+			if (mapping.mTool == GameObjectType::OBJECT_TYPE_FERTILIZER &&
+				mApp->mPlayerInfo->mPurchases[StoreItem::STORE_ITEM_FERTILIZER] <= PURCHASE_COUNT_OFFSET)
+				continue;
+
+			if (mapping.mTool == GameObjectType::OBJECT_TYPE_BUG_SPRAY &&
+				mApp->mPlayerInfo->mPurchases[StoreItem::STORE_ITEM_BUG_SPRAY] <= PURCHASE_COUNT_OFFSET)
+				continue;
+
+			if (mapping.mTool == GameObjectType::OBJECT_TYPE_CHOCOLATE &&
+				mApp->mPlayerInfo->mPurchases[StoreItem::STORE_ITEM_CHOCOLATE] <= PURCHASE_COUNT_OFFSET)
+				continue;
+
+			aAvailableTools.push_back(mapping);
+		}
+	}
+
+	if (aAvailableTools.empty())
+		return;
+
+	int aCurrentIndex = -1;
+	for (size_t i = 0; i < aAvailableTools.size(); ++i)
+	{
+		if (aAvailableTools[i].mCursor == mCursorObject->mCursorType)
+		{
+			aCurrentIndex = static_cast<int>(i);
+			break;
+		}
+	}
+
+	int aNextIndex = 0;
+	if (aCurrentIndex == -1)
+	{
+		aNextIndex = (theDelta > 0) ? 0 : (static_cast<int>(aAvailableTools.size()) - 1);
+	}
+	else
+	{
+		aNextIndex = (aCurrentIndex + theDelta + static_cast<int>(aAvailableTools.size())) % static_cast<int>(aAvailableTools.size());
+	}
+
+	ClearCursor();
+	mCursorObject->mCursorType = aAvailableTools[aNextIndex].mCursor;
+	mApp->PlayFoley(FoleyType::FOLEY_DROP);
+
+	if (aAvailableTools[aNextIndex].mTool == GameObjectType::OBJECT_TYPE_WATERING_CAN)
+	{
+		if (mTutorialState == TutorialState::TUTORIAL_ZEN_GARDEN_PICKUP_WATER)
+		{
+			mTutorialState = TutorialState::TUTORIAL_ZEN_GARDEN_WATER_PLANT;
+			DisplayAdvice("[ADVICE_ZEN_GARDEN_WATER_PLANT]", MessageStyle::MESSAGE_STYLE_ZEN_GARDEN_LONG, AdviceType::ADVICE_NONE);
+			TutorialArrowRemove();
 		}
 	}
 }

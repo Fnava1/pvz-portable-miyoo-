@@ -432,6 +432,7 @@ public:
 	void							SpawnZombiesFromSky();
 	void							PickUpTool(GameObjectType theObjectType);
 	void							CycleSeedPacket(int theDelta);
+	void							CycleZenTool(int theDelta);
 	void							ToggleShovel();
 	void							PullSlotMachineLever();
 	bool							CanUseGridCursor();

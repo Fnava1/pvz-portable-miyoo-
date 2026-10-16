@@ -690,7 +690,7 @@ bool SoundManager::Initialize(int mixChannels) {
     }
 
 #if PVZ_HAVE_SDL_MIXER
-    if (Mix_OpenAudio(22050, AUDIO_S16SYS, 2, 2048) >= 0) {
+    if (Mix_OpenAudio(22050, AUDIO_S16SYS, 2, 1024) >= 0) {
         Mix_AllocateChannels(mNumChannels);
         mSdlMixerOpen = true;
     }

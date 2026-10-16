@@ -1,13 +1,13 @@
-# 🌻 Plants vs. Zombies GOTY Edition — Miyoo Mini Plus Port (OnionOS)
+# 🌻 Plants vs. Zombies GOTY Edition — Miyoo Mini & Miyoo Mini Plus Port (OnionOS)
 
 [![License: MIT / Clean-Room BYOD](https://img.shields.io/badge/License-MIT%20%2F%20BYOD-green.svg)](#legal--clean-room-architecture)
-[![Platform: Miyoo Mini Plus](https://img.shields.io/badge/Platform-Miyoo%20Mini%20Plus%20%28OnionOS%29-blue.svg)](#hardware-profile--performance-target)
+[![Platform: Miyoo Mini & Plus](https://img.shields.io/badge/Platform-Miyoo%20Mini%20%26%20Plus%20%28OnionOS%29-blue.svg)](#hardware-profile--performance-target)
 [![Architecture: ARMv7 Cortex-A7](https://img.shields.io/badge/Arch-ARMv7--A%20%28Hard%20Float%20%2B%20NEON%29-orange.svg)](#subsystem-architecture)
 [![Memory: <= 85 MB](https://img.shields.io/badge/RAM-78%20MB%20%2F%2085%20MB%20Cap-brightgreen.svg)](#memory-budget--profiling-matrix)
 
-A native, high-performance port of PopCap's classic **Plants vs. Zombies: Game of the Year Edition** for the **Miyoo Mini Plus** retro handheld console running **OnionOS**.
+A native, high-performance port of PopCap's classic **Plants vs. Zombies: Game of the Year Edition** for the **Miyoo Mini (v1/v2/v3/v4)** and **Miyoo Mini Plus** retro handheld consoles running **OnionOS**.
 
-Rendered at the display's native **640×480 (4:3)** resolution at a fluid **30–60 FPS**, complete with authentic tracker music reproduction, custom handheld ergonomics (discrete 9×5 grid snapping, automatic sun hover-vacuum), and full lifecycle power protection.
+Rendered at the display's native **640×480 (4:3)** resolution at a fluid **60 FPS**, complete with authentic tracker music reproduction, custom handheld ergonomics (discrete 9×5 grid snapping, automatic sun hover-vacuum, dedicated Zen Garden L/R tool cycling), and full lifecycle power protection with dynamic model-aware overclocking (1800 MHz on MM+, safe 1400 MHz on MM).
 
 ---
 
@@ -29,17 +29,19 @@ Rendered at the display's native **640×480 (4:3)** resolution at a fluid **30�
 
 ## 🌟 Key Features
 
-- **Native 640×480 Resolution (1:1 Pixel Match):** Perfectly tailored to the 3.5" IPS LCD display without letterboxing or uneven scaling.
+- **Universal Miyoo Mini Family Support:** Out-of-the-box support for both **Miyoo Mini Plus** and **Miyoo Mini (v1/v2/v3/v4)** with automatic hardware detection.
+- **Native 640×480 Resolution (1:1 Pixel Match):** Perfectly tailored to the 2.8" / 3.5" IPS LCD display without letterboxing or uneven scaling.
 - **NEON-Accelerated Software Rasterizer:** Completely removes OpenGL ES 2.0; utilizes ARMv7 NEON SIMD blitting and a 16 MB contiguous DMA texture pool (`SDL_MMIYOO_TEXTURE_POOL=1`).
 - **Hybrid Ergonomic Controls:**
-  - **Lawn Battle:** Discrete 9×5 grid snapping on D-pad with instant L1/R1 seed cycling.
+  - **Lawn Battle:** Discrete 9×5 grid snapping on D-pad with instant L/R seed packet cycling.
   - **Hover Sun Vacuum:** Hovering the cursor over falling or produced suns and coins automatically collects them—no frantic clicking required.
+  - **Zen Garden:** Dedicated **L / R** triggers cycle available top-shelf tools (Watering Can, Fertilizer, Bug Spray, Phonograph, Chocolate, Glove, Money Sign, Wheelbarrow, Tree Food); **A** applies the tool on the selected plant; **B** drops/cancels.
   - **Dave's Shop:** Direct shelf-and-slot navigation.
-  - **Zen Garden & Minigames:** Smooth velocity-accelerated contextual virtual cursor for precision interaction (*Whack-a-Zombie*, *Zombiquarium*).
-- **Faithful Tracker Soundtrack & Audio:** Replaces proprietary BASS with `libopenmpt` and `SDL-Mixer-X`, decoding Laura Shigihara's original `.mo3` modules into low-latency 2,048-sample audio streams at 22,050 Hz with an 8 MB LRU sound effect cache.
-- **Lifecycle & Power Resiliency:**
-  - Safe 1700 MHz overclock via OnionOS `cpuclock`.
-  - Signal traps (`EXIT`, `INT`, `TERM`, `HUP`) with unconditional `sync` to eliminate FAT32 SD card theme corruption.
+  - **Minigames & Precision:** Smooth velocity-accelerated contextual virtual cursor for games requiring freeform aiming (*Whack-a-Zombie*, *Zombiquarium*).
+- **Faithful Low-Latency Tracker Audio:** Replaces proprietary BASS with `libopenmpt` and `SDL-Mixer-X`, decoding Laura Shigihara's original `.mo3` modules into low-latency 1,024-sample audio streams (~46 ms latency) at 22,050 Hz with an 8 MB LRU sound effect cache.
+- **Dynamic Overclocking & Power Resiliency:**
+  - Automatic model detection: **1800 MHz** for Miyoo Mini Plus (AXP223 PMIC) and a safe **1400 MHz** ceiling for Miyoo Mini non-Plus (preventing undervoltage PMIC kernel panics).
+  - Signal traps (`EXIT`, `INT`, `TERM`, `HUP`) with unconditional `sync` and governor restoration to `ondemand 1200` to eliminate FAT32 SD card corruption.
   - Direct hardware framebuffer restoration (`ResetFramebuffer()` via `ioctl(FBIOPAN_DISPLAY)`) completely eliminating post-game black screens.
 - **Dual Installation Workflow:** 3-second automated PC builder (`Launcher.py`) or autonomous console conversion (`setup_miyoo`) with on-screen `/dev/fb0` progress tracking.
 
@@ -49,12 +51,12 @@ Rendered at the display's native **640×480 (4:3)** resolution at a fluid **30�
 
 | Component | Specification | Port Engineering Strategy |
 |---|---|---|
-| **SoC** | SigmaStar SSD202D | Dual ARM Cortex-A7 @ 1.2 GHz, overclocked to **1700 MHz** via `cpuclock` |
+| **SoC** | SigmaStar SSD202D | Dual ARM Cortex-A7 @ 1.2 GHz base; dynamic OC: **1800 MHz** (Plus) / **1400 MHz** (non-Plus) |
 | **SIMD / FPU** | ARMv7-A NEON + VFPv4 | Vectorized Reanim matrix transforms and alpha blending (`-mfpu=neon-vfpv4`) |
 | **RAM** | 128 MB DDR3 SiP | **~80–95 MB usable** userland; engine restricted to **<= 78 MB** steady-state |
 | **GPU** | None (No 3D / OpenGL) | Custom 2D Software Rasterizer with 16 MB DMA pool on `/dev/fb0` |
-| **Display** | 3.5" IPS LCD (640×480, 4:3) | Native 1:1 match; 0.8× texture scaling with 800×600 logical coordinate parity |
-| **Audio** | SigmaStar DAC (`MI_AO`) | `killall -9 audioserver` on launch; clean daemon restoration on exit |
+| **Display** | 2.8" / 3.5" IPS LCD (640×480, 4:3) | Native 1:1 match; 0.8× texture scaling with 800×600 logical coordinate parity |
+| **Audio** | SigmaStar DAC (`MI_AO`) | `killall -9 audioserver` on launch; clean daemon restoration on exit; 1024-sample buffer |
 | **Storage** | microSD (FAT32 / exFAT) | Consolidated `main_mmp.pak` container for single-seek streaming I/O |
 
 ---
@@ -93,21 +95,23 @@ OnionOS uses `/dev/fb0` with panning double-buffering. Custom SDL video drivers 
 ---
 
 ## 🎮 Handheld Control Scheme
-
-| Button | Garden Battle Mode | Menus & Dave's Shop | Zen Garden / Minigames |
-|---|---|---|---|
-| **D-Pad** | Discrete 9×5 Grid Snapping (Tile-to-Tile) | Navigate Items / Shelves | Smooth Contextual Virtual Cursor |
-| **Cursor Hover** | **Auto-Collect Suns & Coins** | — | — |
-| **L1 / R1** | Cycle Seed Packets Left / Right | Tab Left / Right | — |
-| **A** | Plant Selected Seed / Confirm | Select / Purchase | Interact / Water / Whack |
-| **B** | Cancel Seed Selection / Back | Back / Close Menu | Cancel / Deselect |
-| **X** | **Quick Shovel Toggle** (Dig Tile) | — | Secondary Action |
-| **Y** | Inspect Tile / Lawn View | — | — |
-| **Start** | In-Game Pause & Options Menu | Pause | Pause |
-| **Select** | Fast Forward (Game Speed) | — | — |
-| **MENU** | **Universal Pause / Exit (ESC)** | Exit / Return to OS | Universal Pause / Exit (ESC) |
+ 
+| Button | Garden Battle Mode | Menus & Dave's Shop | Zen Garden | Minigames (*Whack-a-Zombie*, etc.) |
+|---|---|---|---|---|
+| **D-Pad** | Discrete 9×5 Grid Snapping (Tile-to-Tile) | Navigate Items / Shelves | Move Virtual Cursor / Target Pot | Smooth Contextual Virtual Cursor |
+| **Cursor Hover** | **Auto-Collect Suns & Coins** | — | — | — |
+| **L / R** | Cycle Seed Packets Prev / Next | Tab Pages Left / Right | **Cycle Zen Garden Tools** (Water, Fertilizer, Spray, Music, Chocolate, Glove, Money, Cart, Tree Food) | Cycle Available Items |
+| **A** | Plant Selected Seed / Confirm | Select / Purchase | **Equip / Apply Tool to Plant** | Hit / Whack / Select |
+| **B** | Cancel Seed Selection / Deselect | Back / Close Menu | **Cancel / Drop Held Tool (`ClearCursor`)** | Deselect / Back |
+| **X** | **Quick Shovel Toggle** (or Slot Lever) | — | Secondary Action | Special Action |
+| **Y** | Inspect Tile / Cancel | — | Cancel / Drop Tool | — |
+| **Start** | In-Game Pause & Options Menu | Pause | Pause Menu | Pause Menu |
+| **Select** | Fast Forward / Toggle Cursor Mode | — | Fast Forward / Toggle Cursor Mode | — |
+| **MENU** | **Universal Pause / Exit (ESC)** | Exit / Return to OS | Universal Pause / Exit (ESC) | Universal Pause / Exit (ESC) |
 
 > 💡 **Tip:** In lawn battles, you don't need to press a button to grab sun! Simply guide your cursor across falling or grounded sun tokens and they will be vacuumed instantly into your bank.
+>
+> 🌸 **Zen Garden Tip:** Press **L** or **R** at any time to instantly equip the Watering Can or cycle through your tools. Press **A** over any plant to care for it, and press **B** to instantly holster your tool!
 
 ---
 
@@ -163,7 +167,7 @@ This repository strictly complies with the **Bring Your Own Data (BYOD)** legal 
    /mnt/SDCARD/Roms/PORTS/Games/Plants vs. Zombies/main.pak
    ```
 4. **Boot & Play:**
-   - Insert the microSD card into your Miyoo Mini Plus.
+   - Insert the microSD card into your Miyoo Mini or Miyoo Mini Plus.
    - In OnionOS, open **Ports -> Strategy -> Plants vs. Zombies**.
    - On first launch, the autonomous installer (`setup_miyoo`) will display an on-screen progress bar on the LCD, downscale textures and resample audio into `main_mmp.pak`, back up your original file to `main.pak.bak`, delete `setup_miyoo` to free storage, and immediately launch into the game!
 

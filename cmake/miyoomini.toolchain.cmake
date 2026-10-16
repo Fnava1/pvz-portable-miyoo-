@@ -30,9 +30,9 @@ set(MMP_FLAGS "-mcpu=cortex-a7 -mtune=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=har
 
 set(CMAKE_C_FLAGS_INIT "${MMP_FLAGS}")
 set(CMAKE_CXX_FLAGS_INIT "${MMP_FLAGS}")
-set(CMAKE_EXE_LINKER_FLAGS_INIT "${MMP_FLAGS}")
-set(CMAKE_SHARED_LINKER_FLAGS_INIT "${MMP_FLAGS}")
-set(CMAKE_MODULE_LINKER_FLAGS_INIT "${MMP_FLAGS}")
+set(CMAKE_EXE_LINKER_FLAGS_INIT "${MMP_FLAGS} -Wl,--as-needed")
+set(CMAKE_SHARED_LINKER_FLAGS_INIT "${MMP_FLAGS} -Wl,--as-needed")
+set(CMAKE_MODULE_LINKER_FLAGS_INIT "${MMP_FLAGS} -Wl,--as-needed")
 
 # Search mode settings for cross-compilation
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
