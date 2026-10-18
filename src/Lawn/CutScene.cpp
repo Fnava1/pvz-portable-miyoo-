@@ -577,6 +577,11 @@ void CutScene::PlaceStreetZombies()
 		aPreviewCapacity = 18;
 	}
 
+	if (aTotalZombieCount <= 0)
+	{
+		return;
+	}
+
 	// Place larger zombies first, then smaller ones
 	for (ZombieType aZombieType = ZombieType::ZOMBIE_NORMAL; aZombieType < ZombieType::NUM_ZOMBIE_TYPES; aZombieType = static_cast<ZombieType>(static_cast<int>(aZombieType) + 1))
 	{
@@ -585,6 +590,7 @@ void CutScene::PlaceStreetZombies()
 			FindAndPlaceZombie(aZombieType, aZombieGrid);
 		}
 	}
+
 	for (ZombieType aZombieType = ZombieType::ZOMBIE_NORMAL; aZombieType < ZombieType::NUM_ZOMBIE_TYPES; aZombieType = static_cast<ZombieType>(static_cast<int>(aZombieType) + 1))
 	{
 		if (aZombieTypeCount[aZombieType] && !Is2x2Zombie(aZombieType) && aZombieType != ZombieType::ZOMBIE_ZAMBONI)

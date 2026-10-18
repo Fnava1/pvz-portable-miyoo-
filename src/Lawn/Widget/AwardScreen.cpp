@@ -474,8 +474,13 @@ void AwardScreen::KeyDown(KeyCode theKey)
 
 void AwardScreen::StartButtonPressed()
 {
-	if (mApp->GetDialog(DIALOG_STORE))
+	if (mPressedStart || !mApp->mAwardScreen || mApp->GetDialog(DIALOG_STORE))
 		return;
+
+	mPressedStart = true;
+	if (mStartButton) mStartButton->mDisabled = true;
+	if (mContinueButton) mContinueButton->mDisabled = true;
+	if (mMenuButton) mMenuButton->mDisabled = true;
 
 	if (mAwardType == AWARD_CREDITS_ZOMBIENOTE)
 	{
@@ -633,6 +638,11 @@ void AwardScreen::DrawAchievements(Graphics* g) {
 
 void AwardScreen::AchievementsContinuePressed() {
 	if (mAwardType == AWARD_ACHIEVEMENTONLY) {
+		if (mPressedStart || !mApp->mAwardScreen)
+			return;
+
+		mPressedStart = true;
+		if (mContinueButton) mContinueButton->mDisabled = true;
 		mApp->KillAwardScreen();
 		if (mApp->IsAdventureMode()) {
 			mApp->PreNewGame(mApp->mGameMode, false);

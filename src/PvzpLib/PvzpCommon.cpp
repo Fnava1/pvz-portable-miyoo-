@@ -361,13 +361,17 @@ float PvzpCurveEvaluateClamped(float theTime, float thePositionStart, float theP
 
 float PvzpAnimateCurveFloatTime(float theTimeStart, float theTimeEnd, float theTimeAge, float thePositionStart, float thePositionEnd, PvzpCurves theCurve)
 {
+	if (theTimeEnd == theTimeStart)
+		return thePositionEnd;
+
 	float aWarpedAge = (theTimeAge - theTimeStart) / (theTimeEnd - theTimeStart);
 	return PvzpCurveEvaluateClamped(aWarpedAge, thePositionStart, thePositionEnd, theCurve);
 }
 
 float PvzpAnimateCurveFloat(int theTimeStart, int theTimeEnd, int theTimeAge, float thePositionStart, float thePositionEnd, PvzpCurves theCurve)
 {
-	//return PvzpAnimateCurveFloatTime(theTimeStart, theTimeEnd, theTimeAge, thePositionStart, thePositionEnd, theCurve);
+	if (theTimeEnd == theTimeStart)
+		return thePositionEnd;
 
 	float aWarpedAge = (theTimeAge - theTimeStart) / static_cast<float>(theTimeEnd - theTimeStart);
 	return PvzpCurveEvaluateClamped(aWarpedAge, thePositionStart, thePositionEnd, theCurve);

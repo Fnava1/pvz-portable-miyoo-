@@ -60,6 +60,7 @@ public:
 	bool								mShowMenuButtonAfterAchievements;	//+0xAD
 	int									mAchievementAnimTime;	//+0xBC
 	bool								mShowingAchievements;	//+0xD8
+	bool								mPressedStart = false;
 	std::vector<AchievementScreenItem>	mAchievementItems;		//+0xC0
 
 public:

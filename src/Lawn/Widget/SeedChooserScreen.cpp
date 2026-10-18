@@ -47,7 +47,8 @@ SeedChooserScreen::SeedChooserScreen()
 	mApp = (LawnApp*)gSexyAppBase;
 	mBoard = mApp->mBoard;
 	mClip = false;
-	// mSeedChooserAge is deliberately not initialized here
+	mSeedChooserAge = 0;
+	mNumSeedsToChoose = 0;
 	mSeedsInFlight = 0;
 	mSeedsInBank = 0;
 	mLastMouseX = -1;
@@ -516,6 +517,9 @@ void SeedChooserScreen::UpdateCursor()
 void SeedChooserScreen::Update()
 {
 	Widget::Update();
+
+	if (!mBoard || !mBoard->ChooseSeedsOnCurrentLevel() || (mBoard->mCutScene && mBoard->mCutScene->IsBeforePreloading()))
+		return;
 
 	mLastMouseX = mApp->mWidgetManager->mLastMouseX;
 	mLastMouseY = mApp->mWidgetManager->mLastMouseY;

@@ -82,16 +82,16 @@ public:
 	ChosenSeed              mChosenSeeds[NUM_SEED_TYPES];
 	LawnApp*                mApp;
 	Board*                  mBoard;
-	int                     mNumSeedsToChoose;
-	int                     mSeedChooserAge;
-	int                     mSeedsInFlight;
-	int                     mSeedsInBank;
+	int                     mNumSeedsToChoose = 0;
+	int                     mSeedChooserAge = 0;
+	int                     mSeedsInFlight = 0;
+	int                     mSeedsInBank = 0;
 	std::unique_ptr<ToolTipWidget> mToolTip;
-	int                     mToolTipSeed;
-	int                     mLastMouseX;
-	int                     mLastMouseY;
-	SeedChooserState        mChooseState;
-	int                     mViewLawnTime;
+	int                     mToolTipSeed = -1;
+	int                     mLastMouseX = -1;
+	int                     mLastMouseY = -1;
+	SeedChooserState        mChooseState = CHOOSE_NORMAL;
+	int                     mViewLawnTime = 0;
 
 public:
 	SeedChooserScreen();

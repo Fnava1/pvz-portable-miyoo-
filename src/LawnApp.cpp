@@ -585,6 +585,7 @@ void LawnApp::EndLevel()
 	if (IsAdventureMode())
 	{
 		NewGame();
+		return;
 	}
 
 	mFirstTimeGameSelector = true;

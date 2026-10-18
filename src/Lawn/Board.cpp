@@ -196,6 +196,7 @@ Board::Board(LawnApp* theApp)
 	mClip = false;
 	mDebugTextMode = DebugTextMode::DEBUG_TEXT_NONE;
 	mMenuButton = std::make_unique<GameButton>(0);
+	mMenuButton->mParentWidget = this;
 	mMenuButton->mDrawStoneButton = true;
 	mStoreButton = nullptr;
 	mIgnoreMouseUp = false;
