@@ -357,6 +357,7 @@ void LawnApp::PreNewGame(GameMode theGameMode, bool theLookForSavedGame)
 void LawnApp::MakeNewBoard()
 {
 	KillBoard();
+	KillSeedChooserScreen();
 	if (mWidgetManager && mWidgetManager->mImage)
 	{
 		mWidgetManager->mImage->Clear();
@@ -562,7 +563,10 @@ void LawnApp::KillStoreScreen()
 
 void LawnApp::ShowSeedChooserScreen()
 {
-	PVZP_ASSERT(mSeedChooserScreen == nullptr);
+	if (mSeedChooserScreen)
+	{
+		KillSeedChooserScreen();
+	}
 
 	mSeedChooserScreen = std::make_unique<SeedChooserScreen>();
 	mSeedChooserScreen->Resize(0, 0, mWidth, mHeight);

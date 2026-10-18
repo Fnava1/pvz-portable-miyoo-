@@ -1657,6 +1657,12 @@ void CutScene::AdvanceCrazyDaveDialog(bool theJustSkipping)
 
 void CutScene::MouseDown([[maybe_unused]] int theX, [[maybe_unused]] int theY)
 {
+	if (mApp->mGameMode == GameMode::GAMEMODE_INTRO)
+	{
+		mCutsceneTime = std::max(mCutsceneTime, TimeIntro_End);
+		return;
+	}
+
 	if (mApp->mCheatKeys && mApp->mGameMode == GameMode::GAMEMODE_UPSELL)
 	{
 		mCrazyDaveCountDown = std::min(mCrazyDaveCountDown, 1);
@@ -1676,6 +1682,15 @@ void CutScene::MouseDown([[maybe_unused]] int theX, [[maybe_unused]] int theY)
 
 void CutScene::KeyDown(KeyCode theKey)
 {
+	if (mApp->mGameMode == GameMode::GAMEMODE_INTRO)
+	{
+		if (theKey == KeyCode::KEYCODE_SPACE || theKey == KeyCode::KEYCODE_RETURN || theKey == KeyCode::KEYCODE_ESCAPE)
+		{
+			mCutsceneTime = std::max(mCutsceneTime, TimeIntro_End);
+			return;
+		}
+	}
+
 	if (mApp->mGameMode == GameMode::GAMEMODE_UPSELL)
 	{
 		if (mApp->mCheatKeys && theKey == KeyCode::KEYCODE_ESCAPE)
@@ -2262,9 +2277,12 @@ void CutScene::UpdateIntro()
 		mApp->PlaySample(SOUND_SIREN);
 		mApp->mMuteSoundsForCutscene = true;
 	}
-	if (mCutsceneTime == TimeIntro_End)
+	if (mCutsceneTime >= TimeIntro_End && !mApp->mDeferredNewGame)
 	{
-		mApp->PreNewGame(GameMode::GAMEMODE_ADVENTURE, false);
+		ClearUpsellBoard();
+		mApp->mMuteSoundsForCutscene = false;
+		mApp->mGameMode = GameMode::GAMEMODE_ADVENTURE;
+		mApp->mDeferredNewGame = true;
 	}
 }
 
