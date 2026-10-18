@@ -6,7 +6,9 @@
 
 A port of **Plants vs. Zombies: Game of the Year Edition** for the **Miyoo Mini & Plus** running **OnionOS** based on Pvz-Portable decomp.
 ---
-- **Bugs:** random crashes after some levels, currently working on it.
+**Bugs:**
+- random crashes after some levels, currently working on it.
+- buttons stop working on Zombatar
 ---
 
 ## Features
