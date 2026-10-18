@@ -649,6 +649,7 @@ void ChallengeScreen::ButtonDepress(int theId)
 	{
 		mApp->KillChallengeScreen();
 		mApp->DoBackToMain();
+		return;
 	}
 
 	int aChallengeMode = theId - ChallengeScreen::ChallengeScreen_Mode;
@@ -656,6 +657,7 @@ void ChallengeScreen::ButtonDepress(int theId)
 	{
 		mApp->KillChallengeScreen();
 		mApp->PreNewGame((GameMode)(aChallengeMode + 1), true);
+		return;
 	}
 
 	int aPageIndex = theId - ChallengeScreen::ChallengeScreen_Page;

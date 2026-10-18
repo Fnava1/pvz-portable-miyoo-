@@ -348,6 +348,9 @@ bool Board::NeedSaveGame()
 		mApp->mGameMode != GameMode::GAMEMODE_INTRO &&
 		mApp->mGameMode != GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN &&
 		mApp->mGameMode != GameMode::GAMEMODE_TREE_OF_WISDOM &&
+		!mLevelAwardSpawned &&
+		!mLevelComplete &&
+		mBoardFadeOutCounter < 0 &&
 		mApp->mGameScene == GameScenes::SCENE_PLAYING;
 }
 
