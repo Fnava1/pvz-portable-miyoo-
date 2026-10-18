@@ -116,6 +116,7 @@ FontLayer::FontLayer(FontData* theFontData)
 	mColorAdd = Color(0, 0, 0, 0);
 	mLineSpacingOffset = 0;
 	mBaseOrder = 0;
+	mStrokesReinforced = false;
 }
 
 FontLayer::FontLayer(const FontLayer& theFontLayer) :
@@ -139,7 +140,8 @@ FontLayer::FontLayer(const FontLayer& theFontLayer) :
 	mLineSpacingOffset(theFontLayer.mLineSpacingOffset),
 	mBaseOrder(theFontLayer.mBaseOrder),
 	// @Minerscale mUseAlphaCorrection wasn't initialised in the copy constructor causing UB
-	mUseAlphaCorrection(theFontLayer.mUseAlphaCorrection)
+	mUseAlphaCorrection(theFontLayer.mUseAlphaCorrection),
+	mStrokesReinforced(theFontLayer.mStrokesReinforced)
 {
 	for (auto anItr = theFontLayer.mCharDataMap.begin(); anItr != theFontLayer.mCharDataMap.end(); anItr++)
 	{
@@ -1232,6 +1234,129 @@ ImageFont::~ImageFont()
 	mFontData->DeRef();
 }
 
+static void ReinforceFontLayerStrokes(FontLayer* aFontLayer)
+{
+	if ((Image*)aFontLayer->mImage == nullptr)
+		return;
+
+	int aPointSize = aFontLayer->mPointSize;
+	int aAscent = aFontLayer->mAscent;
+	int aDefHeight = aFontLayer->mDefaultHeight;
+
+	// Only reinforce small fonts (<= 16pt / ascent <= 16 / height <= 18)
+	bool isSmallFont = (aPointSize > 0 && aPointSize <= 16) ||
+	                   (aAscent > 0 && aAscent <= 16) ||
+	                   (aDefHeight > 0 && aDefHeight <= 18);
+
+	if (!isSmallFont)
+		return;
+
+	MemoryImage* aMemImage = dynamic_cast<MemoryImage*>((Image*)aFontLayer->mImage);
+	if (aMemImage == nullptr)
+		return;
+
+	uint32_t* bits = aMemImage->GetBits();
+	if (bits == nullptr)
+		return;
+
+	int imgWidth = aMemImage->GetWidth();
+	int imgHeight = aMemImage->GetHeight();
+
+	constexpr int MAX_GLYPH_DIM = 64;
+	uint32_t srcColors[MAX_GLYPH_DIM * MAX_GLYPH_DIM];
+	uint8_t srcAlpha[MAX_GLYPH_DIM * MAX_GLYPH_DIM];
+	uint32_t outColors[MAX_GLYPH_DIM * MAX_GLYPH_DIM];
+
+	for (auto& pair : aFontLayer->mCharDataMap)
+	{
+		const Rect& r = pair.second.mImageRect;
+		int w = r.mWidth;
+		int h = r.mHeight;
+
+		if (w <= 1 || h <= 1 || w > MAX_GLYPH_DIM || h > MAX_GLYPH_DIM)
+			continue;
+
+		for (int y = 0; y < h; ++y)
+		{
+			int gy = r.mY + y;
+			const uint32_t* row = (gy >= 0 && gy < imgHeight) ? bits + (gy * imgWidth) : nullptr;
+			for (int x = 0; x < w; ++x)
+			{
+				int gx = r.mX + x;
+				uint32_t c = (row && gx >= 0 && gx < imgWidth) ? row[gx] : 0;
+				srcColors[y * w + x] = c;
+				srcAlpha[y * w + x] = static_cast<uint8_t>(c >> 24);
+				outColors[y * w + x] = c;
+			}
+		}
+
+		for (int y = 0; y < h; ++y)
+		{
+			for (int x = 0; x < w; ++x)
+			{
+				uint8_t a = srcAlpha[y * w + x];
+				uint32_t c = srcColors[y * w + x];
+				uint32_t rgb = c & 0x00FFFFFF;
+
+				if (a >= 100)
+				{
+					// Boost core alpha for solid rendering
+					uint8_t boostedA = std::min(255, (a * 135) / 100);
+					outColors[y * w + x] = (boostedA << 24) | rgb;
+
+					// 1. Horizontal dilation: if stroke is thin horizontally, extend to x+1
+					bool thinH = (x == 0 || srcAlpha[y * w + (x - 1)] < 75) ||
+					             (x == w - 1 || srcAlpha[y * w + (x + 1)] < 75);
+					if (thinH && (x + 1 < w))
+					{
+						uint8_t rightA = srcAlpha[y * w + (x + 1)];
+						if (rightA < 160)
+						{
+							uint8_t newA = std::max<uint8_t>(rightA, 190);
+							outColors[y * w + (x + 1)] = (newA << 24) | rgb;
+						}
+					}
+
+					// 2. Vertical dilation: if stroke is thin vertically, extend to y+1
+					bool thinV = (y == 0 || srcAlpha[(y - 1) * w + x] < 75) ||
+					             (y == h - 1 || srcAlpha[(y + 1) * w + x] < 75);
+					if (thinV && (y + 1 < h))
+					{
+						uint8_t downA = srcAlpha[(y + 1) * w + x];
+						if (downA < 160)
+						{
+							uint8_t newA = std::max<uint8_t>(downA, 190);
+							outColors[(y + 1) * w + x] = (newA << 24) | rgb;
+						}
+					}
+				}
+				else if (a >= 40)
+				{
+					// Faint anti-aliasing edge: boost alpha for solid definition
+					uint8_t boostedA = std::min(255, (a * 140) / 100);
+					outColors[y * w + x] = (boostedA << 24) | rgb;
+				}
+			}
+		}
+
+		// Write reinforced pixels back to the font texture
+		for (int y = 0; y < h; ++y)
+		{
+			int gy = r.mY + y;
+			if (gy < 0 || gy >= imgHeight) continue;
+			uint32_t* row = bits + (gy * imgWidth);
+			for (int x = 0; x < w; ++x)
+			{
+				int gx = r.mX + x;
+				if (gx < 0 || gx >= imgWidth) continue;
+				row[gx] = outColors[y * w + x];
+			}
+		}
+	}
+
+	aMemImage->BitsChanged();
+}
+
 void ImageFont::GenerateActiveFontLayers()
 {
 	if (!mFontData->mInitialized)
@@ -1272,6 +1397,12 @@ void ImageFont::GenerateActiveFontLayers()
 
 			if (active)
 			{
+				if (!aFontLayer->mStrokesReinforced)
+				{
+					aFontLayer->mStrokesReinforced = true;
+					ReinforceFontLayerStrokes(aFontLayer);
+				}
+
 				mActiveLayerList.push_back(ActiveFontLayer());
 
 				ActiveFontLayer* anActiveFontLayer = &mActiveLayerList.back();
@@ -1497,6 +1628,12 @@ void ImageFont::DrawStringEx(Graphics* g, int theX, int theY, std::string_view t
 	int aCurXPos = theX;
 	int aCurPoolIdx = 0;
 
+	// Option 3: Check eligibility for micro drop shadow on small single-layer fonts
+	bool isSmallFont = (mPointSize > 0 && mPointSize <= 16) ||
+	                   (mAscent > 0 && mAscent <= 16) ||
+	                   (mHeight > 0 && mHeight <= 18);
+	bool eligibleForShadow = isSmallFont && (mActiveLayerList.size() == 1);
+
 	size_t aDecodeOffset = 0;
 	char32_t aCurRawChar = 0;
 	char32_t aNextRawChar = 0;
@@ -1575,6 +1712,43 @@ void ImageFont::DrawStringEx(Graphics* g, int theX, int theY, std::string_view t
 				break;
 
 			Rect& aScaledCharRect = anActiveFontLayer->mScaledCharImageRects[aChar];
+
+			// Option 3: Queue high-contrast micro drop shadow behind small, single-layer light text
+			int anEffectiveLum = (aColor.mRed * 299 + aColor.mGreen * 587 + aColor.mBlue * 114) / 1000;
+			if (eligibleForShadow && (anEffectiveLum >= 90) && (aColor.mAlpha >= 100) &&
+			    (anActiveFontLayer->mBaseFontLayer->mDrawMode <= 0) &&
+			    (aScaledCharRect.mWidth > 0 && aScaledCharRect.mHeight > 0) &&
+			    (aCurPoolIdx + 1 < POOL_SIZE))
+			{
+				RenderCommand* aShadowCmd = &gRenderCommandPool[aCurPoolIdx++];
+				aShadowCmd->mImage = anActiveFontLayer->mScaledImage;
+				aShadowCmd->mColor = Color(0, 0, 0, (aColor.mAlpha * 200) / 255);
+				aShadowCmd->mDest[0] = anImageX + 1;
+				aShadowCmd->mDest[1] = anImageY + 1;
+				aShadowCmd->mSrc[0] = aScaledCharRect.mX;
+				aShadowCmd->mSrc[1] = aScaledCharRect.mY;
+				aShadowCmd->mSrc[2] = aScaledCharRect.mWidth;
+				aShadowCmd->mSrc[3] = aScaledCharRect.mHeight;
+				aShadowCmd->mMode = anActiveFontLayer->mBaseFontLayer->mDrawMode;
+				aShadowCmd->mNext = nullptr;
+
+				int aShadowOrderIdx = std::clamp(anOrder + 128 - 1, 0, 255);
+				if (gRenderTail[aShadowOrderIdx] == nullptr)
+				{
+					gRenderTail[aShadowOrderIdx] = aShadowCmd;
+					gRenderHead[aShadowOrderIdx] = aShadowCmd;
+				}
+				else
+				{
+					gRenderTail[aShadowOrderIdx]->mNext = aShadowCmd;
+					gRenderTail[aShadowOrderIdx] = aShadowCmd;
+				}
+
+				if (theDrawnAreas != nullptr)
+				{
+					theDrawnAreas->push_back(Rect(anImageX + 1, anImageY + 1, aScaledCharRect.mWidth, aScaledCharRect.mHeight));
+				}
+			}
 
 			RenderCommand* aRenderCommand = &gRenderCommandPool[aCurPoolIdx++];
 

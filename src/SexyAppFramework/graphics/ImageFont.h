@@ -80,6 +80,7 @@ public:
 	int						mLineSpacingOffset; // This plus height should get added between lines
 	int						mBaseOrder;
 	bool					mUseAlphaCorrection;
+	bool					mStrokesReinforced;
 
 public:
 	FontLayer(FontData* theFontData);
