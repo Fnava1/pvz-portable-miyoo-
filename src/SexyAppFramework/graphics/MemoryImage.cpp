@@ -1533,144 +1533,213 @@ void MemoryImage::FastStretchBlt(Image* theImage, const Rect& theDestRect, const
 {
 	theImage->mDrawn = true;
 
+	if (theDestRect.mWidth <= 0 || theDestRect.mHeight <= 0)
+		return;
+
 	MemoryImage* aSrcMemoryImage = dynamic_cast<MemoryImage*>(theImage);
+	if (aSrcMemoryImage == nullptr)
+		return;
 
-	if (aSrcMemoryImage != nullptr)
+	uint32_t* aDestPixelsRow = ((uint32_t*) GetBits()) + (theDestRect.mY * mWidth) + theDestRect.mX;
+	uint32_t* aSrcPixelsRow = (uint32_t*) aSrcMemoryImage->GetBits();
+
+	int32_t aSrcYFixed = (int32_t)(theSrcRect.mY * 65536.0);
+	int32_t anAddXFixed = (int32_t)((theSrcRect.mWidth / (double)theDestRect.mWidth) * 65536.0);
+	int32_t anAddYFixed = (int32_t)((theSrcRect.mHeight / (double)theDestRect.mHeight) * 65536.0);
+	int32_t aSrcXStartFixed = (int32_t)(theSrcRect.mX * 65536.0);
+
+	int maxSrcX = aSrcMemoryImage->mWidth - 1;
+	int maxSrcY = aSrcMemoryImage->mHeight - 1;
+
+	int ca = theColor.mAlpha;
+	int cr = theColor.mRed;
+	int cg = theColor.mGreen;
+	int cb = theColor.mBlue;
+
+	if (theColor == Color::White || (ca == 255 && cr == 255 && cg == 255 && cb == 255))
 	{
-		uint32_t* aDestPixelsRow = ((uint32_t*) GetBits()) + (theDestRect.mY * mWidth) + theDestRect.mX;
-		uint32_t* aSrcPixelsRow = (uint32_t*) aSrcMemoryImage->GetBits();
-
-		double aSrcY = theSrcRect.mY;
-
-		double anAddX = theSrcRect.mWidth / theDestRect.mWidth;
-		double anAddY = theSrcRect.mHeight / theDestRect.mHeight;
-
-		int maxSrcX = aSrcMemoryImage->mWidth - 1;
-		int maxSrcY = aSrcMemoryImage->mHeight - 1;
-
-		if (theColor == Color::White)
+		for (int y = 0; y < theDestRect.mHeight; y++)
 		{
-			for (int y = 0; y < theDestRect.mHeight; y++)
+			int sy = aSrcYFixed >> 16;
+			if (sy < 0) sy = 0;
+			else if (sy > maxSrcY) sy = maxSrcY;
+			const uint32_t* aSrcRow = aSrcPixelsRow + (aSrcMemoryImage->mWidth * sy);
+			uint32_t* aDestPixels = aDestPixelsRow;
+			int32_t aSrcX = aSrcXStartFixed;
+
+			for (int x = 0; x < theDestRect.mWidth; x++)
 			{
-				double aSrcX = theSrcRect.mX;
-				uint32_t* aDestPixels = aDestPixelsRow;
-				int sy = std::clamp((int) aSrcY, 0, maxSrcY);
-				uint32_t* aSrcRow = aSrcPixelsRow + (aSrcMemoryImage->mWidth * sy);
+				int sx = aSrcX >> 16;
+				if (sx < 0) sx = 0;
+				else if (sx > maxSrcX) sx = maxSrcX;
+				uint32_t src = aSrcRow[sx];
+				aSrcX += anAddXFixed;
 
-				for (int x = 0; x < theDestRect.mWidth; x++)
+				uint32_t a = src >> 24;
+				if (a == 0)
 				{
-					int sx = std::clamp((int) aSrcX, 0, maxSrcX);
-					uint32_t src = aSrcRow[sx];
-					aSrcX += anAddX;
+					aDestPixels++;
+					continue;
+				}
 
-					uint32_t dest = *aDestPixels;
+				if (a == 255)
+				{
+					*aDestPixels++ = src;
+					continue;
+				}
 
-					int a = src >> 24;
-
-					if (a != 0)
+				uint32_t dest = *aDestPixels;
+				uint32_t aDestAlpha = dest >> 24;
+				if (aDestAlpha == 255)
+				{
+					uint32_t oma = 256 - a;
+					uint32_t rb = ((((src & 0x00FF00FF) * a) + ((dest & 0x00FF00FF) * oma)) >> 8) & 0x00FF00FF;
+					uint32_t g  = ((((src & 0x0000FF00) * a) + ((dest & 0x0000FF00) * oma)) >> 8) & 0x0000FF00;
+					*aDestPixels++ = 0xFF000000 | rb | g;
+				}
+				else
+				{
+					uint32_t aNewDestAlpha = aDestAlpha + (((255 - aDestAlpha) * a) / 255);
+					if (aNewDestAlpha > 0)
 					{
-						int aDestAlpha = dest >> 24;
-						int aNewDestAlpha = aDestAlpha + ((255 - aDestAlpha) * a) / 255;
-
-						a = 255 * a / aNewDestAlpha;
-
-						int oma = 256 - a;
-
-						*(aDestPixels++) = (aNewDestAlpha << 24) |
-							((((dest & 0x0000FF) * oma) >> 8) + (((src & 0x0000FF) * a) >> 8) & 0x0000FF) |
-							((((dest & 0x00FF00) * oma) >> 8) + (((src & 0x00FF00) * a) >> 8) & 0x00FF00) |
-							((((dest & 0xFF0000) * oma) >> 8) + (((src & 0xFF0000) * a) >> 8) & 0xFF0000);
+						uint32_t blend_a = (255 * a) / aNewDestAlpha;
+						uint32_t oma = 256 - blend_a;
+						uint32_t rb = ((((src & 0x00FF00FF) * blend_a) + ((dest & 0x00FF00FF) * oma)) >> 8) & 0x00FF00FF;
+						uint32_t g  = ((((src & 0x0000FF00) * blend_a) + ((dest & 0x0000FF00) * oma)) >> 8) & 0x0000FF00;
+						*aDestPixels++ = (aNewDestAlpha << 24) | rb | g;
 					}
 					else
-						aDestPixels++;
+					{
+						*aDestPixels++ = 0;
+					}
 				}
-
-				aDestPixelsRow += mWidth;
-				aSrcY += anAddY;
 			}
+
+			aDestPixelsRow += mWidth;
+			aSrcYFixed += anAddYFixed;
 		}
-		else
+	}
+	else if (cr == cg && cg == cb)
+	{
+		for (int y = 0; y < theDestRect.mHeight; y++)
 		{
-			int ca = theColor.mAlpha;
-			int cr = theColor.mRed;
-			int cg = theColor.mGreen;
-			int cb = theColor.mBlue;
+			int sy = aSrcYFixed >> 16;
+			if (sy < 0) sy = 0;
+			else if (sy > maxSrcY) sy = maxSrcY;
+			const uint32_t* aSrcRow = aSrcPixelsRow + (aSrcMemoryImage->mWidth * sy);
+			uint32_t* aDestPixels = aDestPixelsRow;
+			int32_t aSrcX = aSrcXStartFixed;
 
-			if (cr == cg && cg == cb)
+			for (int x = 0; x < theDestRect.mWidth; x++)
 			{
-				for (int y = 0; y < theDestRect.mHeight; y++)
+				int sx = aSrcX >> 16;
+				if (sx < 0) sx = 0;
+				else if (sx > maxSrcX) sx = maxSrcX;
+				uint32_t src = aSrcRow[sx];
+				aSrcX += anAddXFixed;
+
+				uint32_t a = ((src >> 24) * ca) / 255;
+				if (a == 0)
 				{
-					double aSrcX = theSrcRect.mX;
-					uint32_t* aDestPixels = aDestPixelsRow;
-					int sy = std::clamp((int) aSrcY, 0, maxSrcY);
-					uint32_t* aSrcRow = aSrcPixelsRow + (aSrcMemoryImage->mWidth * sy);
+					aDestPixels++;
+					continue;
+				}
 
-					for (int x = 0; x < theDestRect.mWidth; x++)
+				uint32_t src_rb = (((src & 0x00FF00FF) * cr) >> 8) & 0x00FF00FF;
+				uint32_t src_g  = (((src & 0x0000FF00) * cr) >> 8) & 0x0000FF00;
+				uint32_t dest = *aDestPixels;
+				uint32_t aDestAlpha = dest >> 24;
+
+				if (aDestAlpha == 255)
+				{
+					uint32_t oma = 256 - a;
+					uint32_t rb = ((src_rb * a + (dest & 0x00FF00FF) * oma) >> 8) & 0x00FF00FF;
+					uint32_t g  = ((src_g * a  + (dest & 0x0000FF00) * oma) >> 8) & 0x0000FF00;
+					*aDestPixels++ = 0xFF000000 | rb | g;
+				}
+				else
+				{
+					uint32_t aNewDestAlpha = aDestAlpha + (((255 - aDestAlpha) * a) / 255);
+					if (aNewDestAlpha > 0)
 					{
-						int sx = std::clamp((int) aSrcX, 0, maxSrcX);
-						uint32_t src = aSrcRow[sx];
-						aSrcX += anAddX;
-
-						uint32_t a = ((src >> 24) * ca) / 255;
-
-						if (a != 0)
-						{
-							uint32_t dest = *aDestPixels;
-							uint32_t aDestAlpha = dest >> 24;
-							uint32_t aNewDestAlpha = aDestAlpha + ((255 - aDestAlpha) * a) / 255;
-							uint32_t blend_a = 255 * a / aNewDestAlpha;
-							int oma = 256 - blend_a;
-
-							*(aDestPixels++) = (aNewDestAlpha << 24) |
-								((((dest & 0xFF00FF) * oma >> 8) + ((((src & 0xFF00FF) * cr >> 8) & 0xFF00FF) * blend_a >> 8)) & 0xFF00FF) |
-								((((dest & 0x00FF00) * oma >> 8) + ((src & 0x00FF00) * cr * blend_a >> 16)) & 0x00FF00);
-						}
-						else
-							aDestPixels++;
+						uint32_t blend_a = (255 * a) / aNewDestAlpha;
+						uint32_t oma = 256 - blend_a;
+						uint32_t rb = ((src_rb * blend_a + (dest & 0x00FF00FF) * oma) >> 8) & 0x00FF00FF;
+						uint32_t g  = ((src_g * blend_a  + (dest & 0x0000FF00) * oma) >> 8) & 0x00FF00FF;
+						*aDestPixels++ = (aNewDestAlpha << 24) | rb | g;
 					}
-
-					aDestPixelsRow += mWidth;
-					aSrcY += anAddY;
+					else
+					{
+						*aDestPixels++ = 0;
+					}
 				}
 			}
-			else
+
+			aDestPixelsRow += mWidth;
+			aSrcYFixed += anAddYFixed;
+		}
+	}
+	else
+	{
+		for (int y = 0; y < theDestRect.mHeight; y++)
+		{
+			int sy = aSrcYFixed >> 16;
+			if (sy < 0) sy = 0;
+			else if (sy > maxSrcY) sy = maxSrcY;
+			const uint32_t* aSrcRow = aSrcPixelsRow + (aSrcMemoryImage->mWidth * sy);
+			uint32_t* aDestPixels = aDestPixelsRow;
+			int32_t aSrcX = aSrcXStartFixed;
+
+			for (int x = 0; x < theDestRect.mWidth; x++)
 			{
-				for (int y = 0; y < theDestRect.mHeight; y++)
+				int sx = aSrcX >> 16;
+				if (sx < 0) sx = 0;
+				else if (sx > maxSrcX) sx = maxSrcX;
+				uint32_t src = aSrcRow[sx];
+				aSrcX += anAddXFixed;
+
+				uint32_t a = ((src >> 24) * ca) / 255;
+				if (a == 0)
 				{
-					double aSrcX = theSrcRect.mX;
-					uint32_t* aDestPixels = aDestPixelsRow;
-					int sy = std::clamp((int) aSrcY, 0, maxSrcY);
-					uint32_t* aSrcRow = aSrcPixelsRow + (aSrcMemoryImage->mWidth * sy);
+					aDestPixels++;
+					continue;
+				}
 
-					for (int x = 0; x < theDestRect.mWidth; x++)
+				uint32_t src_r = (((src & 0x00FF0000) * cr) >> 8) & 0x00FF0000;
+				uint32_t src_g = (((src & 0x0000FF00) * cg) >> 8) & 0x0000FF00;
+				uint32_t src_b = (((src & 0x000000FF) * cb) >> 8) & 0x000000FF;
+				uint32_t mod_src_rb = src_r | src_b;
+				uint32_t mod_src_g = src_g;
+				uint32_t dest = *aDestPixels;
+				uint32_t aDestAlpha = dest >> 24;
+
+				if (aDestAlpha == 255)
+				{
+					uint32_t oma = 256 - a;
+					uint32_t rb = ((mod_src_rb * a + (dest & 0x00FF00FF) * oma) >> 8) & 0x00FF00FF;
+					uint32_t g  = ((mod_src_g * a  + (dest & 0x0000FF00) * oma) >> 8) & 0x0000FF00;
+					*aDestPixels++ = 0xFF000000 | rb | g;
+				}
+				else
+				{
+					uint32_t aNewDestAlpha = aDestAlpha + (((255 - aDestAlpha) * a) / 255);
+					if (aNewDestAlpha > 0)
 					{
-						int sx = std::clamp((int) aSrcX, 0, maxSrcX);
-						uint32_t src = aSrcRow[sx];
-						aSrcX += anAddX;
-
-						uint32_t a = ((src >> 24) * ca) / 255;
-
-						if (a != 0)
-						{
-							uint32_t dest = *aDestPixels;
-							uint32_t aDestAlpha = dest >> 24;
-							uint32_t aNewDestAlpha = aDestAlpha + ((255 - aDestAlpha) * a) / 255;
-							uint32_t blend_a = 255 * a / aNewDestAlpha;
-							int oma = 256 - blend_a;
-
-							*(aDestPixels++) = (aNewDestAlpha << 24) |
-								((((dest & 0x0000FF) * oma >> 8) + (((src & 0x0000FF) * blend_a * cb) >> 16)) & 0x0000FF) |
-								((((dest & 0x00FF00) * oma >> 8) + (((src & 0x00FF00) * blend_a * cg) >> 16)) & 0x00FF00) |
-								((((dest & 0xFF0000) * oma >> 8) + (((((src & 0xFF0000) * blend_a) >> 8) * cr) >> 8)) & 0xFF0000);
-						}
-						else
-							aDestPixels++;
+						uint32_t blend_a = (255 * a) / aNewDestAlpha;
+						uint32_t oma = 256 - blend_a;
+						uint32_t rb = ((mod_src_rb * blend_a + (dest & 0x00FF00FF) * oma) >> 8) & 0x00FF00FF;
+						uint32_t g  = ((mod_src_g * blend_a  + (dest & 0x0000FF00) * oma) >> 8) & 0x00FF00FF;
+						*aDestPixels++ = (aNewDestAlpha << 24) | rb | g;
 					}
-
-					aDestPixelsRow += mWidth;
-					aSrcY += anAddY;
+					else
+					{
+						*aDestPixels++ = 0;
+					}
 				}
 			}
+
+			aDestPixelsRow += mWidth;
+			aSrcYFixed += anAddYFixed;
 		}
 	}
 
@@ -1686,6 +1755,10 @@ void MemoryImage::StretchBlt(Image* theImage, const Rect& theDestRect, const Rec
 
 	if (!StretchBltClipHelper(theSrcRect, theClipRect, theDestRect, aSrcRect, aDestRect))
 		return;
+
+#if !PVZ_ENABLE_GLES
+	fastStretch = true;
+#endif
 
 	if (fastStretch)
 		FastStretchBlt(theImage, aDestRect, aSrcRect, theColor, theDrawMode);

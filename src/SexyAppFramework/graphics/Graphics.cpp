@@ -77,9 +77,15 @@ Graphics::Graphics(Image* theDestImage)
 	mDestImage = theDestImage;
 	mDrawMode = DRAWMODE_NORMAL;
 	mColorizeImages = false;
+#if PVZ_ENABLE_GLES
 	mFastStretch = false;
 	mWriteColoredString = true;
-	mLinearBlend = true; // Default to linear filtering
+	mLinearBlend = true; // Default to linear filtering for OpenGL
+#else
+	mFastStretch = true; // Default to fast stretch blit for software rasterizer
+	mWriteColoredString = true;
+	mLinearBlend = false; // Default to nearest-neighbor filtering for software rasterizer
+#endif
 
 	if (mDestImage == nullptr)
 	{
@@ -171,7 +177,12 @@ bool Graphics::GetFastStretch()
 
 void Graphics::SetLinearBlend(bool linear)
 {
+#if PVZ_ENABLE_GLES
 	mLinearBlend = linear;
+#else
+	(void)linear;
+	mLinearBlend = false; // Never use slow 4-tap bilinear in pure software mode
+#endif
 }
 
 bool Graphics::GetLinearBlend()

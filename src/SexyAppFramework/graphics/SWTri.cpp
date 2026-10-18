@@ -638,6 +638,9 @@ void Sexy::SWTri_AddAllDrawTriFuncs()
 
 void	SWHelper::SWDrawTriangle(bool textured, bool talpha, bool mod_argb, bool global_argb, SWVertex * pVerts, unsigned int * pFrameBuffer, const unsigned int bytepitch, const SWTextureInfo * textureInfo, SWDiffuse & globalDiffuse, int thePixelFormat, bool blend)
 {
+#if !PVZ_ENABLE_GLES
+	blend = false; // Pure software rasterizer: 4-tap bilinear filtering causes massive CPU stalls on Cortex-A7
+#endif
 	int aType = (blend?1:0) | (global_argb?2:0) | (mod_argb?4:0) | (talpha?8:0) | (textured?16:0);
 	switch (thePixelFormat)
 	{

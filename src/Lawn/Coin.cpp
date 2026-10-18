@@ -841,10 +841,17 @@ void Coin::Draw(Graphics* g)
 		return;
 	}
 
-	if (IsLevelAward() && !mIsBeingCollected)
+	if (IsLevelAward())
 	{
-		Color aFlashingColor = GetFlashingColor(mCoinAge, 75);
-		g->SetColor(aFlashingColor);
+		if (!mIsBeingCollected)
+		{
+			Color aFlashingColor = GetFlashingColor(mCoinAge, 75);
+			g->SetColor(aFlashingColor);
+		}
+		else
+		{
+			g->SetColor(Color::White);
+		}
 	}
 
 	if (mType == CoinType::COIN_SILVER || mType == CoinType::COIN_GOLD)
