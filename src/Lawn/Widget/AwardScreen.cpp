@@ -144,6 +144,7 @@ AwardScreen::AwardScreen(LawnApp* theApp, AwardType theAwardType, bool theShowin
 	mStartButton->SetLabelColor(Color(213, 159, 43));
 	mStartButton->SetLabelHiliteColor(Color(213, 159, 43));
 	mStartButton->Resize(324, 500, 156, 42);
+	mStartButton->mParentWidget = this;
 	mStartButton->mTextOffsetY = -1;
 
 	mContinueButton = std::make_unique<GameButton>(AwardScreen::AwardScreen_Start);

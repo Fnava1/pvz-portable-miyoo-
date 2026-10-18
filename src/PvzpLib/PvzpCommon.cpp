@@ -745,6 +745,10 @@ void PvzpBltMatrix(Graphics* g, Image* theImage, const SexyMatrix3& theTransform
 	else
 	{
 		Rect aBufFixClipRect(0, 0, BOARD_WIDTH + 1, BOARD_HEIGHT + 1);
+		if (g->mDestImage != nullptr)
+		{
+			aBufFixClipRect = aBufFixClipRect.Intersection(Rect(0, 0, g->mDestImage->mWidth, g->mDestImage->mHeight));
+		}
 		g->mDestImage->BltMatrix(theImage, aOffsetX, aOffsetY, theTransform, aBufFixClipRect, theColor, theDrawMode, theSrcRect, g->mLinearBlend);
 	}
 

@@ -1745,13 +1745,17 @@ void MemoryImage::BltMatrix(Image* theImage, float x, float y, const SexyMatrix3
 {
 	theImage->mDrawn = true;
 
+	Rect aClampedClip = theClipRect.Intersection(Rect(0, 0, mWidth, mHeight));
+	if (aClampedClip.mWidth <= 0 || aClampedClip.mHeight <= 0)
+		return;
+
 	uint32_t *aSurface = GetBits();
 	int aPitch = mWidth*4;
 	int aFormat = 0x8888;
 	if (mForcedMode && !mHasAlpha && !mHasTrans)
 		aFormat = 0x888;
 
-	BltMatrixHelper(theImage,x,y,theMatrix,theClipRect,theColor,theDrawMode,theSrcRect,aSurface,aPitch,aFormat,blend);
+	BltMatrixHelper(theImage,x,y,theMatrix,aClampedClip,theColor,theDrawMode,theSrcRect,aSurface,aPitch,aFormat,blend);
 	BitsChanged();
 }
 
@@ -1823,6 +1827,10 @@ void MemoryImage::BltTrianglesTex(Image *theTexture, const TriVertex theVertices
 {
 	theTexture->mDrawn = true;
 
+	Rect aClampedClip = theClipRect.Intersection(Rect(0, 0, mWidth, mHeight));
+	if (aClampedClip.mWidth <= 0 || aClampedClip.mHeight <= 0)
+		return;
+
 	uint32_t *aSurface = GetBits();
 
 	int aPitch = mWidth*4;
@@ -1830,7 +1838,7 @@ void MemoryImage::BltTrianglesTex(Image *theTexture, const TriVertex theVertices
 	if (mForcedMode && !mHasAlpha && !mHasTrans)
 		aFormat = 0x888;
 
-	BltTrianglesTexHelper(theTexture,theVertices,theNumTriangles,theClipRect,theColor,theDrawMode,aSurface,aPitch,aFormat,tx,ty,blend);
+	BltTrianglesTexHelper(theTexture,theVertices,theNumTriangles,aClampedClip,theColor,theDrawMode,aSurface,aPitch,aFormat,tx,ty,blend);
 	BitsChanged();
 }
 

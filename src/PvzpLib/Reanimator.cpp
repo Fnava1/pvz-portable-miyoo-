@@ -703,6 +703,10 @@ bool Reanimation::DrawTrack(Graphics* g, int theTrackIndex, [[maybe_unused]] int
 	{
 		aClipRect = Rect(0, 0, BOARD_WIDTH, BOARD_HEIGHT);
 	}
+	if (g->mDestImage != nullptr)
+	{
+		aClipRect = aClipRect.Intersection(Rect(0, 0, g->mDestImage->mWidth, g->mDestImage->mHeight));
+	}
 
 	Image* aImage = aTransform.mImage;
 	ReanimAtlasImage* aAtlasImage = nullptr;

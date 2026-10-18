@@ -403,7 +403,15 @@ void PvzpTriangleGroup::DrawGroup(Graphics* g)
 		}
 		else
 		{
-			g->mDestImage->BltTrianglesTex(mImage, mVertArray, mTriangleCount, Rect(0, 0, BOARD_WIDTH, BOARD_HEIGHT), Color::White, mDrawMode, 0.0f, 0.0f, g->mLinearBlend);
+			Rect aClipRect = g->mClipRect;
+			if (g->mDestImage != nullptr)
+			{
+				aClipRect = aClipRect.Intersection(Rect(0, 0, g->mDestImage->mWidth, g->mDestImage->mHeight));
+			}
+			if (aClipRect.mWidth > 0 && aClipRect.mHeight > 0)
+			{
+				g->mDestImage->BltTrianglesTex(mImage, mVertArray, mTriangleCount, aClipRect, Color::White, mDrawMode, 0.0f, 0.0f, g->mLinearBlend);
+			}
 		}
 
 		mTriangleCount = 0;

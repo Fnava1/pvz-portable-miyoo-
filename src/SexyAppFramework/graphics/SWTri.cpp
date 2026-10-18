@@ -24,6 +24,7 @@
 
 #include "SWTri.h"
 #include "misc/Debug.h"
+#include <algorithm>
 
 using namespace Sexy;
 
@@ -268,10 +269,23 @@ static inline int	clipShape(SWHelper::XYZStruct ** dst, SWHelper::XYZStruct ** s
 
 void SWHelper::SWDrawShape(XYZStruct *theVerts, int theNumVerts, MemoryImage *theImage, const Color &theColor, [[maybe_unused]] int theDrawMode, const Rect &theClipRect, void *theSurface, int thePitch, int thePixelFormat, bool blend, bool vertexColor)
 {
-	float	tclx0 = theClipRect.mX;
-	float	tcly0 = theClipRect.mY;
-	float	tclx1 = theClipRect.mX + theClipRect.mWidth - 1;
-	float	tcly1 = theClipRect.mY + theClipRect.mHeight - 1;
+	if (theClipRect.mWidth <= 0 || theClipRect.mHeight <= 0 || theSurface == nullptr)
+		return;
+
+	float	tclx0 = std::max(0.0f, (float)theClipRect.mX);
+	float	tcly0 = std::max(0.0f, (float)theClipRect.mY);
+	float	tclx1 = (float)(theClipRect.mX + theClipRect.mWidth - 1);
+	float	tcly1 = (float)(theClipRect.mY + theClipRect.mHeight - 1);
+
+	if (thePitch > 0)
+	{
+		float max_x = (float)((thePitch / 4) - 1);
+		if (tclx1 > max_x)
+			tclx1 = max_x;
+	}
+
+	if (tclx0 > tclx1 || tcly0 > tcly1)
+		return;
 
 	//
 	// Okay, now we're gonna render.  We have the vertex list.
