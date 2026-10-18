@@ -1485,6 +1485,23 @@ static inline void BlendRow640(const uint32_t* r1, const uint32_t* r2, uint32_t*
 		d += 16;
 	}
 }
+
+static inline void AverageRow800(const uint32_t* r1, const uint32_t* r2, uint32_t* dst)
+{
+	const uint8_t* p1 = reinterpret_cast<const uint8_t*>(r1);
+	const uint8_t* p2 = reinterpret_cast<const uint8_t*>(r2);
+	uint8_t* d = reinterpret_cast<uint8_t*>(dst);
+
+	for (int i = 0; i < 200; ++i)
+	{
+		uint8x16_t v1 = vld1q_u8(p1);
+		uint8x16_t v2 = vld1q_u8(p2);
+		vst1q_u8(d, vrhaddq_u8(v1, v2));
+		p1 += 16;
+		p2 += 16;
+		d += 16;
+	}
+}
 #else
 static inline uint32_t ScaleBlend2(uint32_t c1, uint32_t c2, uint32_t w1, uint32_t w2)
 {
@@ -1523,6 +1540,16 @@ static inline void BlendRow640(const uint32_t* r1, const uint32_t* r2, uint32_t*
 	for (int x = 0; x < 640; ++x)
 	{
 		dst[x] = ScaleBlend2(r1[x], r2[x], w1, w2);
+	}
+}
+
+static inline void AverageRow800(const uint32_t* r1, const uint32_t* r2, uint32_t* dst)
+{
+	for (int i = 0; i < 800; ++i)
+	{
+		uint32_t a = r1[i];
+		uint32_t b = r2[i];
+		dst[i] = ((a & 0xFEFEFEFEu) >> 1) + ((b & 0xFEFEFEFEu) >> 1) + (a & b & 0x01010101u);
 	}
 }
 #endif
@@ -1568,32 +1595,33 @@ void GLInterface::Flush()
 			}
 			else if (texW == 640 && texH == 480 && mWidth == 800 && mHeight == 600)
 			{
-				static bool sSmoothScale = false;
+				static bool sSmoothScale = true;
 				static bool sSmoothScaleInit = false;
 				if (!sSmoothScaleInit)
 				{
 					const char* env = getenv("PVZ_SMOOTH_SCALE");
-					if (env && (strcmp(env, "1") == 0 || strcmp(env, "on") == 0 || strcmp(env, "true") == 0))
+					if (env && (strcmp(env, "0") == 0 || strcmp(env, "off") == 0 || strcmp(env, "false") == 0))
+						sSmoothScale = false;
+					else if (env && (strcmp(env, "1") == 0 || strcmp(env, "on") == 0 || strcmp(env, "true") == 0))
 						sSmoothScale = true;
 					sSmoothScaleInit = true;
 				}
 
 				if (sSmoothScale)
 				{
-					static uint32_t sHRows[5][640];
+					// Option A: Fused 1-pass edge-smoothing downscaler (800x600 -> 640x480)
+					// Rows 0, 1, 2: direct 1-pass horizontal NEON downscale straight to texture
+					// Row 3: fast average with skipped row 4 to eliminate vertical aliasing
+					static uint32_t sAvgRow[800];
 					for (int block = 0; block < 120; ++block)
 					{
 						int sy = block * 5;
-						DownscaleRow800To640(srcBits + (sy + 0) * 800, sHRows[0]);
-						DownscaleRow800To640(srcBits + (sy + 1) * 800, sHRows[1]);
-						DownscaleRow800To640(srcBits + (sy + 2) * 800, sHRows[2]);
-						DownscaleRow800To640(srcBits + (sy + 3) * 800, sHRows[3]);
-						DownscaleRow800To640(srcBits + (sy + 4) * 800, sHRows[4]);
+						DownscaleRow800To640(srcBits + (sy + 0) * 800, (uint32_t*)(dstRow + 0 * texPitch));
+						DownscaleRow800To640(srcBits + (sy + 1) * 800, (uint32_t*)(dstRow + 1 * texPitch));
+						DownscaleRow800To640(srcBits + (sy + 2) * 800, (uint32_t*)(dstRow + 2 * texPitch));
 
-						BlendRow640(sHRows[0], sHRows[1], (uint32_t*)(dstRow + 0 * texPitch), 205, 51);
-						BlendRow640(sHRows[1], sHRows[2], (uint32_t*)(dstRow + 1 * texPitch), 154, 102);
-						BlendRow640(sHRows[2], sHRows[3], (uint32_t*)(dstRow + 2 * texPitch), 102, 154);
-						BlendRow640(sHRows[3], sHRows[4], (uint32_t*)(dstRow + 3 * texPitch), 51, 205);
+						AverageRow800(srcBits + (sy + 3) * 800, srcBits + (sy + 4) * 800, sAvgRow);
+						DownscaleRow800To640(sAvgRow, (uint32_t*)(dstRow + 3 * texPitch));
 
 						dstRow += 4 * texPitch;
 					}
