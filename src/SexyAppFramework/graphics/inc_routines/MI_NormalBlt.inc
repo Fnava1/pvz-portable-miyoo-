@@ -5,6 +5,31 @@
 	{
 		if (theColor == Color::White)
 		{
+#ifdef DIRECT_SRC_PIXELS
+			for (int y = 0; y < theSrcRect.mHeight; y++)
+			{
+				uint32_t* aDestPixels = aDestPixelsRow;
+				EACH_ROW;
+
+				int width = theSrcRect.mWidth;
+				int left = 0;
+				while (left < width && (aSrcPtr[left] >> 24) == 0)
+					left++;
+
+				if (left < width)
+				{
+					int right = width - 1;
+					while (right > left && (aSrcPtr[right] >> 24) == 0)
+						right--;
+
+					int count = right - left + 1;
+					PvZ::Graphics::NeonBlit_AlphaBlend_ARGB(aDestPixels + left, aSrcPtr + left, count);
+				}
+
+				aDestPixelsRow += mWidth;
+				aSrcPixelsRow += theImage->mWidth;
+			}
+#else
 			for (int y = 0; y < theSrcRect.mHeight; y++)
 			{
 				uint32_t* aDestPixels = aDestPixelsRow;
@@ -40,6 +65,7 @@
 				aDestPixelsRow += mWidth;
 				aSrcPixelsRow += theImage->mWidth;
 			}
+#endif
 		}
 		else
 		{
@@ -48,6 +74,35 @@
 			int cg = theColor.mGreen;
 			int cb = theColor.mBlue;
 
+#ifdef DIRECT_SRC_PIXELS
+			uint32_t tint_color = (static_cast<uint32_t>(ca) << 24) |
+			                      (static_cast<uint32_t>(cr) << 16) |
+			                      (static_cast<uint32_t>(cg) << 8)  |
+			                      static_cast<uint32_t>(cb);
+			for (int y = 0; y < theSrcRect.mHeight; y++)
+			{
+				uint32_t* aDestPixels = aDestPixelsRow;
+				EACH_ROW;
+
+				int width = theSrcRect.mWidth;
+				int left = 0;
+				while (left < width && (aSrcPtr[left] >> 24) == 0)
+					left++;
+
+				if (left < width)
+				{
+					int right = width - 1;
+					while (right > left && (aSrcPtr[right] >> 24) == 0)
+						right--;
+
+					int count = right - left + 1;
+					PvZ::Graphics::NeonBlit_AlphaBlend_Tint_ARGB(aDestPixels + left, aSrcPtr + left, count, tint_color);
+				}
+
+				aDestPixelsRow += mWidth;
+				aSrcPixelsRow += theImage->mWidth;
+			}
+#else
 #ifdef OPTIMIZE_SOFTWARE_DRAWING
 			bool performNormalBlit = true;
 			if (cr == cg && cg == cb)
@@ -119,6 +174,7 @@
 					aSrcPixelsRow += theImage->mWidth;
 				}
 			}
+#endif
 		}
 	}
 	else

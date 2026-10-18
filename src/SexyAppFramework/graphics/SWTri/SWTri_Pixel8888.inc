@@ -68,9 +68,10 @@
 					}
 					else if (finalAlpha > 0)
 					{
-						tr = ((tr + (256-alpha)*dr)/finalAlpha) & 0xFF0000;
-						tg = ((tg + (256-alpha)*dg)/finalAlpha) & 0x00FF00;
-						tb = ((tb + (256-alpha)*db)/finalAlpha) & 0x0000FF;
+						uint32_t inv = gInvAlphaTable[finalAlpha & 0xFF];
+						tr = static_cast<uint32_t>((static_cast<uint64_t>(tr + (256-alpha)*dr) * inv) >> 16) & 0xFF0000;
+						tg = static_cast<uint32_t>((static_cast<uint64_t>(tg + (256-alpha)*dg) * inv) >> 16) & 0x00FF00;
+						tb = static_cast<uint32_t>((static_cast<uint64_t>(tb + (256-alpha)*db) * inv) >> 16) & 0x0000FF;
 						*pix = ((finalAlpha-1)<<24) | tr | tg | tb;
 					}
 				}

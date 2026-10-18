@@ -120,10 +120,12 @@ static void PaceWaitMs(int theMs)
 			break;
 
 		uint64_t remaining = until - now;
-		// If remaining sleep > 1.5ms, sleep in kernel so we don't spin-burn Core 0
-		if (remaining > 1500000ULL)
+		// SigmaStar SSD202D Linux 4.9 has CONFIG_HZ=100 (10ms tick).
+		// Any nanosleep blocks for at least 10ms. Therefore, only sleep in kernel if
+		// remaining time exceeds 12ms to safely avoid overshooting frame deadlines.
+		if (remaining > 12000000ULL)
 		{
-			uint64_t sleepNs = remaining - 1000000ULL;
+			uint64_t sleepNs = remaining - 12000000ULL;
 			struct timespec tsSleep;
 			tsSleep.tv_sec = static_cast<time_t>(sleepNs / 1000000000ULL);
 			tsSleep.tv_nsec = static_cast<long>(sleepNs % 1000000000ULL);
@@ -131,7 +133,7 @@ static void PaceWaitMs(int theMs)
 		}
 		else
 		{
-			// The final <= 1ms is waited yielding
+			// The final <= 12ms is waited yielding CPU to prevent scheduler jitter
 			sched_yield();
 		}
 	}

@@ -34,6 +34,7 @@
 #include "misc/PerfTimer.h"
 #include "SWTri.h"
 #include "imagelib/ImageLib.h"
+#include "graphics/NeonBlit.hpp"
 
 #include <math.h>
 #include <algorithm>
@@ -1306,6 +1307,7 @@ void MemoryImage::NormalBlt(Image* theImage, int theX, int theY, const Rect& the
 		{
 			uint32_t* aSrcPixelsRow = ((uint32_t*) aSrcMemoryImage->GetBits()) + (theSrcRect.mY * theImage->mWidth) + theSrcRect.mX;
 
+			#define DIRECT_SRC_PIXELS 1
 			#define NEXT_SRC_COLOR		(*(aSrcPtr++))
 			#define READ_SRC_COLOR		(*(aSrcPtr))
 			#undef EACH_ROW
@@ -1313,6 +1315,7 @@ void MemoryImage::NormalBlt(Image* theImage, int theX, int theY, const Rect& the
 
 			#include "inc_routines/MI_NormalBlt.inc"
 
+			#undef DIRECT_SRC_PIXELS
 			#undef NEXT_SRC_COLOR
 			#undef READ_SRC_COLOR
 			#undef EACH_ROW
