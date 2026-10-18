@@ -26,7 +26,7 @@ from typing import Dict, List, Optional, Tuple, Any
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 
-DEFAULT_VERSION = "1.0.1"
+DEFAULT_VERSION = "1.1.0"
 
 # Target pure ports directory layout definitions
 PORTS_REL_PATH = os.path.join("Roms", "PORTS")
