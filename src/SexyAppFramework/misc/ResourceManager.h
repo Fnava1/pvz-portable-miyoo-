@@ -129,6 +129,7 @@ public: // TODO: revert to protected
 	typedef std::map<std::string,ResList,StringLessNoCase> ResGroupMap;
 
 	std::set<std::string,StringLessNoCase> mLoadedGroups;
+	std::map<std::string,int,StringLessNoCase> mLoadedGroupRefs;
 
 	ResMap					mImageMap;
 	ResMap					mSoundMap;

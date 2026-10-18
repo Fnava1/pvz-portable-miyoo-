@@ -1062,7 +1062,10 @@ bool PvzpLoadResources(const std::string& theGroup)
 bool PvzpResourceManager::PvzpLoadResources(const std::string& theGroup)
 {
 	if (IsGroupLoaded(theGroup))
+	{
+		mLoadedGroupRefs[theGroup]++;
 		return true;
+	}
 
 	PerfTimer aTimer;
 	aTimer.Start();
@@ -1085,6 +1088,7 @@ bool PvzpResourceManager::PvzpLoadResources(const std::string& theGroup)
 	}
 
 	mLoadedGroups.insert(theGroup);
+	mLoadedGroupRefs[theGroup] = 1;
 
 	int aDuration = std::max(aTimer.GetDuration(), 0.0);
 	if (aDuration > 20)

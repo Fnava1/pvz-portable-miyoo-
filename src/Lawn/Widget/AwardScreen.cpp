@@ -586,13 +586,20 @@ void AwardScreen::MouseUp([[maybe_unused]] int x, [[maybe_unused]] int y, int th
 	if (theClickCount == 1)
 	{
 		if (mStartButton->IsMouseOver())
+		{
 			StartButtonPressed();
+			return;
+		}
 		if (mContinueButton->IsMouseOver())
+		{
 			AchievementsContinuePressed();
+			return;
+		}
 		if (mMenuButton->IsMouseOver())
 		{
 			mApp->KillAwardScreen();
 			mApp->ShowGameSelector();
+			return;
 		}
 	}
 }

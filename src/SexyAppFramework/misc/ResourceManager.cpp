@@ -104,6 +104,10 @@ void ResourceManager::DeleteResources(const std::string &theGroup)
 	DeleteResources(mSoundMap,theGroup);
 	DeleteResources(mFontMap,theGroup);
 	mLoadedGroups.erase(theGroup);
+	if (theGroup.empty())
+		mLoadedGroupRefs.clear();
+	else
+		mLoadedGroupRefs.erase(theGroup);
 }
 
 void ResourceManager::DeleteSound(const std::string &theName)
@@ -115,7 +119,22 @@ void ResourceManager::ReleaseTrackedResources(std::vector<std::string>& theNames
 {
 #ifdef LOW_MEMORY
 	for (const std::string& aName : theNames)
-		DeleteResources(aName);
+	{
+		auto anItr = mLoadedGroupRefs.find(aName);
+		if (anItr != mLoadedGroupRefs.end())
+		{
+			anItr->second--;
+			if (anItr->second <= 0)
+			{
+				mLoadedGroupRefs.erase(anItr);
+				DeleteResources(aName);
+			}
+		}
+		else
+		{
+			DeleteResources(aName);
+		}
+	}
 #endif
 	theNames.clear();
 }
@@ -978,6 +997,12 @@ void ResourceManager::DumpCurResGroup(std::string& theDestStr)
 
 bool ResourceManager::LoadResources(const std::string &theGroup)
 {
+	if (IsGroupLoaded(theGroup))
+	{
+		mLoadedGroupRefs[theGroup]++;
+		return true;
+	}
+
 	mError = "";
 	mHasFailed = false;
 	StartLoadResources(theGroup);
@@ -988,6 +1013,7 @@ bool ResourceManager::LoadResources(const std::string &theGroup)
 	if (!HadError())
 	{
 		mLoadedGroups.insert(theGroup);
+		mLoadedGroupRefs[theGroup] = 1;
 		return true;
 	}
 	else

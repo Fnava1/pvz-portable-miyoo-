@@ -68,12 +68,14 @@ SeedChooserScreen::SeedChooserScreen()
 	mStartButton->SetFont(Sexy::FONT_DWARVENTODCRAFT18YELLOW);
 	mStartButton->SetLabelHiliteColor(Color::White);
 	mStartButton->Resize(154, 545, 156, 42);
+	mStartButton->mParentWidget = this;
 	mStartButton->mTextOffsetY = -1;
 	EnableStartButton(false);
 
 	mMenuButton = std::make_unique<GameButton>(SeedChooserScreen::SeedChooserScreen_Menu);
 	mMenuButton->SetLabel("[MENU_BUTTON]");
 	mMenuButton->Resize(681, -10, 117, 46);
+	mMenuButton->mParentWidget = this;
 	mMenuButton->mDrawStoneButton = true;
 
 	mRandomButton = std::make_unique<GameButton>(SeedChooserScreen::SeedChooserScreen_Random);
@@ -85,6 +87,7 @@ SeedChooserScreen::SeedChooserScreen()
 	mRandomButton->SetLabelColor(Color(255, 240, 0));
 	mRandomButton->SetLabelHiliteColor(Color(200, 200, 255));
 	mRandomButton->Resize(332, 546, 100, 30);
+	mRandomButton->mParentWidget = this;
 	if (!mApp->mCheatKeys)
 	{
 		mRandomButton->mBtnNoDraw = true;
