@@ -1610,6 +1610,7 @@ void LawnApp::UpdateFrames()
 	if (mDeferredNewGame)
 	{
 		mDeferredNewGame = false;
+		KillAwardScreen();
 		KillBoard();
 		ProcessSafeDeleteList();
 		if (mWidgetManager)

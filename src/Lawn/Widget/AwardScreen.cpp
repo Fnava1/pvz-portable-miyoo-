@@ -441,7 +441,7 @@ void AwardScreen::Update()
 		}
 	}
 
-	if (mApp->GetDialogCount() > 0) return;
+	if (mPressedStart || mApp->GetDialogCount() > 0) return;
 	mStartButton->Update();
 	mMenuButton->Update();
 	mContinueButton->Update();
@@ -454,18 +454,44 @@ void AwardScreen::KeyDown(KeyCode theKey)
 {
 	if (theKey == KeyCode::KEYCODE_SPACE || theKey == KeyCode::KEYCODE_RETURN)
 	{
+		if (mFadeInCounter > 0)
+		{
+			mFadeInCounter = 0;
+			MarkDirty();
+			return;
+		}
+
+		if (mShowingAchievements)
+		{
+			if (mContinueButton && !mContinueButton->mDisabled && !mContinueButton->mBtnNoDraw)
+			{
+				AchievementsContinuePressed();
+			}
+			return;
+		}
+
+		if (!mStartButton || mStartButton->mDisabled || mStartButton->mBtnNoDraw)
+			return;
+
 		StartButtonPressed();
 		return;
 	}
 
 	if (theKey == KeyCode::KEYCODE_ESCAPE)
 	{
+		if (mFadeInCounter > 0)
+		{
+			mFadeInCounter = 0;
+			MarkDirty();
+			return;
+		}
+
 		if (!mMenuButton->mDisabled && !mMenuButton->mBtnNoDraw)
 		{
 			mApp->KillAwardScreen();
 			mApp->ShowGameSelector();
 		}
-		else
+		else if (!mShowingAchievements && mStartButton && !mStartButton->mDisabled && !mStartButton->mBtnNoDraw)
 		{
 			StartButtonPressed();
 		}
@@ -512,14 +538,16 @@ void AwardScreen::StartButtonPressed()
 		int aLevel = mApp->mPlayerInfo->GetLevel();
 		if (aLevel == 1)
 		{
-			mApp->KillAwardScreen();
 			if (mApp->HasFinishedAdventure())
 			{
+				mApp->KillAwardScreen();
 				mApp->ShowAwardScreen(AWARD_CREDITS_ZOMBIENOTE, false);
 			}
 			else
 			{
-				mApp->PreNewGame(GAMEMODE_ADVENTURE, false);
+				mApp->KillAwardScreen();
+				mApp->mGameMode = GAMEMODE_ADVENTURE;
+				mApp->mDeferredNewGame = true;
 			}
 		}
 		else
@@ -543,10 +571,10 @@ void AwardScreen::StartButtonPressed()
 				if (mApp->IsTrialStageLocked())
 				{
 					mApp->KillAwardScreen();
-					mApp->PreNewGame(GAMEMODE_UPSELL, false);
+					mApp->mGameMode = GAMEMODE_UPSELL;
+					mApp->mDeferredNewGame = true;
 					if (!mApp->mPlayerInfo->mHasSeenUpsell)
 					{
-						mApp->mBoard->mStoreButton->mBtnNoDraw = true;
 						mApp->mPlayerInfo->mHasSeenUpsell = true;
 					}
 					return;
@@ -567,13 +595,15 @@ void AwardScreen::StartButtonPressed()
 			else if (aLevel == 45)
 			{
 				mApp->KillAwardScreen();
-				mApp->PreNewGame(GAMEMODE_CHALLENGE_ZEN_GARDEN, false);
+				mApp->mGameMode = GAMEMODE_CHALLENGE_ZEN_GARDEN;
+				mApp->mDeferredNewGame = true;
 				mApp->mZenGarden->SetupForZenTutorial();
 				return;
 			}
 
 			mApp->KillAwardScreen();
-			mApp->PreNewGame(GAMEMODE_ADVENTURE, false);
+			mApp->mGameMode = GAMEMODE_ADVENTURE;
+			mApp->mDeferredNewGame = true;
 		}
 	}
 }
@@ -581,8 +611,19 @@ void AwardScreen::StartButtonPressed()
 void AwardScreen::MouseDown([[maybe_unused]] int x, [[maybe_unused]] int y, int theClickCount)
 {
 	if (theClickCount == 1) {
-		if (mStartButton->IsMouseOver() || mMenuButton->IsMouseOver() || mContinueButton->IsMouseOver())
+		if (mFadeInCounter > 0)
+		{
+			mFadeInCounter = 0;
+			MarkDirty();
+			return;
+		}
+
+		if ((mStartButton && mStartButton->IsMouseOver() && !mStartButton->mDisabled && !mStartButton->mBtnNoDraw) ||
+		    (mMenuButton && mMenuButton->IsMouseOver() && !mMenuButton->mDisabled && !mMenuButton->mBtnNoDraw) ||
+		    (mContinueButton && mContinueButton->IsMouseOver() && !mContinueButton->mDisabled && !mContinueButton->mBtnNoDraw))
+		{
 			mApp->PlaySample(Sexy::SOUND_TAP);
+		}
 	}
 }
 
@@ -590,17 +631,24 @@ void AwardScreen::MouseUp([[maybe_unused]] int x, [[maybe_unused]] int y, int th
 {
 	if (theClickCount == 1)
 	{
-		if (mStartButton->IsMouseOver())
+		if (mFadeInCounter > 0)
+		{
+			mFadeInCounter = 0;
+			MarkDirty();
+			return;
+		}
+
+		if (mStartButton && mStartButton->IsMouseOver() && !mStartButton->mDisabled && !mStartButton->mBtnNoDraw)
 		{
 			StartButtonPressed();
 			return;
 		}
-		if (mContinueButton->IsMouseOver())
+		if (mContinueButton && mContinueButton->IsMouseOver() && !mContinueButton->mDisabled && !mContinueButton->mBtnNoDraw)
 		{
 			AchievementsContinuePressed();
 			return;
 		}
-		if (mMenuButton->IsMouseOver())
+		if (mMenuButton && mMenuButton->IsMouseOver() && !mMenuButton->mDisabled && !mMenuButton->mBtnNoDraw)
 		{
 			mApp->KillAwardScreen();
 			mApp->ShowGameSelector();
@@ -645,7 +693,7 @@ void AwardScreen::AchievementsContinuePressed() {
 		if (mContinueButton) mContinueButton->mDisabled = true;
 		mApp->KillAwardScreen();
 		if (mApp->IsAdventureMode()) {
-			mApp->PreNewGame(mApp->mGameMode, false);
+			mApp->mDeferredNewGame = true;
 		}
 		else if (mApp->IsSurvivalMode()) {
 			mApp->ShowChallengeScreen(ChallengePage::CHALLENGE_PAGE_SURVIVAL);
