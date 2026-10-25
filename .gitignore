@@ -1,11 +1,22 @@
-# Build and distribution directories
+# ==============================================================================
+# Build, Compiler, and Distribution Artifacts
+# ==============================================================================
 /build/
 /dist/
 build/
 dist/
+out/
 Testing/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile
 
-# Distribution anti-virus and clean-room asset rules
+# ==============================================================================
+# Distribution Anti-Virus & Clean-Room Asset Rules (BYOD)
+# ==============================================================================
 *.exe
 *.pak
 *.dat
@@ -14,7 +25,9 @@ Testing/
 *.mo3
 src/SexyAppFramework/sound/SDL-Mixer-X/test/
 
-# Object files and compiled libraries
+# ==============================================================================
+# Compiled Objects, Intermediate Libraries & Native Binaries
+# ==============================================================================
 *.o
 *.obj
 *.a
@@ -22,23 +35,92 @@ src/SexyAppFramework/sound/SDL-Mixer-X/test/
 *.dylib
 *.dll
 
-# Explicit tracking exceptions for scripts, CMake configuration, and console shared libraries
+# ==============================================================================
+# Explicit Whitelist Exceptions (Required for Build & Console Staging)
+# ==============================================================================
 !*.sh
 !*.cmake
 !CMakeLists.txt
+!/3rdparty/libopenmpt/lib/libopenmpt.a
 !/packaging/Roms/PORTS/Games/Plants vs. Zombies/libs/*.so*
 !/ports/Games/Plants vs. Zombies/libs/*.so*
-!/3rdparty/libopenmpt/lib/libopenmpt.a
+!/bin/PvZ
+!/bin/setup_miyoo
+!/packaging/Roms/PORTS/Games/Plants vs. Zombies/PvZ
+!/packaging/Roms/PORTS/Games/Plants vs. Zombies/setup_miyoo
+!/ports/Games/Plants vs. Zombies/PvZ
+!/ports/Games/Plants vs. Zombies/setup_miyoo
 
+# ==============================================================================
+# AI Assistants, LLM Tools & Agent Configurations (Not Part of Game Source)
+# ==============================================================================
+.claude/
+.gemini/
+.trail/
+.cursor/
+.cursorrules
+.windsurf/
+.copilot/
+.continue/
+.cody/
+.aider*
+.agents/
+.superpowers/
 
-# Editor / IDE artifacts
+# ==============================================================================
+# IDE, Editor & Developer Workspace Artifacts
+# ==============================================================================
 .vscode/
 .idea/
-*.swp
-*~
+.vs/
+*.suo
+*.user
+*.userosv
+*.sln.docstates
+.fleet/
+.history/
+.settings/
+.project
+.cproject
+.clangd/
 compile_commands.json
+*.swp
+*.swo
+*~
+*.bak
 
-# Python caches
+# ==============================================================================
+# Python, Testing, Coverage & Virtual Environments
+# ==============================================================================
 __pycache__/
 *.py[cod]
+*$py.class
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+ENV/
+
+# ==============================================================================
+# Operating System & Environment Clutter
+# ==============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ==============================================================================
+# Logs, Crash Dumps & Diagnostics
+# ==============================================================================
+*.log
+*.tlog
+core
+core.*
