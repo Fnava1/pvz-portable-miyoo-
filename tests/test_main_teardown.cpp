@@ -93,6 +93,37 @@ static void test_clean_unwinding() {
     std::cout << "[PASS] Clean unwinding succeeds without exit(0)." << std::endl;
 }
 
+// ---------------------------------------------------------------------------
+// Step 4: Model-Specific Clock Detection & Sleep-Resume Clock Restoration
+// ---------------------------------------------------------------------------
+static void test_clock_detection_and_restore() {
+    std::cout << "[TEST] Running test_clock_detection_and_restore..." << std::endl;
+
+#ifndef _WIN32
+    setenv("TARGET_CPU_MHZ", "1400", 1);
+    assert(DetectTargetCpuMhz() == 1400);
+
+    setenv("TARGET_CPU_MHZ", "1800", 1);
+    assert(DetectTargetCpuMhz() == 1800);
+
+    unsetenv("TARGET_CPU_MHZ");
+    int fallbackClock = DetectTargetCpuMhz();
+    assert(fallbackClock == 1400 || fallbackClock == 1800);
+#else
+    _putenv("TARGET_CPU_MHZ=1400");
+    assert(DetectTargetCpuMhz() == 1400);
+
+    _putenv("TARGET_CPU_MHZ=1800");
+    assert(DetectTargetCpuMhz() == 1800);
+#endif
+
+    // RestoreCpuClockSafe must execute safely without crashing in test environment
+    RestoreCpuClockSafe(1400);
+    RestoreCpuClockSafe(1800);
+
+    std::cout << "[PASS] Model-specific clock detection and safe restore passed." << std::endl;
+}
+
 int main() {
     std::cout << "==========================================" << std::endl;
     std::cout << " Running PvZ Lifecycle & Teardown Unit Tests" << std::endl;
@@ -101,6 +132,7 @@ int main() {
     test_reset_framebuffer();
     test_signal_handling();
     test_clean_unwinding();
+    test_clock_detection_and_restore();
 
     std::cout << "==========================================" << std::endl;
     std::cout << " ALL LIFECYCLE TESTS PASSED!" << std::endl;

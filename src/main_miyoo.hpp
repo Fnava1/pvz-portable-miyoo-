@@ -8,4 +8,16 @@
  */
 void ResetFramebuffer();
 
+/**
+ * Detects safe target CPU clock in MHz per hardware model:
+ * 1800 MHz for Miyoo Mini Plus, 1400 MHz for Miyoo Mini non-Plus.
+ */
+int DetectTargetCpuMhz();
+
+/**
+ * Restores safe CPU governor and model-specific target clock frequency
+ * directly via POSIX file descriptors (zero fork/system overhead).
+ */
+void RestoreCpuClockSafe(int targetCpuMhz);
+
 #endif // PVZ_MAIN_MIYOO_HPP

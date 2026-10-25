@@ -46,6 +46,79 @@ void ResetFramebuffer() {
 #endif
 }
 
+int DetectTargetCpuMhz() {
+    // 1. Check TARGET_CPU_MHZ environment variable (set by launch.sh)
+    const char* envMhz = std::getenv("TARGET_CPU_MHZ");
+    if (envMhz && *envMhz) {
+        int mhz = std::atoi(envMhz);
+        if (mhz >= 1000 && mhz <= 2000) {
+            return mhz;
+        }
+    }
+
+#ifndef _WIN32
+    // 2. Multi-tier hardware detection fallback
+    bool isPlus = false;
+
+    // Check OnionOS deviceModel (354 = Miyoo Mini Plus, 283 = Miyoo Mini)
+    int fdModel = open("/tmp/deviceModel", O_RDONLY);
+    if (fdModel >= 0) {
+        char modelBuf[16] = {0};
+        ssize_t n = read(fdModel, modelBuf, sizeof(modelBuf) - 1);
+        close(fdModel);
+        if (n > 0 && std::strncmp(modelBuf, "354", 3) == 0) {
+            isPlus = true;
+        }
+    }
+
+    // Check factory AXP test utility (exists only in Plus internal NAND)
+    if (!isPlus && access("/customer/app/axp_test", F_OK) == 0) {
+        isPlus = true;
+    }
+
+    // Check wlan0 network interface sysfs directory
+    if (!isPlus && access("/sys/class/net/wlan0", F_OK) == 0) {
+        isPlus = true;
+    }
+
+    // Return safe model-specific clock: 1800 MHz for Plus, 1400 MHz for non-Plus
+    return isPlus ? 1800 : 1400;
+#else
+    return 1400;
+#endif
+}
+
+void RestoreCpuClockSafe(int targetCpuMhz) {
+    if (targetCpuMhz <= 0) return;
+
+#ifndef _WIN32
+    // 1. Ensure CPU1 is online in case OnionOS put it offline during sleep
+    int fdCore1 = open("/sys/devices/system/cpu/cpu1/online", O_WRONLY);
+    if (fdCore1 >= 0) {
+        (void)write(fdCore1, "1\n", 2);
+        close(fdCore1);
+    }
+
+    // 2. Set governor to userspace
+    int fdGov = open("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor", O_WRONLY);
+    if (fdGov >= 0) {
+        (void)write(fdGov, "userspace\n", 10);
+        close(fdGov);
+    }
+
+    // 3. Write target frequency in kHz (e.g. 1800000 for MMP, 1400000 for MM)
+    char freqBuf[32];
+    int len = snprintf(freqBuf, sizeof(freqBuf), "%d000\n", targetCpuMhz);
+    if (len > 0) {
+        int fdSpeed = open("/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed", O_WRONLY);
+        if (fdSpeed >= 0) {
+            (void)write(fdSpeed, freqBuf, static_cast<size_t>(len));
+            close(fdSpeed);
+        }
+    }
+#endif
+}
+
 static void CrashSignalHandler(int sig, siginfo_t* info, void* context) {
     (void)context;
     // Always restore framebuffer panning first to eliminate black screen
@@ -139,8 +212,30 @@ static void* HardwareWatchdogThreadFunc(void* arg) {
         pfd[i].events = POLLIN;
     }
 
+    int targetCpuMhz = DetectTargetCpuMhz();
+    uint64_t lastTickMs = 0;
+#ifndef _WIN32
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
+        lastTickMs = static_cast<uint64_t>(ts.tv_sec) * 1000ULL + static_cast<uint64_t>(ts.tv_nsec) / 1000000ULL;
+    }
+#endif
+
     while (sWatchdogRunning.load(std::memory_order_relaxed)) {
         int ret = poll(pfd, numFds, 50);
+#ifndef _WIN32
+        if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
+            uint64_t nowMs = static_cast<uint64_t>(ts.tv_sec) * 1000ULL + static_cast<uint64_t>(ts.tv_nsec) / 1000000ULL;
+            if (lastTickMs != 0 && nowMs > lastTickMs) {
+                uint64_t diffMs = nowMs - lastTickMs;
+                // poll timeout is 50ms; if diffMs > 1200ms, the system was suspended (OnionOS keymon sleep)
+                if (diffMs > 1200ULL) {
+                    RestoreCpuClockSafe(targetCpuMhz);
+                }
+            }
+            lastTickMs = nowMs;
+        }
+#endif
         if (ret > 0) {
             for (int i = 0; i < numFds; ++i) {
                 if (pfd[i].revents & POLLIN) {
@@ -249,7 +344,7 @@ static void SetupWorkingDirectory() {
 int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--version") == 0 || std::strcmp(argv[i], "-v") == 0) {
-            std::printf("Plants vs. Zombies (Miyoo Mini Plus Edition) v1.0.1\n");
+            std::printf("Plants vs. Zombies (Miyoo Mini Plus Edition) v1.1.0\n");
             return 0;
         }
         if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {

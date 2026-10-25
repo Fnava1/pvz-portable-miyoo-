@@ -81,6 +81,8 @@ for script in "$LAUNCH_SH" "$PKG_LAUNCH_SH"; do
     assert_pattern "$script" 'sync' "${script_name} invokes sync on cleanup"
     assert_pattern "$script" 'cpuclock[[:space:]]+1200' "${script_name} restores CPU clock to 1200 MHz"
     assert_pattern "$script" 'IS_PLUS' "${script_name} performs hardware model detection"
+    assert_pattern "$script" 'deviceModel' "${script_name} checks OnionOS deviceModel"
+    assert_pattern "$script" 'TARGET_CPU_MHZ' "${script_name} exports TARGET_CPU_MHZ"
     assert_pattern "$script" 'CPU_FREQ=1800' "${script_name} sets 1800 MHz for Plus"
     assert_pattern "$script" 'CPU_FREQ=1400' "${script_name} sets 1400 MHz for non-Plus"
     assert_pattern "$script" 'cpuclock[[:space:]]+\$CPU_FREQ' "${script_name} applies dynamic CPU clock"

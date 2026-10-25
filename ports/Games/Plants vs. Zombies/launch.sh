@@ -78,7 +78,13 @@ fi
 # Miyoo Mini Plus: 1800 MHz (AXP223 PMIC, large battery, WiFi present)
 # Miyoo Mini (v1/v2/v3/v4 non-Plus): 1400 MHz (conservative ceiling avoiding PMIC panic)
 IS_PLUS=0
-if [ -d /sys/class/net/wlan0 ] || grep -qi "plus" /proc/cmdline 2>/dev/null; then
+if [ -f "/tmp/deviceModel" ]; then
+    [ "$(cat /tmp/deviceModel 2>/dev/null)" = "354" ] && IS_PLUS=1
+elif [ -f "/customer/app/axp_test" ]; then
+    IS_PLUS=1
+elif [ -x "/mnt/SDCARD/.tmp_update/bin/axp" ] && /mnt/SDCARD/.tmp_update/bin/axp 0 >/dev/null 2>&1; then
+    IS_PLUS=1
+elif grep -qi "plus" /proc/cmdline 2>/dev/null || [ -d "/sys/class/net/wlan0" ]; then
     IS_PLUS=1
 fi
 
@@ -87,6 +93,7 @@ if [ "$IS_PLUS" -eq 1 ]; then
 else
     CPU_FREQ=1400
 fi
+export TARGET_CPU_MHZ="$CPU_FREQ"
 
 if [ -f "/mnt/SDCARD/.tmp_update/bin/cpuclock" ]; then
     /mnt/SDCARD/.tmp_update/bin/cpuclock $CPU_FREQ 2>/dev/null
