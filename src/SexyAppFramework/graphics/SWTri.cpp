@@ -30,7 +30,7 @@ using namespace Sexy;
 
 // Precalculated reciprocal table: gInvAlphaTable[a] = round(65536.0 / a)
 // Eliminates 32-bit hardware divide stalls inside the inner pixel loop of transformed triangles.
-static const uint32_t gInvAlphaTable[256] = {
+extern const uint32_t gInvAlphaTable[256] = {
 	0,
 	65536, 32768, 21845, 16384, 13107, 10923, 9362, 8192, 7282, 6554, 5958, 5461, 5041, 4681, 4369,
 	4096, 3855, 3641, 3449, 3277, 3121, 2979, 2849, 2731, 2621, 2521, 2427, 2341, 2260, 2185, 2114,

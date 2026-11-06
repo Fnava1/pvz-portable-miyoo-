@@ -353,6 +353,8 @@ static inline int Pvzp_clipShape(TriVertex** dst, TriVertex* src, const float le
 
 bool gPvzpTriangleDrawAdditive = false;
 
+extern const uint32_t gInvAlphaTable[256];
+
 #include "PvzpDrawTriangleInc.inc"
 
 // Mixed blending preserves screen RGB but not destination alpha. Offscreen targets may be sampled later.
