@@ -39,3 +39,7 @@ re-read whole files.
 After big code changes, refresh the graph with `trail build` (deterministic,
 no API key, $0).
 <!-- trail:end -->
+
+## Process & Background Task Rules
+- **Python & Task Termination:** Cada vez que se ejecute Python o cualquier script/tarea en segundo plano, asegurarse de que termine de forma síncrona o finalizarla/matarla (`manage_task` con `Action='kill'` o terminación explícita del proceso) inmediatamente después de su uso. Queda estrictamente prohibido dejar procesos o tareas huérfanas de Python ejecutándose en segundo plano consumiendo memoria RAM o congelando el equipo.
+

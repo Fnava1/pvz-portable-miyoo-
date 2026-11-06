@@ -2032,6 +2032,9 @@ void Board::CycleSeedPacket(int theDelta)
 	if (!mSeedBank || mSeedBank->mNumPackets <= 0 || mPaused || mApp->mGameScene != GameScenes::SCENE_PLAYING)
 		return;
 
+	if (mBoardFadeOutCounter >= 0 || mLevelComplete)
+		return;
+
 	int aCurrentIndex = -1;
 	if (mCursorObject->mCursorType == CursorType::CURSOR_TYPE_PLANT_FROM_BANK)
 	{
@@ -2214,7 +2217,7 @@ void Board::CycleZenTool(int theDelta)
 
 void Board::ToggleShovel()
 {
-	if (!mShowShovel || mPaused || mApp->mGameScene != GameScenes::SCENE_PLAYING)
+	if (!mShowShovel || mPaused || mApp->mGameScene != GameScenes::SCENE_PLAYING || mBoardFadeOutCounter >= 0 || mLevelComplete)
 		return;
 
 	if (mCursorObject->mCursorType == CursorType::CURSOR_TYPE_SHOVEL)

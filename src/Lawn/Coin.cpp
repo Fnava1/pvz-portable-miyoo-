@@ -1229,6 +1229,7 @@ void Coin::Collect()
 		PVZP_ASSERT(mBoard);
 
 		mBoard->FadeOutLevel();
+		mBoard->ClearCursor();
 		AttachmentDetachCrossFadeParticleType(mAttachmentID, ParticleEffect::PARTICLE_SEED_PACKET, nullptr);
 		AttachmentDetachCrossFadeParticleType(mAttachmentID, ParticleEffect::PARTICLE_AWARD_PICKUP_ARROW, nullptr);
 		AttachmentDetachCrossFadeParticleType(mAttachmentID, ParticleEffect::PARTICLE_COIN_PICKUP_ARROW, nullptr);

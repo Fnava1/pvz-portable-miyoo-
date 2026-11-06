@@ -658,7 +658,8 @@ bool SeedPacket::CanPickUp()
 
 void SeedPacket::MouseDown([[maybe_unused]] int x, [[maybe_unused]] int y, [[maybe_unused]] int theClickCount)
 {
-	if (mBoard->mPaused || mApp->mGameScene != GameScenes::SCENE_PLAYING || mPacketType == SeedType::SEED_NONE)
+	if (mBoard->mPaused || mApp->mGameScene != GameScenes::SCENE_PLAYING || mPacketType == SeedType::SEED_NONE ||
+		mBoard->mBoardFadeOutCounter >= 0 || mBoard->mLevelComplete)
 	{
 		return;
 	}

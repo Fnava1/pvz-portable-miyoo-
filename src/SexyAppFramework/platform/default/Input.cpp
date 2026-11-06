@@ -866,8 +866,8 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 						{
 							gLawnApp->mBoard->ToggleShovel();
 						}
-						break;
 					}
+					break;
 				}
 				else if (event.key.keysym.sym == SDLK_TAB || event.key.keysym.sym == 'e' || event.key.keysym.sym == 'E')
 				{
@@ -875,8 +875,8 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 					if (gLawnApp && gLawnApp->mBoard)
 					{
 						gLawnApp->mBoard->CycleSeedPacket(-1);
-						break;
 					}
+					break;
 				}
 				else if (event.key.keysym.sym == SDLK_BACKSPACE || event.key.keysym.sym == 't' || event.key.keysym.sym == 'T')
 				{
@@ -884,8 +884,8 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 					if (gLawnApp && gLawnApp->mBoard)
 					{
 						gLawnApp->mBoard->CycleSeedPacket(1);
-						break;
 					}
+					break;
 				}
 
 				if (event.key.keysym.sym == SDLK_LEFT || event.key.keysym.sym == SDLK_RIGHT ||
