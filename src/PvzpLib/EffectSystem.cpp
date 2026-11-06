@@ -424,6 +424,9 @@ void PvzpTriangleGroup::AddTriangle(Graphics* g, Image* theImage, const SexyMatr
 {
 	PVZP_ASSERT(theImage != nullptr);
 
+	if (theColor.mAlpha <= 4 || theSrcRect.mWidth <= 0 || theSrcRect.mHeight <= 0)
+		return;
+
 	if (mTriangleCount > 0 && mImage != theImage)
 		DrawGroup(g);
 	if (mTriangleCount > 0 && mDrawMode != theDrawMode && !CanMixTriangleDrawModes(g))
@@ -447,6 +450,18 @@ void PvzpTriangleGroup::AddTriangle(Graphics* g, Image* theImage, const SexyMatr
 		tp[i] = theMatrix * p[i];
 		tp[i].x -= 0.5f;
 		tp[i].y -= 0.5f;
+	}
+
+	// Early bounding-box culling against clip rect
+	float minX = std::min({tp[0].x, tp[1].x, tp[2].x, tp[3].x});
+	float maxX = std::max({tp[0].x, tp[1].x, tp[2].x, tp[3].x});
+	float minY = std::min({tp[0].y, tp[1].y, tp[2].y, tp[3].y});
+	float maxY = std::max({tp[0].y, tp[1].y, tp[2].y, tp[3].y});
+
+	if (maxX < theClipRect.mX || minX > theClipRect.mX + theClipRect.mWidth ||
+		maxY < theClipRect.mY || minY > theClipRect.mY + theClipRect.mHeight)
+	{
+		return;
 	}
 
 	PVZP_ASSERT(theSrcRect.mX >= 0 && theSrcRect.mWidth >= 0 && theSrcRect.mX + theSrcRect.mWidth <= mImage->mWidth);

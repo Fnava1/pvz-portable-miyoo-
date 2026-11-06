@@ -54,25 +54,36 @@
 					}
 					#endif
 
-					unsigned int dr = (((p&0xFF0000)*da)>>8) & 0xFF0000;
-					unsigned int dg = (((p&0x00FF00)*da)>>8) & 0x00FF00;
-					unsigned int db = (((p&0x0000FF)*da)>>8) & 0x0000FF;
-
-					int finalAlpha = 256 - (((256 - alpha)*(256 - da))>>8);
-					if (finalAlpha >= 256)
+					if (da >= 254)
 					{
-						tr = ((tr + (256-alpha)*dr) >> 8) & 0xFF0000;
-						tg = ((tg + (256-alpha)*dg) >> 8) & 0x00FF00;
-						tb = ((tb + (256-alpha)*db) >> 8) & 0x0000FF;
+						unsigned int inv_a = 256 - alpha;
+						tr = ((tr + inv_a * (p & 0xFF0000)) >> 8) & 0xFF0000;
+						tg = ((tg + inv_a * (p & 0x00FF00)) >> 8) & 0x00FF00;
+						tb = ((tb + inv_a * (p & 0x0000FF)) >> 8) & 0x0000FF;
 						*pix = 0xFF000000 | tr | tg | tb;
 					}
-					else if (finalAlpha > 0)
+					else
 					{
-						uint32_t inv = gInvAlphaTable[finalAlpha & 0xFF];
-						tr = static_cast<uint32_t>((static_cast<uint64_t>(tr + (256-alpha)*dr) * inv) >> 16) & 0xFF0000;
-						tg = static_cast<uint32_t>((static_cast<uint64_t>(tg + (256-alpha)*dg) * inv) >> 16) & 0x00FF00;
-						tb = static_cast<uint32_t>((static_cast<uint64_t>(tb + (256-alpha)*db) * inv) >> 16) & 0x0000FF;
-						*pix = ((finalAlpha-1)<<24) | tr | tg | tb;
+						unsigned int dr = (((p&0xFF0000)*da)>>8) & 0xFF0000;
+						unsigned int dg = (((p&0x00FF00)*da)>>8) & 0x00FF00;
+						unsigned int db = (((p&0x0000FF)*da)>>8) & 0x0000FF;
+
+						int finalAlpha = 256 - (((256 - alpha)*(256 - da))>>8);
+						if (finalAlpha >= 256)
+						{
+							tr = ((tr + (256-alpha)*dr) >> 8) & 0xFF0000;
+							tg = ((tg + (256-alpha)*dg) >> 8) & 0x00FF00;
+							tb = ((tb + (256-alpha)*db) >> 8) & 0x0000FF;
+							*pix = 0xFF000000 | tr | tg | tb;
+						}
+						else if (finalAlpha > 0)
+						{
+							uint32_t inv = gInvAlphaTable[finalAlpha & 0xFF];
+							tr = static_cast<uint32_t>((static_cast<uint64_t>(tr + (256-alpha)*dr) * inv) >> 16) & 0xFF0000;
+							tg = static_cast<uint32_t>((static_cast<uint64_t>(tg + (256-alpha)*dg) * inv) >> 16) & 0x00FF00;
+							tb = static_cast<uint32_t>((static_cast<uint64_t>(tb + (256-alpha)*db) * inv) >> 16) & 0x0000FF;
+							*pix = ((finalAlpha-1)<<24) | tr | tg | tb;
+						}
 					}
 				}
 				else
@@ -104,24 +115,36 @@
 			unsigned int tg = ((g>>8)*(alpha))&0x00FF0000;
 			unsigned int tb = ((b>>16)*(alpha))&0x0000FF00;
 
-			unsigned int dr = (((p&0xFF0000)*da)>>8) & 0xFF0000;
-			unsigned int dg = (((p&0x00FF00)*da)>>8) & 0x00FF00;
-			unsigned int db = (((p&0x0000FF)*da)>>8) & 0x0000FF;
-
-			int finalAlpha = 256 - (((256 - alpha)*(256 - da))>>8);
-			if (finalAlpha >= 256)
+			if (da >= 254)
 			{
-				tr = ((tr + (256-alpha)*dr) >> 8) & 0xFF0000;
-				tg = ((tg + (256-alpha)*dg) >> 8) & 0x00FF00;
-				tb = ((tb + (256-alpha)*db) >> 8) & 0x0000FF;
+				unsigned int inv_a = 256 - alpha;
+				tr = ((tr + inv_a * (p & 0xFF0000)) >> 8) & 0xFF0000;
+				tg = ((tg + inv_a * (p & 0x00FF00)) >> 8) & 0x00FF00;
+				tb = ((tb + inv_a * (p & 0x0000FF)) >> 8) & 0x0000FF;
 				*pix = 0xFF000000 | tr | tg | tb;
 			}
-			else if (finalAlpha > 0)
+			else
 			{
-				tr = ((tr + (256-alpha)*dr)/finalAlpha) & 0xFF0000;
-				tg = ((tg + (256-alpha)*dg)/finalAlpha) & 0x00FF00;
-				tb = ((tb + (256-alpha)*db)/finalAlpha) & 0x0000FF;
-				*pix = ((finalAlpha-1)<<24) | tr | tg | tb;
+				unsigned int dr = (((p&0xFF0000)*da)>>8) & 0xFF0000;
+				unsigned int dg = (((p&0x00FF00)*da)>>8) & 0x00FF00;
+				unsigned int db = (((p&0x0000FF)*da)>>8) & 0x0000FF;
+
+				int finalAlpha = 256 - (((256 - alpha)*(256 - da))>>8);
+				if (finalAlpha >= 256)
+				{
+					tr = ((tr + (256-alpha)*dr) >> 8) & 0xFF0000;
+					tg = ((tg + (256-alpha)*dg) >> 8) & 0x00FF00;
+					tb = ((tb + (256-alpha)*db) >> 8) & 0x0000FF;
+					*pix = 0xFF000000 | tr | tg | tb;
+				}
+				else if (finalAlpha > 0)
+				{
+					uint32_t inv = gInvAlphaTable[finalAlpha & 0xFF];
+					tr = static_cast<uint32_t>((static_cast<uint64_t>(tr + (256-alpha)*dr) * inv) >> 16) & 0xFF0000;
+					tg = static_cast<uint32_t>((static_cast<uint64_t>(tg + (256-alpha)*dg) * inv) >> 16) & 0x00FF00;
+					tb = static_cast<uint32_t>((static_cast<uint64_t>(tb + (256-alpha)*db) * inv) >> 16) & 0x0000FF;
+					*pix = ((finalAlpha-1)<<24) | tr | tg | tb;
+				}
 			}
 		}
 	}

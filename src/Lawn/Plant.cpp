@@ -491,12 +491,16 @@ void Plant::PlantInitialize(int theGridX, int theGridY, SeedType theSeedType, Se
 	}
 	mPlantMaxHealth = mPlantHealth;
 
-	if (mSeedType != SeedType::SEED_FLOWERPOT && IsOnBoard())
+	if (mSeedType != SeedType::SEED_FLOWERPOT && mSeedType != SeedType::SEED_LILYPAD && IsOnBoard())
 	{
 		PVZP_ASSERT(mBoard);
-		Plant* aFlowerPot = mBoard->GetFlowerPotAt(mPlantCol, mRow);
-		if (aFlowerPot)
-			mApp->ReanimationGet(aFlowerPot->mBodyReanimID)->mAnimRate = 0.0f;
+		Plant* anUnderPlant = mBoard->GetTopPlantAt(mPlantCol, mRow, PlantPriority::TOPPLANT_ONLY_UNDER_PLANT);
+		if (anUnderPlant && anUnderPlant->mBodyReanimID != ReanimationID::REANIMATIONID_NULL)
+		{
+			Reanimation* anUnderReanim = mApp->ReanimationTryToGet(anUnderPlant->mBodyReanimID);
+			if (anUnderReanim)
+				anUnderReanim->mAnimRate = 0.0f;
+		}
 	}
 }
 
@@ -4032,8 +4036,12 @@ void Plant::Draw(Graphics* g)
 			Reanimation* aBodyReanim = mApp->ReanimationTryToGet(mBodyReanimID);
 			if (aBodyReanim)
 			{
-				if (!mApp->Is3DAccelerated() && mSeedType == SeedType::SEED_FLOWERPOT && IsOnBoard() &&
+				if (!mApp->Is3DAccelerated() && (mSeedType == SeedType::SEED_FLOWERPOT || mSeedType == SeedType::SEED_LILYPAD) && IsOnBoard() &&
 					aBodyReanim->mAnimRate == 0.0f && aBodyReanim->IsAnimPlaying("anim_idle"))
+				{
+					mApp->mReanimatorCache->DrawCachedPlant(g, aOffsetX, aOffsetY, mSeedType, DrawVariation::VARIATION_NORMAL);
+				}
+				else if (!mApp->Is3DAccelerated() && mIsAsleep && IsOnBoard() && aBodyReanim->IsAnimPlaying("anim_idle"))
 				{
 					mApp->mReanimatorCache->DrawCachedPlant(g, aOffsetX, aOffsetY, mSeedType, DrawVariation::VARIATION_NORMAL);
 				}

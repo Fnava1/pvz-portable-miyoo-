@@ -120,6 +120,9 @@ static void PaceWaitMs(int theMs)
 			break;
 
 		uint64_t remaining = until - now;
+		if (remaining <= 2000000ULL)
+			break;
+
 		// SigmaStar SSD202D Linux 4.9 has CONFIG_HZ=100 (10ms tick).
 		// Any nanosleep blocks for at least 10ms. Therefore, only sleep in kernel if
 		// remaining time exceeds 12ms to safely avoid overshooting frame deadlines.
@@ -2867,7 +2870,7 @@ bool SexyAppBase::Process(bool allowSleep)
 			{
 				// Let us take into account the time it took to draw dirty stuff
 				int aTimeToNextFrame = static_cast<int>(aFrameFTime - mUpdateFTimeAcc);
-				if (aTimeToNextFrame > 0)
+				if (aTimeToNextFrame > 2)
 				{
 					if (!allowSleep)
 						return false;
