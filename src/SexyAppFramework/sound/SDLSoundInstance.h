@@ -89,6 +89,7 @@ protected:
 public:
 	SDLSoundInstance(SDLSoundManager* theSoundManager, Mix_Chunk* theSourceSound, int theReservedChannel = -1);
 	~SDLSoundInstance() override;
+	void					Rebind(Mix_Chunk* theSourceSound, int theReservedChannel = -1);
 	void					Release() override;
 
 	void					SetBaseVolume(double theBaseVolume) override;

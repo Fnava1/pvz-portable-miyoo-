@@ -228,6 +228,8 @@ public:
 	int32_t							mTriggeredLawnMowers;
 	uint32_t						mPlayTimeActiveLevel;
 	uint32_t						mPlayTimeInactiveLevel;
+	uint32_t						mRowZombieMask;
+	bool							mHasBossZombie;
 	int32_t							mMaxSunPlants;
 	int64_t							mStartDrawTime;
 	int64_t							mIntervalDrawTime;
@@ -322,6 +324,7 @@ public:
 	int								GridToPixelY(int theGridX, int theGridY);
 	int					PixelToGridXKeepOnBoard(int theX, int theY);
 	int					PixelToGridYKeepOnBoard(int theX, int theY);
+	void							UpdateRowZombieMask();
 	void							UpdateGameObjects();
 	bool							MouseHitTest(int x, int y, HitResult* theHitResult);
 	void							MouseDownWithPlant(int x, int y, int theClickCount);

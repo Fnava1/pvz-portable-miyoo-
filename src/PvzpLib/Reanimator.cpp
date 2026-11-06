@@ -226,6 +226,7 @@ bool ReanimationLoadDefinition(const std::string& theFileName, ReanimatorDefinit
 	for (int aTrackIndex = 0; aTrackIndex < theDefinition->mTracks.count; aTrackIndex++)
 	{
 		ReanimatorTrack* aTrack = &theDefinition->mTracks.tracks[aTrackIndex];
+		aTrack->mIsAttacher = (aTrack->mName != nullptr && strncasecmp(aTrack->mName, "attacher__", 10) == 0);
 		float aPrevTransX = 0.0f;
 		float aPrevTransY = 0.0f;
 		float aPrevSkewX = 0.0f;
@@ -510,7 +511,7 @@ void Reanimation::Update()
 			aTrack->mShakeY = RandRangeFloat(-aTrack->mShakeOverride, aTrack->mShakeOverride);
 		}
 
-		if (strncasecmp(mDefinition->mTracks.tracks[aTrackIndex].mName, "attacher__", 10) == 0)  // IsAttacher
+		if (mDefinition->mTracks.tracks[aTrackIndex].mIsAttacher)
 			UpdateAttacherTrack(aTrackIndex);
 
 		if (aTrack->mAttachmentID != AttachmentID::ATTACHMENTID_NULL)
@@ -575,6 +576,22 @@ void Reanimation::GetTransformAtTime(int theTrackIndex, ReanimatorTransform* the
 	PVZP_ASSERT(aTrack->mTransforms.count == mDefinition->mTracks.tracks[0].mTransforms.count);
 	ReanimatorTransform& aTransBefore = aTrack->mTransforms.mTransforms[theFrameTime->mAnimFrameBeforeInt];  // previous frame's transform definition
 	ReanimatorTransform& aTransAfter = aTrack->mTransforms.mTransforms[theFrameTime->mAnimFrameAfterInt];  // next frame's transform definition
+
+	if (aTransBefore.mFrame == -1.0f && aTransAfter.mFrame == -1.0f && aTransBefore.mImage == nullptr && aTransBefore.mFont == nullptr)
+	{
+		theTransform->mTransX = aTransBefore.mTransX;
+		theTransform->mTransY = aTransBefore.mTransY;
+		theTransform->mSkewX = 0.0f;
+		theTransform->mSkewY = 0.0f;
+		theTransform->mScaleX = 1.0f;
+		theTransform->mScaleY = 1.0f;
+		theTransform->mAlpha = 0.0f;
+		theTransform->mImage = nullptr;
+		theTransform->mFont = nullptr;
+		theTransform->mText = "";
+		theTransform->mFrame = -1.0f;
+		return;
+	}
 
 	theTransform->mTransX = FloatLerp(aTransBefore.mTransX, aTransAfter.mTransX, theFrameTime->mFraction);
 	theTransform->mTransY = FloatLerp(aTransBefore.mTransY, aTransAfter.mTransY, theFrameTime->mFraction);

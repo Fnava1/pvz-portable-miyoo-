@@ -244,6 +244,7 @@ void* ReanimatorTrackConstructor(void* thePointer)
 	{
 		((ReanimatorTrack*)thePointer)->mName = "";
 		((ReanimatorTrack*)thePointer)->mTransforms = {nullptr, 0};
+		((ReanimatorTrack*)thePointer)->mIsAttacher = false;
 	}
 	return thePointer;
 }

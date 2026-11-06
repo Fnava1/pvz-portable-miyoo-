@@ -57,6 +57,30 @@ SDLSoundInstance::~SDLSoundInstance()
 	Stop();
 }
 
+void SDLSoundInstance::Rebind(Mix_Chunk* theSourceSound, int theReservedChannel)
+{
+	Stop();
+	mMixChunk = theSourceSound;
+	mReleased = false;
+	mAutoRelease = false;
+	mHasPlayed = false;
+	mReservedChannel = theReservedChannel;
+	mChannel = -1;
+
+	mBaseVolume = 1.0;
+	mBasePan = 0;
+
+	mVolume = 1.0;
+	mPan = 0;
+	mPitch = 1.0f;
+
+	mDefaultFrequency = 44100;
+	mDemoEndUpdateCount = 0;
+	mDemoLooping = false;
+
+	RehupVolume();
+}
+
 void SDLSoundInstance::RehupVolume()
 {
 	Mix_VolumeChunk(mMixChunk, (mBaseVolume * mVolume * mSoundManagerP->mMasterVolume) * 128);

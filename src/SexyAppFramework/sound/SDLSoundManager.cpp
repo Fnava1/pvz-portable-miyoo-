@@ -391,7 +391,14 @@ SoundInstance* SDLSoundManager::GetSoundInstance(intptr_t theSfxID)
 #endif
 	}
 
-	mPlayingSounds[aFreeChannel] = std::make_unique<SDLSoundInstance>(this, mSourceSounds[theSfxID], aFreeChannel);
+	if (!mPlayingSounds[aFreeChannel])
+	{
+		mPlayingSounds[aFreeChannel] = std::make_unique<SDLSoundInstance>(this, mSourceSounds[theSfxID], aFreeChannel);
+	}
+	else
+	{
+		mPlayingSounds[aFreeChannel]->Rebind(mSourceSounds[theSfxID], aFreeChannel);
+	}
 
 	mPlayingSounds[aFreeChannel]->SetBasePan(mBasePans[theSfxID]);
 	mPlayingSounds[aFreeChannel]->SetBaseVolume(mBaseVolumes[theSfxID]);

@@ -4777,6 +4777,24 @@ void Plant::Fire(Zombie* theTargetZombie, int theRow, PlantWeapon thePlantWeapon
 
 Zombie* Plant::FindTargetZombie(int theRow, PlantWeapon thePlantWeapon)
 {
+	if (!mBoard->mHasBossZombie && mSeedType != SeedType::SEED_CATTAIL)
+	{
+		if (mSeedType == SeedType::SEED_GLOOMSHROOM)
+		{
+			int minR = std::max(0, theRow - 1);
+			int maxR = std::min(MAX_GRID_SIZE_Y - 1, theRow + 1);
+			uint32_t mask = 0;
+			for (int r = minR; r <= maxR; ++r) mask |= (1U << r);
+			if ((mBoard->mRowZombieMask & mask) == 0)
+				return nullptr;
+		}
+		else
+		{
+			if (theRow >= 0 && theRow < MAX_GRID_SIZE_Y && (mBoard->mRowZombieMask & (1U << theRow)) == 0)
+				return nullptr;
+		}
+	}
+
 	int aDamageRangeFlags = GetDamageRangeFlags(thePlantWeapon);
 	Rect aAttackRect = GetPlantAttackRect(thePlantWeapon);
 	int aHighestWeight = 0;

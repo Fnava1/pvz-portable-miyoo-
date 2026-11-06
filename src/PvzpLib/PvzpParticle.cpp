@@ -1023,25 +1023,32 @@ void PvzpParticleEmitter::DrawParticle(Graphics* g, PvzpParticle* theParticle, P
 	ParticleRenderParams aParams;
 	if (GetRenderParams(theParticle, &aParams))
 	{
+		int aAlpha = std::clamp(FloatRoundToInt(aParams.mAlpha), 0, 255);
+		if (aAlpha <= 4)
+			return;
+
+		float posX = aParams.mPosX + g->mTransX;
+		float posY = aParams.mPosY + g->mTransY;
+		if (posX < -100.0f || posX > 900.0f || posY < -100.0f || posY > 700.0f)
+			return;
+
 		Color aColor(
 			std::clamp(FloatRoundToInt(aParams.mRed), 0, 255),
 			std::clamp(FloatRoundToInt(aParams.mGreen), 0, 255),
 			std::clamp(FloatRoundToInt(aParams.mBlue), 0, 255),
-			std::clamp(FloatRoundToInt(aParams.mAlpha), 0, 255)
+			aAlpha
 		);
-		if (aColor.mAlpha > 0)
-		{
-			aParams.mPosX += g->mTransX;
-			aParams.mPosY += g->mTransY;
 
-			PvzpParticle* aParticle;
-			if (mImageOverride || mEmitterDef->mImage)
-				aParticle = theParticle;
-			else  // no image of its own: try the cross-fade source particle
-				aParticle = mParticleSystem->mParticleHolder->mParticles.DataArrayTryToGet(static_cast<unsigned int>(theParticle->mCrossFadeParticleID));
-			if (aParticle != nullptr)
-				RenderParticle(g, aParticle, aColor, &aParams, theTriangleGroup);
-		}
+		aParams.mPosX = posX;
+		aParams.mPosY = posY;
+
+		PvzpParticle* aParticle;
+		if (mImageOverride || mEmitterDef->mImage)
+			aParticle = theParticle;
+		else  // no image of its own: try the cross-fade source particle
+			aParticle = mParticleSystem->mParticleHolder->mParticles.DataArrayTryToGet(static_cast<unsigned int>(theParticle->mCrossFadeParticleID));
+		if (aParticle != nullptr)
+			RenderParticle(g, aParticle, aColor, &aParams, theTriangleGroup);
 	}
 }
 

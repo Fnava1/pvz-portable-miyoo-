@@ -226,6 +226,9 @@ Zombie* Projectile::FindCollisionTarget()
 	if (PeaAboutToHitTorchwood())  // a pea about to hit a torchwood skips zombie collision ("torchwood clip" trick)
 		return nullptr;
 
+	if (!mBoard->mHasBossZombie && mRow >= 0 && mRow < MAX_GRID_SIZE_Y && (mBoard->mRowZombieMask & (1U << mRow)) == 0)
+		return nullptr;
+
 	Rect aProjectileRect = GetProjectileRect();
 	Zombie* aBestZombie = nullptr;
 	int aMinX = 0;

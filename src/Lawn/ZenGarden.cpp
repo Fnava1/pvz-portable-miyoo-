@@ -1770,7 +1770,10 @@ void ZenGarden::ZenGardenUpdate()
 		}
 	}
 
-	UpdatePlantNeeds();
+	if (mBoard->mBoardUpdateCounter % 15 == 0)
+	{
+		UpdatePlantNeeds();
+	}
 	{
 		for (Plant* aPlant : mBoard->mPlants)
 		{

@@ -175,6 +175,8 @@ Board::Board(LawnApp* theApp)
 	}
 	mPrevMouseX = -1;
 	mPrevMouseY = -1;
+	mRowZombieMask = 0;
+	mHasBossZombie = false;
 	mFinalBossKilled = false;
 	mMustacheMode = mApp->mMustacheMode;
 	mSuperMowerMode = mApp->mSuperMowerMode;
@@ -5358,8 +5360,25 @@ void Board::SpawnZombieWave()
 	mTotalSpawnedWaves++;
 }
 
+void Board::UpdateRowZombieMask()
+{
+	mRowZombieMask = 0;
+	mHasBossZombie = false;
+	for (Zombie* aZombie : mZombies)
+	{
+		if (aZombie->mDead)
+			continue;
+		if (aZombie->mZombieType == ZombieType::ZOMBIE_BOSS)
+			mHasBossZombie = true;
+		if (aZombie->mRow >= 0 && aZombie->mRow < MAX_GRID_SIZE_Y)
+			mRowZombieMask |= (1U << aZombie->mRow);
+	}
+}
+
 void Board::UpdateGameObjects()
 {
+	UpdateRowZombieMask();
+
 	for (Plant* aPlant : mPlants)
 	{
 		if (aPlant->mDead)
