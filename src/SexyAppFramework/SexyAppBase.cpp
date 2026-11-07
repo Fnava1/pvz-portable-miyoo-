@@ -2642,7 +2642,10 @@ void SexyAppBase::UpdateFTimeAcc()
 	{
 		int aDeltaTime = aCurTime - mLastTimeCheck;
 
-		mUpdateFTimeAcc = std::min(mUpdateFTimeAcc + aDeltaTime, 120.0);
+		// Cap single-frame delta to prevent large OS/sleep pauses from creating an unpayable tick debt
+		aDeltaTime = std::min(aDeltaTime, 50);
+
+		mUpdateFTimeAcc = std::min(mUpdateFTimeAcc + aDeltaTime, 60.0);
 
 		if (mRelaxUpdateBacklogCount > 0)
 			mRelaxUpdateBacklogCount = std::max(mRelaxUpdateBacklogCount - aDeltaTime, 0);
@@ -2849,12 +2852,6 @@ bool SexyAppBase::Process(bool allowSleep)
 				mUpdateFTimeAcc = std::max(mUpdateFTimeAcc - aFrameFTime - 0.2f, 0.0);
 			else
 				mUpdateFTimeAcc = std::max(mUpdateFTimeAcc - aFrameFTime, 0.0);
-
-			// Anti-spiral / anti-stutter safety for single-core handhelds:
-			// If a stall or delay occurred, immediately drop accumulated debt rather than
-			// queuing backlog updates that would saturate the CPU and starve the audio thread.
-			if (mUpdateFTimeAcc > aFrameFTime * 1.5)
-				mUpdateFTimeAcc = 0.0;
 
 			if (mRelaxUpdateBacklogCount > 0)
 				mUpdateFTimeAcc = 0;
