@@ -793,24 +793,25 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 
 #if !PVZ_ENABLE_GLES
 				// Universal emergency exit combo (SELECT + START held together)
-				if (event.key.keysym.sym == SDLK_ESCAPE)
+				// On Miyoo Mini / OnionOS, physical SELECT is SDLK_RCTRL (or SDLK_SELECT).
+				if (event.key.keysym.sym == SDLK_RCTRL || event.key.keysym.sym == SDLK_SELECT)
 				{
 					sSelectDown = true;
-					// In active gameplay without open dialogs, Select toggles turbo speed on keyup.
-					// Suppress sending KEYCODE_ESCAPE on keydown so options dialog does not open.
-					if (gLawnApp && gLawnApp->mGameScene == GameScenes::SCENE_PLAYING &&
-						gLawnApp->mBoard && !gLawnApp->mBoard->mPaused && gLawnApp->GetDialogCount() == 0)
+					if (sSelectDown && sStartDown)
 					{
+						CloseRequestAsync();
 						break;
 					}
+					break;
 				}
 				if (event.key.keysym.sym == SDLK_RETURN || event.key.keysym.sym == SDLK_KP_ENTER)
-					sStartDown = true;
-
-				if (sSelectDown && sStartDown)
 				{
-					CloseRequestAsync();
-					break;
+					sStartDown = true;
+					if (sSelectDown && sStartDown)
+					{
+						CloseRequestAsync();
+						break;
+					}
 				}
 
 				// Power button: mute audio and request clean exit
@@ -821,8 +822,10 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 					break;
 				}
 
-				// Physical Menu button: record press time for hold detection, or forward to keyup for short press
-				if (event.key.keysym.sym == SDLK_HOME || event.key.keysym.sym == SDLK_RALT || event.key.keysym.sym == SDLK_MENU)
+				// Physical Menu button: record press time for hold detection, or forward to keyup for short press.
+				// On Miyoo Mini Plus / OnionOS, physical Menu emits SDLK_ESCAPE, SDLK_HOME, SDLK_RALT, or SDLK_MENU.
+				if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_HOME ||
+					event.key.keysym.sym == SDLK_RALT || event.key.keysym.sym == SDLK_MENU)
 				{
 					if (!sMenuDown)
 					{
@@ -919,7 +922,9 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 			case SDL_KEYUP:
 				mLastUserInputTick = mLastTimerTime;
 #if !PVZ_ENABLE_GLES
-				if (event.key.keysym.sym == SDLK_ESCAPE)
+				// Physical SELECT button: toggles turbo speed during active gameplay
+				// On Miyoo Mini / OnionOS, physical SELECT is SDLK_RCTRL (or SDLK_SELECT).
+				if (event.key.keysym.sym == SDLK_RCTRL || event.key.keysym.sym == SDLK_SELECT)
 				{
 					bool wasSelectDown = sSelectDown;
 					sSelectDown = false;
@@ -932,11 +937,14 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 							break;
 						}
 					}
+					break;
 				}
 				if (event.key.keysym.sym == SDLK_RETURN || event.key.keysym.sym == SDLK_KP_ENTER)
 					sStartDown = false;
 
-				if (event.key.keysym.sym == SDLK_HOME || event.key.keysym.sym == SDLK_RALT || event.key.keysym.sym == SDLK_MENU)
+				// Physical MENU button: short press (< 750ms) opens options menu / cancel; long press (>= 750ms) exits cleanly
+				if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_HOME ||
+					event.key.keysym.sym == SDLK_RALT || event.key.keysym.sym == SDLK_MENU)
 				{
 					if (sMenuDown)
 					{

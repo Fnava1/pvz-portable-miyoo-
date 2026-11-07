@@ -34,7 +34,7 @@ bool HandheldInput::IsMenuKey(int sdlKey, int scancode) {
     if (scancode == MIYOO_SCANCODE_MENU_HOME || scancode == MIYOO_SCANCODE_MENU_RALT) {
         return true;
     }
-    if (sdlKey == SDLK_HOME || sdlKey == SDLK_RALT) {
+    if (sdlKey == SDLK_HOME || sdlKey == SDLK_RALT || sdlKey == SDLK_ESCAPE || sdlKey == SDLK_MENU) {
         return true;
     }
     return false;
@@ -126,7 +126,7 @@ HandheldButton HandheldInput::MapSDLKeyToHandheldButton(int sdlKey, int scancode
     if (sdlKey == SDLK_RETURN) {
         return HandheldButton::Start;
     }
-    if (sdlKey == SDLK_ESCAPE) {
+    if (sdlKey == SDLK_RCTRL || sdlKey == SDLK_SELECT) {
         return HandheldButton::Select;
     }
 
