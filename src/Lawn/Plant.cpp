@@ -4085,6 +4085,23 @@ void Plant::Draw(Graphics* g)
 				{
 					mApp->mReanimatorCache->DrawCachedPlant(g, aOffsetX, aOffsetY, mSeedType, DrawVariation::VARIATION_NORMAL);
 				}
+				else if (!mApp->Is3DAccelerated() && IsOnBoard() && !mSquished && mEatenFlashCountdown == 0 &&
+						 mBeghouledFlashCountdown == 0 && !mHighlighted && mImitaterType == SeedType::SEED_NONE &&
+						 mBlinkReanimID == ReanimationID::REANIMATIONID_NULL &&
+						 g->mScaleX == 1.0f && g->mScaleY == 1.0f &&
+						 aBodyReanim->mColorOverride == Color(255, 255, 255) &&
+						 !aBodyReanim->mEnableExtraAdditiveDraw && !aBodyReanim->mEnableExtraOverlayDraw &&
+						 aBodyReanim->IsAnimPlaying("anim_idle") &&
+						 ((mSeedType == SeedType::SEED_SUNFLOWER || mSeedType == SeedType::SEED_TWINSUNFLOWER) ||
+						  ((mSeedType == SeedType::SEED_PEASHOOTER || mSeedType == SeedType::SEED_REPEATER ||
+							mSeedType == SeedType::SEED_SNOWPEA || mSeedType == SeedType::SEED_GATLINGPEA) &&
+						   mShootingCounter == 0 &&
+						   (mHeadReanimID == ReanimationID::REANIMATIONID_NULL ||
+							(mApp->ReanimationTryToGet(mHeadReanimID) != nullptr &&
+							 mApp->ReanimationTryToGet(mHeadReanimID)->IsAnimPlaying("anim_head_idle"))))))
+				{
+					mApp->mReanimatorCache->DrawCachedPlantAnim(g, aOffsetX, aOffsetY, mSeedType, aBodyReanim->mAnimTime);
+				}
 				else
 				{
 					aBodyReanim->Draw(g);
