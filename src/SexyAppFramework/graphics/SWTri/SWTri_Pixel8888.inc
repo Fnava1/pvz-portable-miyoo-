@@ -39,7 +39,7 @@
 					unsigned int p = *pix;
 					unsigned int da = p >> 24;
 
-					if (da >= 254)
+					if (__builtin_expect(da >= 254, 1))
 					{
 						unsigned int inv_a = 256 - alpha;
 #if !defined(LINEAR_BLEND)
@@ -114,7 +114,7 @@
 			unsigned int tg = ((g>>8)*(alpha))&0x00FF0000;
 			unsigned int tb = ((b>>16)*(alpha))&0x0000FF00;
 
-			if (da >= 254)
+			if (__builtin_expect(da >= 254, 1))
 			{
 				unsigned int inv_a = 256 - alpha;
 				tr = ((tr + inv_a * (p & 0xFF0000)) >> 8) & 0xFF0000;

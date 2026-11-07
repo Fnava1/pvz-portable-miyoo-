@@ -423,14 +423,47 @@ void SWHelper::SWDrawShape(XYZStruct *theVerts, int theNumVerts, MemoryImage *th
 		aTriRef[3] = 0;
 
 		// Clip
-
-		XYZStruct *	clipped[64];
 		float		clipX0 = tclx0;
 		float		clipY0 = tcly0;
 		float		clipX1 = tclx1;
 		float		clipY1 = tcly1;
 
-		unsigned int	vCount = clipShape(clipped, aTriRef, clipX0, clipX1, clipY0, clipY1);
+		float x0 = aTriRef[0]->mX;
+		float y0 = aTriRef[0]->mY;
+		float x1 = aTriRef[1]->mX;
+		float y1 = aTriRef[1]->mY;
+		float x2 = aTriRef[2]->mX;
+		float y2 = aTriRef[2]->mY;
+
+		float minX = std::min(x0, std::min(x1, x2));
+		float maxX = std::max(x0, std::max(x1, x2));
+		float minY = std::min(y0, std::min(y1, y2));
+		float maxY = std::max(y0, std::max(y1, y2));
+
+		if (maxX < clipX0 || minX > clipX1 || maxY < clipY0 || minY > clipY1)
+		{
+			// Triangle is completely outside clipping rectangle: early out
+			aTVertPtr++;
+			aTriCounter++;
+			aOddTriangle = !aOddTriangle;
+			continue;
+		}
+
+		XYZStruct *	clipped[64];
+		unsigned int	vCount = 0;
+
+		if (minX >= clipX0 && maxX <= clipX1 && minY >= clipY0 && maxY <= clipY1)
+		{
+			// Triangle is completely inside clipping rectangle: bypass Sutherland-Hodgman clipping entirely
+			clipped[0] = aTriRef[0];
+			clipped[1] = aTriRef[1];
+			clipped[2] = aTriRef[2];
+			vCount = 3;
+		}
+		else
+		{
+			vCount = clipShape(clipped, aTriRef, clipX0, clipX1, clipY0, clipY1);
+		}
 
 		if (vCount)
 		{

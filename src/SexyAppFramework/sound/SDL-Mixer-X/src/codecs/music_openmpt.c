@@ -224,6 +224,10 @@ void *OPENMPT_CreateFromRW(SDL_RWops *src, int freesrc)
     meta_tags_init(&music->tags);
     meta_tags_set(&music->tags, MIX_META_TITLE, openmpt.openmpt_module_get_metadata(music->file, "title"));
 	openmpt.openmpt_module_set_repeat_count(music->file, -1);
+	/* Linear interpolation (fast on embedded ARM, saving significant CPU over 8-tap sinc) */
+	if (openmpt.openmpt_module_set_render_param) {
+		openmpt.openmpt_module_set_render_param(music->file, 3 /* OPENMPT_MODULE_RENDER_INTERPOLATIONFILTER_LENGTH */, 2);
+	}
 	/* Equivalent to BASS_MUSIC_POSRESET: stop all notes when seeking */
 	openmpt.openmpt_module_ctl_set_boolean(music->file, "seek.sync_samples", 0);
 
