@@ -3492,6 +3492,15 @@ void Challenge::ScaryPotterFillColumnWithPlant(int theCol, SeedType theSeedType,
 
 void Challenge::ScaryPotterPlacePot(ScaryPotType theScaryPotType, ZombieType theZombieType, SeedType theSeedType, int theCount, PvzpWeightedGridArray* theGridArray, int theGridArrayCount)
 {
+	if (theZombieType != ZombieType::ZOMBIE_INVALID)
+	{
+		Zombie::PreloadZombieResources(theZombieType);
+	}
+	if (theSeedType != SeedType::SEED_NONE)
+	{
+		Plant::PreloadPlantResources(theSeedType);
+	}
+
 	ScaryPotType aPotType = theScaryPotType;
 	while (theCount > 0)
 	{
@@ -4119,6 +4128,7 @@ void Challenge::IZombieSetupPlant(Plant* thePlant)
 
 void Challenge::IZombiePlacePlantInSquare(SeedType theSeedType, int theGridX, int theGridY)
 {
+	Plant::PreloadPlantResources(theSeedType);
 	if (mBoard->CanPlantAt(theGridX, theGridY, theSeedType) == PLANTING_OK)
 	{
 		IZombieSetupPlant(mBoard->NewPlant(theGridX, theGridY, theSeedType));

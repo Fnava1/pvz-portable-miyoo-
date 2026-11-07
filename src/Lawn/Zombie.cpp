@@ -10604,6 +10604,10 @@ void Zombie::PreloadZombieResources(ZombieType theZombieType)
 	{
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_CATAPULT, true);
 	}
+	else if (theZombieType == ZombieType::ZOMBIE_IMP)
+	{
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_IMP, true);
+	}
 
 	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_PUFF, true);
 	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);

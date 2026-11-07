@@ -371,6 +371,26 @@ void CutScene::PreloadResources()
 		Plant::PreloadPlantResources(mApp->GetAwardSeedForLevel(mBoard->mLevel));
 	}
 
+	if (mBoard->mSeedBank)
+	{
+		for (int i = 0; i < mBoard->mSeedBank->mNumPackets; i++)
+		{
+			SeedType aSeedType = mBoard->mSeedBank->mSeedPackets[i].mPacketType;
+			if (aSeedType == SeedType::SEED_NONE)
+				continue;
+
+			if (Challenge::IsZombieSeedType(aSeedType))
+			{
+				ZombieType aZombieType = Challenge::IZombieSeedTypeToZombieType(aSeedType);
+				Zombie::PreloadZombieResources(aZombieType);
+			}
+			else
+			{
+				Plant::PreloadPlantResources(aSeedType);
+			}
+		}
+	}
+
 	if (mCrazyDaveDialogStart != -1)
 	{
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_CRAZY_DAVE, true);
@@ -388,6 +408,7 @@ void CutScene::PreloadResources()
 	if (mBoard->StageHasRoof())
 	{
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ROOF_CLEANER, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_BUNGEE, true);
 	}
 	else
 	{
@@ -423,6 +444,11 @@ void CutScene::PreloadResources()
 	{
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_RAIN_CIRCLE, true);
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_RAIN_SPLASH, true);
+	}
+
+	if (mApp->mGameMode == GameMode::GAMEMODE_CHALLENGE_ZOMBIQUARIUM)
+	{
+		Zombie::PreloadZombieResources(ZombieType::ZOMBIE_SNORKEL);
 	}
 
 	if (mApp->mGameMode == GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN)
