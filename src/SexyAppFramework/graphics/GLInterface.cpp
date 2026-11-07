@@ -26,6 +26,10 @@
 #include "graphics/GLPlatform.h"
 
 #include <SDL.h>
+#ifndef _WIN32
+#include <pthread.h>
+#include <sched.h>
+#endif
 
 #include "graphics/GLInterface.h"
 #include "graphics/GLImage.h"
@@ -1167,6 +1171,24 @@ static SDL_Texture* sVirtualCursorTex = nullptr;
 
 GLInterface::~GLInterface()
 {
+#if !PVZ_ENABLE_GLES
+#ifndef _WIN32
+	if (mFlipRunning.load(std::memory_order_relaxed))
+	{
+		mFlipRunning.store(false, std::memory_order_relaxed);
+		pthread_mutex_lock(&mFlipMutex);
+		mFlipWorkPending.store(true, std::memory_order_relaxed);
+		pthread_cond_signal(&mFlipCond);
+		pthread_cond_signal(&mFlipDoneCond);
+		pthread_mutex_unlock(&mFlipMutex);
+		pthread_join(mFlipThread, nullptr);
+		pthread_mutex_destroy(&mFlipMutex);
+		pthread_cond_destroy(&mFlipCond);
+		pthread_cond_destroy(&mFlipDoneCond);
+	}
+#endif
+	mWorkerBits.reset();
+#endif
 	mScreenImage.reset();
 	Flush();
 #if !PVZ_ENABLE_GLES
@@ -1311,6 +1333,18 @@ int GLInterface::Init(bool IsWindowed)
 	}
 
 	SetVideoOnlyDraw(false);
+#if !PVZ_ENABLE_GLES
+	mWorkerBits = std::make_unique<uint32_t[]>(mWidth * mHeight);
+#ifndef _WIN32
+	pthread_mutex_init(&mFlipMutex, nullptr);
+	pthread_cond_init(&mFlipCond, nullptr);
+	pthread_cond_init(&mFlipDoneCond, nullptr);
+	mFlipRunning.store(true, std::memory_order_relaxed);
+	mFlipWorkPending.store(false, std::memory_order_relaxed);
+	mFlipWorkDone.store(true, std::memory_order_relaxed);
+	pthread_create(&mFlipThread, nullptr, FlipWorkerThreadFunc, this);
+#endif
+#endif
 	return 1;
 #else
 	static bool inited = false;
@@ -1623,10 +1657,53 @@ static inline void AverageAndDownscaleRow800To640(const uint32_t* src1, const ui
 #endif
 #endif
 
-void GLInterface::Flush()
-{
 #if !PVZ_ENABLE_GLES
-	if (mSdlRenderer && mSdlTexture && mScreenImage && mScreenImage->GetBits())
+#ifndef _WIN32
+void* GLInterface::FlipWorkerThreadFunc(void* arg)
+{
+	GLInterface* self = static_cast<GLInterface*>(arg);
+
+	cpu_set_t cpuset;
+	CPU_ZERO(&cpuset);
+	CPU_SET(1, &cpuset); // Pin asynchronous presentation worker exclusively to Core 1
+	pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+
+	while (self->mFlipRunning.load(std::memory_order_relaxed))
+	{
+		pthread_mutex_lock(&self->mFlipMutex);
+		while (!self->mFlipWorkPending.load(std::memory_order_relaxed) && self->mFlipRunning.load(std::memory_order_relaxed))
+		{
+			pthread_cond_wait(&self->mFlipCond, &self->mFlipMutex);
+		}
+		if (!self->mFlipRunning.load(std::memory_order_relaxed))
+		{
+			pthread_mutex_unlock(&self->mFlipMutex);
+			break;
+		}
+
+		self->mFlipWorkPending.store(false, std::memory_order_relaxed);
+		bool showCursor = self->mWorkerShowCursor;
+		int curX = self->mWorkerCursorX;
+		int curY = self->mWorkerCursorY;
+		pthread_mutex_unlock(&self->mFlipMutex);
+
+		if (self->mWorkerBits)
+		{
+			self->DoFlushPresent(self->mWorkerBits.get(), showCursor, curX, curY);
+		}
+
+		pthread_mutex_lock(&self->mFlipMutex);
+		self->mFlipWorkDone.store(true, std::memory_order_release);
+		pthread_cond_signal(&self->mFlipDoneCond);
+		pthread_mutex_unlock(&self->mFlipMutex);
+	}
+	return nullptr;
+}
+#endif
+
+void GLInterface::DoFlushPresent(const uint32_t* srcBits, bool showCursor, int cursorX, int cursorY)
+{
+	if (mSdlRenderer && mSdlTexture && srcBits)
 	{
 		SDL_Renderer* ren = (SDL_Renderer*)mSdlRenderer;
 		SDL_Texture* tex = (SDL_Texture*)mSdlTexture;
@@ -1643,7 +1720,6 @@ void GLInterface::Flush()
 		int texPitch = 0;
 		if (SDL_LockTexture(tex, nullptr, &texPixels, &texPitch) == 0)
 		{
-			const uint32_t* srcBits = mScreenImage->GetBits();
 			uint8_t* dstRow = (uint8_t*)texPixels;
 
 			if (texW == mWidth && texH == mHeight)
@@ -1745,16 +1821,16 @@ void GLInterface::Flush()
 		}
 		else if (texW == mWidth && texH == mHeight)
 		{
-			SDL_UpdateTexture(tex, nullptr, mScreenImage->GetBits(), mWidth * sizeof(uint32_t));
+			SDL_UpdateTexture(tex, nullptr, srcBits, mWidth * sizeof(uint32_t));
 		}
 		SDL_RenderClear(ren);
 		SDL_RenderCopy(ren, tex, nullptr, nullptr);
 
 		// Render virtual cursor overlay for handheld navigation (menus, dialogs, etc.)
-		if (SexyAppBase::sShowVirtualCursor || mApp->GetDialogCount() > 0)
+		if (showCursor)
 		{
-			int cx = (int)(SexyAppBase::sVirtualCursorX * 640.0f / 800.0f);
-			int cy = (int)(SexyAppBase::sVirtualCursorY * 480.0f / 600.0f);
+			int cx = (int)(cursorX * 640.0f / 800.0f);
+			int cy = (int)(cursorY * 480.0f / 600.0f);
 
 			if (!sVirtualCursorTex)
 			{
@@ -1780,6 +1856,44 @@ void GLInterface::Flush()
 
 		SDL_RenderPresent(ren);
 	}
+}
+#endif
+
+void GLInterface::Flush()
+{
+#if !PVZ_ENABLE_GLES
+	if (!mSdlRenderer || !mSdlTexture || !mScreenImage || !mScreenImage->GetBits())
+		return;
+
+#ifndef _WIN32
+	if (mFlipRunning.load(std::memory_order_relaxed) && mWorkerBits)
+	{
+		// Wait if worker thread is still presenting previous frame
+		pthread_mutex_lock(&mFlipMutex);
+		while (!mFlipWorkDone.load(std::memory_order_acquire))
+		{
+			pthread_cond_wait(&mFlipDoneCond, &mFlipMutex);
+		}
+
+		// Swap buffer pointer: mWorkerBits receives current frame, mScreenImage gets previous buffer
+		mScreenImage->mBits.swap(mWorkerBits);
+
+		// Snapshot cursor state
+		mWorkerShowCursor = SexyAppBase::sShowVirtualCursor || (mApp && mApp->GetDialogCount() > 0);
+		mWorkerCursorX = (int)SexyAppBase::sVirtualCursorX;
+		mWorkerCursorY = (int)SexyAppBase::sVirtualCursorY;
+
+		mFlipWorkDone.store(false, std::memory_order_relaxed);
+		mFlipWorkPending.store(true, std::memory_order_relaxed);
+		pthread_cond_signal(&mFlipCond);
+		pthread_mutex_unlock(&mFlipMutex);
+		return;
+	}
+#endif
+
+	// Fallback path (Windows / single-core synchronous)
+	bool showCursor = SexyAppBase::sShowVirtualCursor || (mApp && mApp->GetDialogCount() > 0);
+	DoFlushPresent(mScreenImage->GetBits(), showCursor, (int)SexyAppBase::sVirtualCursorX, (int)SexyAppBase::sVirtualCursorY);
 #else
 	gNumVertices = 0;
 #ifdef __SWITCH__

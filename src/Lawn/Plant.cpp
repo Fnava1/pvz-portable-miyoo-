@@ -2806,7 +2806,25 @@ void Plant::UpdateReanim()
 		aOffsetY += 80.0f - 80.0f * aScaleFactor;
 	}
 
-	aBodyReanim->Update();
+	bool skipPlantUpdate = false;
+	if (mBoard && mBoard->mZombies.mSize > 40 && IsOnBoard() && mPottedPlantIndex == -1 && aBodyReanim->IsAnimPlaying("anim_idle") &&
+		(mSeedType == SeedType::SEED_SUNFLOWER || mSeedType == SeedType::SEED_TWINSUNFLOWER ||
+		 mSeedType == SeedType::SEED_PUMPKINSHELL || mSeedType == SeedType::SEED_TORCHWOOD ||
+		 mSeedType == SeedType::SEED_SPIKEROCK || mSeedType == SeedType::SEED_SPIKEWEED ||
+		 mSeedType == SeedType::SEED_WALLNUT || mSeedType == SeedType::SEED_TALLNUT ||
+		 mSeedType == SeedType::SEED_REPEATER || mSeedType == SeedType::SEED_GATLINGPEA ||
+		 mSeedType == SeedType::SEED_SNOWPEA || mSeedType == SeedType::SEED_PEASHOOTER))
+	{
+		if (((mPlantCol + mRow + mBoard->mBoardUpdateCounter) & 1) != 0)
+		{
+			skipPlantUpdate = true;
+		}
+	}
+
+	if (!skipPlantUpdate)
+	{
+		aBodyReanim->Update();
+	}
 
 	if (mSeedType == SeedType::SEED_LEFTPEATER)
 	{
@@ -3235,7 +3253,17 @@ void Plant::UpdateShooting()
 
 	if (mSeedType == SeedType::SEED_GLOOMSHROOM)
 	{
-		if (mShootingCounter == 136 || mShootingCounter == 108 || mShootingCounter == 80 || mShootingCounter == 52)
+		bool spawnCloud = false;
+		if (mBoard && mBoard->mZombies.mSize > 30)
+		{
+			spawnCloud = (mShootingCounter == 136 || mShootingCounter == 80);
+		}
+		else
+		{
+			spawnCloud = (mShootingCounter == 136 || mShootingCounter == 108 || mShootingCounter == 80 || mShootingCounter == 52);
+		}
+
+		if (spawnCloud)
 		{
 			int aRenderPosition = Board::MakeRenderOrder(RenderLayer::RENDER_LAYER_PARTICLE, mRow, 0);
 			AddAttachedParticle(mX + 40, mY + 40, aRenderPosition, ParticleEffect::PARTICLE_GLOOMCLOUD);

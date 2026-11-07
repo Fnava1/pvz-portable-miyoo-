@@ -35,6 +35,10 @@
 #include "misc/Ratio.h"
 #include "misc/SexyMatrix.h"
 #include <memory>
+#include <atomic>
+#ifndef _WIN32
+#include <pthread.h>
+#endif
 
 namespace Sexy
 {
@@ -196,6 +200,24 @@ public:
 	void*					mSdlTexture = nullptr;
 	int						mTexWidth = 0;
 	int						mTexHeight = 0;
+
+#if !PVZ_ENABLE_GLES
+	std::unique_ptr<uint32_t[]> mWorkerBits;
+#ifndef _WIN32
+	pthread_t				mFlipThread{};
+	pthread_mutex_t			mFlipMutex{};
+	pthread_cond_t			mFlipCond{};
+	pthread_cond_t			mFlipDoneCond{};
+	std::atomic<bool>		mFlipRunning{false};
+	std::atomic<bool>		mFlipWorkPending{false};
+	std::atomic<bool>		mFlipWorkDone{true};
+	bool					mWorkerShowCursor = false;
+	int						mWorkerCursorX = 0;
+	int						mWorkerCursorY = 0;
+	static void*			FlipWorkerThreadFunc(void* arg);
+#endif
+	void					DoFlushPresent(const uint32_t* srcBits, bool showCursor, int cursorX, int cursorY);
+#endif
 
 	int						mNextCursorX;
 	int						mNextCursorY;

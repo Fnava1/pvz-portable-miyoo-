@@ -6910,6 +6910,14 @@ void Board::DrawGameObjects(Graphics* g)
 		case RenderObjectType::RENDER_ITEM_ZOMBIE_SHADOW:
 		{
 			Zombie* aZombie = aRenderItem.mZombie;
+			if (mZombies.mSize > 40 && aZombie->mRow >= 0 && aZombie->mRow < MAX_GRID_SIZE_Y && mRowZombies[aZombie->mRow].size() > 6)
+			{
+				// In dense zombie hordes, decimate redundant shadow rendering to conserve memory fillrate
+				if ((reinterpret_cast<uintptr_t>(aZombie) >> 4) & 1)
+				{
+					break;
+				}
+			}
 			if (aZombie->BeginDraw(g))
 			{
 				aZombie->DrawShadow(g);

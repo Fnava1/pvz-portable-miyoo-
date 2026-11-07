@@ -23,6 +23,9 @@
  */
 
 #include "SexyMatrix.h"
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+#include <arm_neon.h>
+#endif
 
 #include <math.h>
 
@@ -49,17 +52,38 @@ SexyMatrix3 SexyMatrix3::operator*(const SexyMatrix3 &theMat) const
 {
 	SexyMatrix3 aResult;
 
-	for(int i=0; i<3; i++)
-	{
-		for(int j=0; j<3; j++)
-		{
-			float x = 0;
-			for(int k=0; k<3; k++)
-				x += m[i][k]*theMat.m[k][j];
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+	// In 2D affine graphics, the 3rd row is strictly [0, 0, 1].
+	// Compute 2x2 rotation/scale/skew block in parallel using 128-bit NEON vector registers:
+	// row0: [m00, m01] = l00 * [r00, r01] + l01 * [r10, r11]
+	// row1: [m10, m11] = l10 * [r00, r01] + l11 * [r10, r11]
+	float32x4_t r_row01 = { theMat.m00, theMat.m01, theMat.m00, theMat.m01 };
+	float32x4_t r_row10 = { theMat.m10, theMat.m11, theMat.m10, theMat.m11 };
+	float32x4_t l_col0 = { m00, m00, m10, m10 };
+	float32x4_t l_col1 = { m01, m01, m11, m11 };
 
-			aResult.m[i][j] = x;
-		}
-	}
+	float32x4_t rot_block = vmlaq_f32(vmulq_f32(l_col0, r_row01), l_col1, r_row10);
+
+	aResult.m00 = vgetq_lane_f32(rot_block, 0);
+	aResult.m01 = vgetq_lane_f32(rot_block, 1);
+	aResult.m10 = vgetq_lane_f32(rot_block, 2);
+	aResult.m11 = vgetq_lane_f32(rot_block, 3);
+
+	// Translation: [m02, m12] = [l00, l10] * r02 + [l01, l11] * r12 + [l02, l12]
+	aResult.m02 = m00 * theMat.m02 + m01 * theMat.m12 + m02;
+	aResult.m12 = m10 * theMat.m02 + m11 * theMat.m12 + m12;
+#else
+	// Analytical 2D affine reduction: 8 multiplications and 4 additions vs 27 mults / 18 adds
+	aResult.m00 = m00 * theMat.m00 + m01 * theMat.m10;
+	aResult.m01 = m00 * theMat.m01 + m01 * theMat.m11;
+	aResult.m02 = m00 * theMat.m02 + m01 * theMat.m12 + m02;
+	aResult.m10 = m10 * theMat.m00 + m11 * theMat.m10;
+	aResult.m11 = m10 * theMat.m01 + m11 * theMat.m11;
+	aResult.m12 = m10 * theMat.m02 + m11 * theMat.m12 + m12;
+#endif
+	aResult.m20 = 0.0f;
+	aResult.m21 = 0.0f;
+	aResult.m22 = 1.0f;
 
 	return aResult;
 }

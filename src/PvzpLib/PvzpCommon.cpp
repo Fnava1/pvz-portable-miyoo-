@@ -1002,25 +1002,7 @@ void SexyMatrix3Inverse(const SexyMatrix3& m, SexyMatrix3 &r)
 
 void SexyMatrix3Multiply(SexyMatrix3& m, const SexyMatrix3& l, const SexyMatrix3& r)
 {
-	//SexyMatrix3 temp = l * r;
-	SexyMatrix3 temp;
-	temp.m00 = l.m00 * r.m00 + l.m01 * r.m10 + l.m02 * r.m20;
-	temp.m01 = l.m00 * r.m01 + l.m01 * r.m11 + l.m02 * r.m21;
-	temp.m02 = l.m00 * r.m02 + l.m01 * r.m12 + l.m02 * r.m22;
-	temp.m10 = l.m10 * r.m00 + l.m11 * r.m10 + l.m12 * r.m20;
-	temp.m11 = l.m10 * r.m01 + l.m11 * r.m11 + l.m12 * r.m21;
-	temp.m12 = l.m10 * r.m02 + l.m11 * r.m12 + l.m12 * r.m22;
-	temp.m20 = l.m20 * r.m00 + l.m21 * r.m10 + l.m22 * r.m20;
-	temp.m21 = l.m20 * r.m01 + l.m21 * r.m11 + l.m22 * r.m21;
-	temp.m22 = l.m20 * r.m02 + l.m21 * r.m12 + l.m22 * r.m22;
-
-	for (int i = 0; i < 3; i++)
-	{
-		for (int j = 0; j < 3; j++)
-		{
-			m.m[i][j] = temp.m[i][j];
-		}
-	}
+	m = l * r;
 }
 
 Color GetFlashingColor(uint32_t theCounter, int theFlashTime)

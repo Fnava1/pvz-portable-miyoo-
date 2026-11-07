@@ -6311,6 +6311,13 @@ void Zombie::Draw(Graphics* g)
 	if (mZombieHeight == ZombieHeight::HEIGHT_GETTING_BUNGEE_DROPPED)
 		return;
 
+	if (mBoard && mZombieType != ZombieType::ZOMBIE_BOSS)
+	{
+		float aScreenX = mPosX + mBoard->mX;
+		if (aScreenX > BOARD_WIDTH + 100.0f || aScreenX < -150.0f)
+			return;
+	}
+
 	ZombieDrawPosition aDrawPos;
 	GetDrawPos(aDrawPos);
 
@@ -9393,6 +9400,13 @@ void Zombie::DrawShadow(Graphics* g)
 
 	// shadows look really dumb in Zombiquarium
 	if (mApp->mGameMode == GAMEMODE_CHALLENGE_ZOMBIQUARIUM) return;
+
+	if (mBoard && mZombieType != ZombieType::ZOMBIE_BOSS)
+	{
+		float aScreenX = mPosX + mBoard->mX;
+		if (aScreenX > BOARD_WIDTH + 80.0f || aScreenX < -120.0f)
+			return;
+	}
 
 	int aShadowType = 0;
 	float aShadowOffsetX = aDrawPos.mImageOffsetX;
