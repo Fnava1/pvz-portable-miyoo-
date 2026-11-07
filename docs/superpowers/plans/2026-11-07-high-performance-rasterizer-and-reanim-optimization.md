@@ -41,7 +41,7 @@
 **Context:**
 The software triangle rasterizer is invoked for all rotated, scaled, or skewed sprites (zombie limbs, walking animations, melon projectiles, cob cannon shells, particles). The inner loop in [`SWTri_Pixel8888.inc`](file:///c:/DEV/PVZ/src/SexyAppFramework/graphics/SWTri/SWTri_Pixel8888.inc) currently performs 6 scalar multiplications, 9 bitwise AND operations, and 6 shifts per pixel. For an opaque background (`da >= 254`), which represents over 95% of drawn pixels on the game lawn, SWAR parallel arithmetic blends Red and Blue simultaneously in a single 32-bit register and Green in a second register.
 
-- [ ] **Step 1.1: Implement SWAR blending for the opaque background path (`da >= 254`)**
+- [x] **Step 1.1: Implement SWAR blending for the opaque background path (`da >= 254`)**
 In [`src/SexyAppFramework/graphics/SWTri/SWTri_Pixel8888.inc`](file:///c:/DEV/PVZ/src/SexyAppFramework/graphics/SWTri/SWTri_Pixel8888.inc):
 Replace the scalar per-channel calculations in `if (da >= 254)`:
 ```cpp
@@ -64,11 +64,11 @@ Replace the scalar per-channel calculations in `if (da >= 254)`:
 #endif
 ```
 
-- [ ] **Step 1.2: Verify math against overflow**
+- [x] **Step 1.2: Verify math against overflow**
 Confirm that `(0x00FF00FF * 255) + (0x00FF00FF * 256)` does not overflow the 32-bit boundary and that the Blue channel product (bits 0..15) never carries into the Red channel (bits 16..31).
 Max Blue sum = $255 \times 256 = 65280 = \text{0xFF00} \le \text{0xFFFF}$. Overflow is strictly impossible.
 
-- [ ] **Step 1.3: Verify translucent destination fallback**
+- [x] **Step 1.3: Verify translucent destination fallback**
 Ensure the `da < 254` branch (used when rendering onto transparent offscreen surfaces) retains its existing exact alpha composition logic without regression.
 
 ---
@@ -82,7 +82,7 @@ Ensure the `da < 254` branch (used when rendering onto transparent offscreen sur
 **Context:**
 In dense Survival Endless horde waves, the game updates up to 2,000 skeletal tracks per frame. [`Reanimation::MatrixFromTransform`](file:///c:/DEV/PVZ/src/PvzpLib/Reanimator.cpp#L613-L627) is called for every active track. Over 40% of tracks have zero skew (`mSkewX == 0.0f && mSkewY == 0.0f`). Currently, the engine computes 4 double-precision 64-bit transcendental trigonometric functions (`cos()` and `sin()`) for each track, burning millions of CPU cycles on Cortex-A7.
 
-- [ ] **Step 2.1: Add zero-skew fast-path check**
+- [x] **Step 2.1: Add zero-skew fast-path check**
 In [`src/PvzpLib/Reanimator.cpp:MatrixFromTransform`](file:///c:/DEV/PVZ/src/PvzpLib/Reanimator.cpp#L613-L627), check if `theTransform.mSkewX == 0.0f && theTransform.mSkewY == 0.0f`:
 ```cpp
 void Reanimation::MatrixFromTransform(const ReanimatorTransform& theTransform, SexyMatrix3& theMatrix)
@@ -103,7 +103,7 @@ void Reanimation::MatrixFromTransform(const ReanimatorTransform& theTransform, S
 ...
 ```
 
-- [ ] **Step 2.2: Replace double-precision trigonometric calls with hardware `sincosf`**
+- [x] **Step 2.2: Replace double-precision trigonometric calls with hardware `sincosf`**
 For tracks with non-zero skews:
 ```cpp
 	float aSkewX = -DEG_TO_RAD(theTransform.mSkewX);
@@ -141,9 +141,9 @@ For tracks with non-zero skews:
 **Context:**
 In Survival Endless, when 20–30 zombies cluster in a single lane, each zombie issues an independent translucent shadow quad via `PvzpBltMatrix` $\rightarrow$ `SWTri`. Visually, stacking 10+ black transparent oval shadows on top of each other saturates to solid black within 2–3 layers; drawing 25 overlapping shadows produces 25 redundant software rasterization passes on the exact same 50-pixel grass patch.
 
-- [ ] **Step 3.1: Add per-frame row shadow tracking**
+- [x] **Step 3.1: Add per-frame row shadow tracking**
 Maintain a per-frame cache of shadow horizontal coordinates rendered per row (`mRowLastShadowX[MAX_GRID_SIZE_Y]` and `mShadowFrameCounter`).
-- [ ] **Step 3.2: Prune redundant overlapping shadows during horde stress**
+- [x] **Step 3.2: Prune redundant overlapping shadows during horde stress**
 In [`Zombie::DrawShadow`](file:///c:/DEV/PVZ/src/Lawn/Zombie.cpp#L9394-L9590):
 If `mBoard != nullptr && mBoard->mZombies.mSize > 15`:
 Check the zombie's row and horizontal position `aShadowOffsetX`.
@@ -162,13 +162,14 @@ Ensure special entities (Zomboss, Bungee, Pogo jumping) bypass deduplication.
 During dense Survival Endless waves, multiple cob cannon impacts and winter melon splashes generate dozens of fading secondary particles (smoke puffs, faint sparkles, residual ice mist). The engine currently renders every particle until its alpha drops below 5 (`aAlpha <= 4`). Faint particles ($5 \le \text{alpha} \le 20$) are barely visible against the combat lawn but require full triangle rasterization.
 Crucially: `MAX_PARTICLES_SIZE` must remain at 900 (as established in commit `5e1050a` to prevent `DataArrayGetID` null-pointer crashes). Pruning is strictly visual rendering culling in `DrawParticle`.
 
-- [ ] **Step 4.1: Dynamic alpha culling threshold in `PvzpParticleEmitter::DrawParticle`**
+- [x] **Step 4.1: Dynamic alpha culling threshold in `PvzpParticleEmitter::DrawParticle`**
 In [`src/PvzpLib/PvzpParticle.cpp:DrawParticle`](file:///c:/DEV/PVZ/src/PvzpLib/PvzpParticle.cpp#L1018-L1053):
 Check zombie count and board activity:
 ```cpp
 		int aAlpha = std::clamp(FloatRoundToInt(aParams.mAlpha), 0, 255);
 		int aMinAlpha = 4;
-		if (gLawnApp && gLawnApp->mBoard && gLawnApp->mBoard->mZombies.mSize > 20)
+		if (mParticleSystem && mParticleSystem->mParticleHolder &&
+		    mParticleSystem->mParticleHolder->mParticles.mSize > 120)
 		{
 			aMinAlpha = 20;
 		}
@@ -187,16 +188,16 @@ This drops the long-tail fading particles early during heavy combat, freeing up 
 - Modify: `ports/PvZ/PvZ`
 - Modify: `dist/PvZ_MiyooMiniPlus_v1.1.0.zip`
 
-- [ ] **Step 5.1: Cross-compile ARMv7 binary in Docker**
+- [x] **Step 5.1: Cross-compile ARMv7 binary in Docker**
 Run CMake configure and build in `aemiii91/miyoomini-toolchain`:
 ```bash
-docker run --rm -v C:\DEV\PVZ:/work -w /work/build-docker-arm aemiii91/miyoomini-toolchain sh -c "make -j4"
+docker run --rm -v C:\DEV\PVZ:/root/workspace -w /root/workspace/build aemiii91/miyoomini-toolchain sh -c "make -j4"
 ```
-- [ ] **Step 5.2: Strip binary and update distribution locations**
-Strip debug symbols with `arm-linux-gnueabihf-strip` and copy to `bin/PvZ`, `packaging/PvZ_MiyooMiniPlus/RApp/PvZ/PvZ`, and `ports/PvZ/PvZ`.
-- [ ] **Step 5.3: Execute automated lifecycle test suite**
+- [x] **Step 5.2: Strip binary and update distribution locations**
+Strip debug symbols with `arm-linux-gnueabihf-strip` and copy to `bin/PvZ`, `packaging/Roms/PORTS/Games/Plants vs. Zombies/PvZ`, and `ports/Games/Plants vs. Zombies/PvZ`.
+- [x] **Step 5.3: Execute automated lifecycle test suite**
 Run `tests/test_launch_script.sh` in the Docker container to ensure all 71 tests pass without regression.
-- [ ] **Step 5.4: Package release zip synchronously**
+- [x] **Step 5.4: Package release zip synchronously**
 Run `python scripts/package_release.py` synchronously to generate `dist/PvZ_MiyooMiniPlus_v1.1.0.zip`.
-- [ ] **Step 5.5: Update Trail graph**
+- [x] **Step 5.5: Update Trail graph**
 Run `trail build` to ensure all modified symbols, files, and spans are fully updated in the repository context graph.
