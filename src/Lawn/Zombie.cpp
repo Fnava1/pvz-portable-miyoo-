@@ -6461,6 +6461,9 @@ Plant* Zombie::FindPlantTarget(ZombieAttackType theAttackType)
 
 Zombie* Zombie::FindZombieTarget()
 {
+	if (!mBoard->mHasMindControlledZombies && !mMindControlled)
+		return nullptr;
+
 	if (mZombiePhase == ZombiePhase::PHASE_DIGGER_TUNNELING)
 		return nullptr;
 

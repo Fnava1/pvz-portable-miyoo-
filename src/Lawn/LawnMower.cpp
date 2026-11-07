@@ -203,33 +203,45 @@ void LawnMower::Update()
 		return;
 	}
 
-	Rect aAttackRect = GetLawnMowerAttackRect();
-	for (Zombie* aZombie : mBoard->mZombies)
+	if (mRow >= 0 && mRow < MAX_GRID_SIZE_Y && (mBoard->mRowZombieMask & (1U << mRow)) == 0)
 	{
-		if (aZombie->mDead)
-			continue;
-		if (aZombie->mZombieType == ZombieType::ZOMBIE_BOSS)
-			continue;
-
-		if (aZombie->mRow - mRow)
-			continue;
-
-		if (aZombie->mZombieType != ZombieType::ZOMBIE_BOSS &&
-			aZombie->mRow - mRow == 0 &&
-			aZombie->mZombiePhase != ZombiePhase::PHASE_ZOMBIE_MOWERED &&
-			!aZombie->IsTangleKelpTarget() &&
-			aZombie->EffectedByDamage(127U))
+		// No zombies in this mower's row
+	}
+	else
+	{
+		Rect aAttackRect = GetLawnMowerAttackRect();
+		auto checkZombie = [&](Zombie* aZombie)
 		{
-			Rect aZombieRect = aZombie->GetZombieRect();
-			int aOverlap = GetRectOverlap(aAttackRect, aZombieRect);
-			if (aOverlap > (aZombie->mZombieType == ZombieType::ZOMBIE_BALLOON ? 20 : 0))
+			if (aZombie->mDead)
+				return;
+			if (aZombie->mZombieType != ZombieType::ZOMBIE_BOSS &&
+				aZombie->mRow - mRow == 0 &&
+				aZombie->mZombiePhase != ZombiePhase::PHASE_ZOMBIE_MOWERED &&
+				!aZombie->IsTangleKelpTarget() &&
+				aZombie->EffectedByDamage(127U))
 			{
-				// bungee zombies and dead zombies cannot trigger the mower themselves
-				if (mMowerState != LawnMowerState::MOWER_READY || (aZombie->mZombieType != ZombieType::ZOMBIE_BUNGEE && aZombie->mHasHead))
+				Rect aZombieRect = aZombie->GetZombieRect();
+				int aOverlap = GetRectOverlap(aAttackRect, aZombieRect);
+				if (aOverlap > (aZombie->mZombieType == ZombieType::ZOMBIE_BALLOON ? 20 : 0))
 				{
-					MowZombie(aZombie);
+					// bungee zombies and dead zombies cannot trigger the mower themselves
+					if (mMowerState != LawnMowerState::MOWER_READY || (aZombie->mZombieType != ZombieType::ZOMBIE_BUNGEE && aZombie->mHasHead))
+					{
+						MowZombie(aZombie);
+					}
 				}
 			}
+		};
+
+		if (mRow >= 0 && mRow < MAX_GRID_SIZE_Y)
+		{
+			for (Zombie* aZombie : mBoard->mRowZombies[mRow])
+				checkZombie(aZombie);
+		}
+		else
+		{
+			for (Zombie* aZombie : mBoard->mZombies)
+				checkZombie(aZombie);
 		}
 	}
 

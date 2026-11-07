@@ -211,6 +211,7 @@ public:
 	bool                    mIsAsleep;
 	bool                    mIsOnBoard;
 	bool                    mHighlighted;
+	bool                    mRecentColorOverride;
 
 public:
 	Plant();

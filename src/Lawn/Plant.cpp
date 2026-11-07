@@ -148,6 +148,8 @@ void Plant::PlantInitialize(int theGridX, int theGridY, SeedType theSeedType, Se
 	mBeghouledFlashCountdown = 0;
 	mWidth = 80;
 	mHeight = 80;
+	mHighlighted = false;
+	mRecentColorOverride = false;
 	memset(mMagnetItems, 0, sizeof(mMagnetItems));
 	const PlantDefinition& aPlantDef = GetPlantDefinition(theSeedType);
 	mIsAsleep = false;
@@ -2723,7 +2725,12 @@ void Plant::UpdateReanimColor()
 		aBodyReanim->mEnableExtraOverlayDraw = false;
 	}
 
-	aBodyReanim->PropogateColorToAttachments();
+	bool hadSpecialColor = (aColorOverride != Color(255, 255, 255)) || aBodyReanim->mEnableExtraAdditiveDraw || aBodyReanim->mEnableExtraOverlayDraw;
+	if (hadSpecialColor || mRecentColorOverride)
+	{
+		aBodyReanim->PropogateColorToAttachments();
+		mRecentColorOverride = hadSpecialColor;
+	}
 }
 
 bool Plant::IsOnBoard()
@@ -4800,10 +4807,10 @@ Zombie* Plant::FindTargetZombie(int theRow, PlantWeapon thePlantWeapon)
 	int aHighestWeight = 0;
 	Zombie* aBestZombie = nullptr;
 
-	for (Zombie* aZombie : mBoard->mZombies)
+	auto checkZombie = [&](Zombie* aZombie)
 	{
 		if (aZombie->mDead)
-			continue;
+			return;
 		int aRowDeviation = aZombie->mRow - theRow;
 		if (aZombie->mZombieType == ZombieType::ZOMBIE_BOSS)
 		{
@@ -4814,7 +4821,7 @@ Zombie* Plant::FindTargetZombie(int theRow, PlantWeapon thePlantWeapon)
 		{
 			if (mSeedType == SeedType::SEED_POTATOMINE || mSeedType == SeedType::SEED_CHOMPER || mSeedType == SeedType::SEED_TANGLEKELP)
 			{
-				continue;
+				return;
 			}
 		}
 
@@ -4833,19 +4840,19 @@ Zombie* Plant::FindTargetZombie(int theRow, PlantWeapon thePlantWeapon)
 			{
 				if (aRowDeviation < -1 || aRowDeviation > 1)
 				{
-					continue;
+					return;
 				}
 			}
 			else if (needPortalCheck)
 			{
 				if (!mBoard->mChallenge->CanTargetZombieWithPortals(this, aZombie))
 				{
-					continue;
+					return;
 				}
 			}
 			else if (aRowDeviation)
 			{
-				continue;
+				return;
 			}
 		}
 
@@ -4863,7 +4870,7 @@ Zombie* Plant::FindTargetZombie(int theRow, PlantWeapon thePlantWeapon)
 
 				if (aZombie->mZombiePhase == ZombiePhase::PHASE_POGO_BOUNCING || (aZombie->mZombieType == ZombieType::ZOMBIE_BUNGEE && aZombie->mTargetCol == mPlantCol))
 				{
-					continue;
+					return;
 				}
 
 				if (aZombie->mIsEating || mState == PlantState::STATE_CHOMPER_BITING)
@@ -4877,7 +4884,7 @@ Zombie* Plant::FindTargetZombie(int theRow, PlantWeapon thePlantWeapon)
 				if ((aZombie->mZombieType == ZombieType::ZOMBIE_POGO && aZombie->mHasObject) ||
 					aZombie->mZombiePhase == ZombiePhase::PHASE_POLEVAULTER_IN_VAULT || aZombie->mZombiePhase == ZombiePhase::PHASE_POLEVAULTER_PRE_VAULT)
 				{
-					continue;
+					return;
 				}
 
 				if (aZombie->mZombieType == ZombieType::ZOMBIE_POLEVAULTER)
@@ -4888,7 +4895,7 @@ Zombie* Plant::FindTargetZombie(int theRow, PlantWeapon thePlantWeapon)
 
 				if (aZombie->mZombieType == ZombieType::ZOMBIE_BUNGEE && aZombie->mTargetCol != mPlantCol)
 				{
-					continue;
+					return;
 				}
 
 				if (aZombie->mIsEating)
@@ -4900,13 +4907,13 @@ Zombie* Plant::FindTargetZombie(int theRow, PlantWeapon thePlantWeapon)
 			if ((mSeedType == SeedType::SEED_EXPLODE_O_NUT && aZombie->mZombiePhase == ZombiePhase::PHASE_POLEVAULTER_IN_VAULT) ||
 				(mSeedType == SeedType::SEED_TANGLEKELP && !aZombie->mInPool))
 			{
-				continue;
+				return;
 			}
 
 			Rect aZombieRect = aZombie->GetZombieRect();
 			if (!needPortalCheck && GetRectOverlap(aAttackRect, aZombieRect) < -aExtraRange)
 			{
-				continue;
+				return;
 			}
 
 			int aWeight = -aZombieRect.mX;
@@ -4925,6 +4932,35 @@ Zombie* Plant::FindTargetZombie(int theRow, PlantWeapon thePlantWeapon)
 				aBestZombie = aZombie;
 			}
 		}
+	};
+
+	if (!mBoard->mHasBossZombie && mSeedType != SeedType::SEED_CATTAIL)
+	{
+		if (mSeedType == SeedType::SEED_GLOOMSHROOM)
+		{
+			int minR = std::max(0, theRow - 1);
+			int maxR = std::min(MAX_GRID_SIZE_Y - 1, theRow + 1);
+			for (int r = minR; r <= maxR; ++r)
+			{
+				for (Zombie* aZombie : mBoard->mRowZombies[r])
+					checkZombie(aZombie);
+			}
+		}
+		else if (theRow >= 0 && theRow < MAX_GRID_SIZE_Y)
+		{
+			for (Zombie* aZombie : mBoard->mRowZombies[theRow])
+				checkZombie(aZombie);
+		}
+		else
+		{
+			for (Zombie* aZombie : mBoard->mZombies)
+				checkZombie(aZombie);
+		}
+	}
+	else
+	{
+		for (Zombie* aZombie : mBoard->mZombies)
+			checkZombie(aZombie);
 	}
 
 	return aBestZombie;

@@ -24,6 +24,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 #include "../ConstEnums.h"
 #include "../PvzpLib/DataArray.h"
@@ -97,7 +98,15 @@ public:
 		int							mBoardGridY;
 	};
 };
-bool RenderItemSortFunc(const RenderItem& theItem1, const RenderItem& theItem2);
+inline bool RenderItemSortFunc(const RenderItem& theItem1, const RenderItem& theItem2)
+{
+	if (theItem1.mZPos == theItem2.mZPos)
+	{
+		return theItem1.mGameObject < theItem2.mGameObject;
+	}
+
+	return theItem1.mZPos < theItem2.mZPos;
+}
 
 struct ZombiePicker
 {
@@ -230,6 +239,13 @@ public:
 	uint32_t						mPlayTimeInactiveLevel;
 	uint32_t						mRowZombieMask;
 	bool							mHasBossZombie;
+	bool							mHasMindControlledZombies;
+	uint32_t						mTorchwoodRowMask;
+	int32_t							mFlowerPotCount;
+	int32_t							mPumpkinCount;
+	Plant*							mPumpkinGrid[MAX_GRID_SIZE_X][MAX_GRID_SIZE_Y];
+	Plant*							mFlowerPotGrid[MAX_GRID_SIZE_X][MAX_GRID_SIZE_Y];
+	std::vector<Zombie*>			mRowZombies[MAX_GRID_SIZE_Y];
 	int32_t							mMaxSunPlants;
 	int64_t							mStartDrawTime;
 	int64_t							mIntervalDrawTime;
@@ -325,6 +341,7 @@ public:
 	int					PixelToGridXKeepOnBoard(int theX, int theY);
 	int					PixelToGridYKeepOnBoard(int theX, int theY);
 	void							UpdateRowZombieMask();
+	void							UpdateRowPlantMask();
 	void							UpdateGameObjects();
 	bool							MouseHitTest(int x, int y, HitResult* theHitResult);
 	void							MouseDownWithPlant(int x, int y, int theClickCount);

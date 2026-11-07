@@ -177,6 +177,14 @@ Board::Board(LawnApp* theApp)
 	mPrevMouseY = -1;
 	mRowZombieMask = 0;
 	mHasBossZombie = false;
+	mHasMindControlledZombies = false;
+	mTorchwoodRowMask = 0;
+	mFlowerPotCount = 0;
+	mPumpkinCount = 0;
+	memset(mPumpkinGrid, 0, sizeof(mPumpkinGrid));
+	memset(mFlowerPotGrid, 0, sizeof(mFlowerPotGrid));
+	for (int i = 0; i < MAX_GRID_SIZE_Y; ++i)
+		mRowZombies[i].clear();
 	mFinalBossKilled = false;
 	mMustacheMode = mApp->mMustacheMode;
 	mSuperMowerMode = mApp->mSuperMowerMode;
@@ -1353,6 +1361,8 @@ void Board::InitLevel()
 	mLevel = mApp->IsAdventureMode() ? mApp->mPlayerInfo->mLevel : 0;
 	PickBackground();
 	InitZombieWaves();
+	UpdateRowZombieMask();
+	UpdateRowPlantMask();
 	if (aGameMode == GameMode::GAMEMODE_CHALLENGE_BEGHOULED || aGameMode == GameMode::GAMEMODE_CHALLENGE_BEGHOULED_TWIST ||
 		mApp->IsScaryPotterLevel() || mApp->IsWhackAZombieLevel())
 	{
@@ -2520,30 +2530,18 @@ Plant* Board::AddPlant(int theGridX, int theGridY, SeedType theSeedType, SeedTyp
 
 Plant* Board::GetPumpkinAt(int theGridX, int theGridY)
 {
-	for (Plant* aPlant : mPlants)
-	{
-		if (aPlant->mDead)
-			continue;
-		if (aPlant->mPlantCol == theGridX && aPlant->mRow == theGridY && !aPlant->NotOnGround() && aPlant->mSeedType == SeedType::SEED_PUMPKINSHELL)
-		{
-			return aPlant;
-		}
-	}
-	return nullptr;
+	if (mPumpkinCount <= 0 || theGridX < 0 || theGridX >= MAX_GRID_SIZE_X || theGridY < 0 || theGridY >= MAX_GRID_SIZE_Y)
+		return nullptr;
+
+	return mPumpkinGrid[theGridX][theGridY];
 }
 
 Plant* Board::GetFlowerPotAt(int theGridX, int theGridY)
 {
-	for (Plant* aPlant : mPlants)
-	{
-		if (aPlant->mDead)
-			continue;
-		if (aPlant->mPlantCol == theGridX && aPlant->mRow == theGridY && !aPlant->NotOnGround() && aPlant->mSeedType == SeedType::SEED_FLOWERPOT)
-		{
-			return aPlant;
-		}
-	}
-	return nullptr;
+	if (mFlowerPotCount <= 0 || theGridX < 0 || theGridX >= MAX_GRID_SIZE_X || theGridY < 0 || theGridY >= MAX_GRID_SIZE_Y)
+		return nullptr;
+
+	return mFlowerPotGrid[theGridX][theGridY];
 }
 
 void Board::GetPlantsOnLawn(int theGridX, int theGridY, PlantsOnLawn* thePlantOnLawn)
@@ -5364,20 +5362,66 @@ void Board::UpdateRowZombieMask()
 {
 	mRowZombieMask = 0;
 	mHasBossZombie = false;
+	mHasMindControlledZombies = false;
+	for (int r = 0; r < MAX_GRID_SIZE_Y; ++r)
+		mRowZombies[r].clear();
+
 	for (Zombie* aZombie : mZombies)
 	{
 		if (aZombie->mDead)
 			continue;
 		if (aZombie->mZombieType == ZombieType::ZOMBIE_BOSS)
 			mHasBossZombie = true;
+		if (aZombie->mMindControlled)
+			mHasMindControlledZombies = true;
 		if (aZombie->mRow >= 0 && aZombie->mRow < MAX_GRID_SIZE_Y)
+		{
 			mRowZombieMask |= (1U << aZombie->mRow);
+			mRowZombies[aZombie->mRow].push_back(aZombie);
+		}
+	}
+}
+
+void Board::UpdateRowPlantMask()
+{
+	mTorchwoodRowMask = 0;
+	mFlowerPotCount = 0;
+	mPumpkinCount = 0;
+	memset(mPumpkinGrid, 0, sizeof(mPumpkinGrid));
+	memset(mFlowerPotGrid, 0, sizeof(mFlowerPotGrid));
+
+	for (Plant* aPlant : mPlants)
+	{
+		if (aPlant->mDead || aPlant->NotOnGround())
+			continue;
+
+		int aCol = aPlant->mPlantCol;
+		int aRow = aPlant->mRow;
+
+		if (aPlant->mSeedType == SeedType::SEED_TORCHWOOD)
+		{
+			if (aRow >= 0 && aRow < MAX_GRID_SIZE_Y)
+				mTorchwoodRowMask |= (1U << aRow);
+		}
+		else if (aPlant->mSeedType == SeedType::SEED_FLOWERPOT)
+		{
+			mFlowerPotCount++;
+			if (aCol >= 0 && aCol < MAX_GRID_SIZE_X && aRow >= 0 && aRow < MAX_GRID_SIZE_Y)
+				mFlowerPotGrid[aCol][aRow] = aPlant;
+		}
+		else if (aPlant->mSeedType == SeedType::SEED_PUMPKINSHELL)
+		{
+			mPumpkinCount++;
+			if (aCol >= 0 && aCol < MAX_GRID_SIZE_X && aRow >= 0 && aRow < MAX_GRID_SIZE_Y)
+				mPumpkinGrid[aCol][aRow] = aPlant;
+		}
 	}
 }
 
 void Board::UpdateGameObjects()
 {
 	UpdateRowZombieMask();
+	UpdateRowPlantMask();
 
 	for (Plant* aPlant : mPlants)
 	{
@@ -6180,7 +6224,7 @@ void Board::Update()
 				float cy = aCoin->mPosY + aCoin->mHeight * 0.5f;
 				float dx = (float)curX - cx;
 				float dy = (float)curY - cy;
-				if ((dx * dx + dy * dy) <= (75.0f * 75.0f))
+				if (std::abs(dx) <= 75.0f && std::abs(dy) <= 75.0f && (dx * dx + dy * dy) <= (75.0f * 75.0f))
 				{
 					aCoin->PlayCollectSound();
 					aCoin->Collect();
@@ -6192,7 +6236,7 @@ void Board::Update()
 				float cy = aCoin->mPosY + aCoin->mHeight * 0.5f;
 				float dx = (float)curX - cx;
 				float dy = (float)curY - cy;
-				if ((dx * dx + dy * dy) <= (95.0f * 95.0f) || (mGridCursorActive && mGridCursorCol == MAX_GRID_SIZE_X - 1 && aCoin->mPosX >= LAWN_XMIN + 8 * 80))
+				if (((std::abs(dx) <= 95.0f && std::abs(dy) <= 95.0f && (dx * dx + dy * dy) <= (95.0f * 95.0f))) || (mGridCursorActive && mGridCursorCol == MAX_GRID_SIZE_X - 1 && aCoin->mPosX >= LAWN_XMIN + 8 * 80))
 				{
 					aCoin->PlayCollectSound();
 					aCoin->Collect();
@@ -6406,16 +6450,6 @@ void Board::DrawBackdrop(Graphics* g)
 	{
 		g->DrawImage(Sexy::IMAGE_NIGHT_GRAVE_GRAPHIC, 1092, 40);
 	}
-}
-
-bool RenderItemSortFunc(const RenderItem& theItem1, const RenderItem& theItem2)
-{
-	if (theItem1.mZPos == theItem2.mZPos)
-	{
-		return theItem1.mGameObject < theItem2.mGameObject;
-	}
-
-	return theItem1.mZPos < theItem2.mZPos;
 }
 
 void Board::AddBossRenderItem(RenderItem* theRenderList, int& theCurRenderItem, Zombie* theBossZombie)
@@ -6644,11 +6678,14 @@ void Board::DrawGameObjects(Graphics* g)
 				continue;
 			AddGameObjectRenderItemProjectile(aRenderList, aRenderItemCount, RenderObjectType::RENDER_ITEM_PROJECTILE, aProjectile);
 
-			RenderItem& aRenderItem = aRenderList[aRenderItemCount];
-			aRenderItem.mRenderObjectType = RenderObjectType::RENDER_ITEM_PROJECTILE_SHADOW;
-			aRenderItem.mZPos = MakeRenderOrder(RenderLayer::RENDER_LAYER_GROUND, aProjectile->mRow, 3);
-			aRenderItem.mProjectile = aProjectile;
-			aRenderItemCount++;
+			if (aProjectile->HasShadow())
+			{
+				RenderItem& aRenderItem = aRenderList[aRenderItemCount];
+				aRenderItem.mRenderObjectType = RenderObjectType::RENDER_ITEM_PROJECTILE_SHADOW;
+				aRenderItem.mZPos = MakeRenderOrder(RenderLayer::RENDER_LAYER_GROUND, aProjectile->mRow, 3);
+				aRenderItem.mProjectile = aProjectile;
+				aRenderItemCount++;
+			}
 		}
 	}
 	{

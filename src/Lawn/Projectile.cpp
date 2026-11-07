@@ -201,6 +201,9 @@ bool Projectile::PeaAboutToHitTorchwood()
 	if (mProjectileType != ProjectileType::PROJECTILE_PEA && mProjectileType != ProjectileType::PROJECTILE_SNOWPEA)
 		return false;
 
+	if (mRow >= 0 && mRow < MAX_GRID_SIZE_Y && (mBoard->mTorchwoodRowMask & (1U << mRow)) == 0)
+		return false;
+
 	for (Plant* aPlant : mBoard->mPlants)
 	{
 		if (aPlant->mDead)
@@ -233,20 +236,20 @@ Zombie* Projectile::FindCollisionTarget()
 	Zombie* aBestZombie = nullptr;
 	int aMinX = 0;
 
-	for (Zombie* aZombie : mBoard->mZombies)
+	auto checkZombie = [&](Zombie* aZombie)
 	{
 		if (aZombie->mDead)
-			continue;
+			return;
 		if ((aZombie->mZombieType == ZombieType::ZOMBIE_BOSS || aZombie->mRow == mRow) && aZombie->EffectedByDamage(static_cast<unsigned int>(mDamageRangeFlags)))
 		{
 			if (aZombie->mZombiePhase == ZombiePhase::PHASE_SNORKEL_WALKING_IN_POOL && mPosZ <= 45.0f)
 			{
-				continue;
+				return;
 			}
 
 			if (mProjectileType == ProjectileType::PROJECTILE_STAR && mProjectileAge < 25 && mVelX >= 0.0f && aZombie->mZombieType == ZombieType::ZOMBIE_DIGGER)
 			{
-				continue;
+				return;
 			}
 
 			Rect aZombieRect = aZombie->GetZombieRect();
@@ -258,6 +261,21 @@ Zombie* Projectile::FindCollisionTarget()
 					aMinX = aZombie->mX;
 				}
 			}
+		}
+	};
+
+	if (!mBoard->mHasBossZombie && mRow >= 0 && mRow < MAX_GRID_SIZE_Y)
+	{
+		for (Zombie* aZombie : mBoard->mRowZombies[mRow])
+		{
+			checkZombie(aZombie);
+		}
+	}
+	else
+	{
+		for (Zombie* aZombie : mBoard->mZombies)
+		{
+			checkZombie(aZombie);
 		}
 	}
 
@@ -1071,6 +1089,15 @@ void Projectile::Draw(Graphics* g)
 		MakeParentGraphicsFrame(&theParticleGraphics);
 		AttachmentDraw(mAttachmentID, &theParticleGraphics, false);
 	}
+}
+
+bool Projectile::HasShadow() const
+{
+	if (!mVisible || mDead)
+		return false;
+	if (mProjectileType == ProjectileType::PROJECTILE_PUFF)
+		return false;
+	return true;
 }
 
 void Projectile::DrawShadow(Graphics* g)

@@ -82,6 +82,7 @@ public:
 	void                    Update();
 	void                    Draw(Graphics* g);
 	void                    DrawShadow(Graphics* g);
+	bool                    HasShadow() const;
 	void                    Die();
 	void                    DoImpact(Zombie* theZombie);
 	void                    UpdateMotion();
