@@ -386,9 +386,6 @@ SexyAppBase::SexyAppBase()
 	mMinVidMemory3D = 6;
 	mRecommendedVidMemory3D = 14;
 	mRelaxUpdateBacklogCount = 0;
-	mConsecutiveFrameskips = 0;
-	mSkipNextDraw = false;
-	mLastFrameDuration = 0;
 	mWidescreenAware = false;
 	mEnableWindowAspect = false;
 	mWindowAspect.Set(4, 3);
@@ -2859,19 +2856,6 @@ bool SexyAppBase::Process(bool allowSleep)
 			if (mRelaxUpdateBacklogCount > 0)
 				mUpdateFTimeAcc = 0;
 
-			if (IsInActiveGameplay())
-			{
-				// In active gameplay: permit accumulator debt up to 30ms (3 ticks), clamped to prevent runaway.
-				if (mUpdateFTimeAcc > 30.0)
-					mUpdateFTimeAcc = 30.0;
-			}
-			else
-			{
-				// In menus, loading screens, and dialogs: preserve strict 1.5x clamp to protect background loading threads
-				if (mUpdateFTimeAcc > aFrameFTime * 1.5)
-					mUpdateFTimeAcc = 0.0;
-			}
-
 			didUpdate = true;
 		}
 
@@ -2883,19 +2867,7 @@ bool SexyAppBase::Process(bool allowSleep)
 
 			if (mHasPendingDraw)
 			{
-				if (IsInActiveGameplay() && mLastFrameDuration >= 34 && mConsecutiveFrameskips == 0)
-				{
-					// Skip this render frame to recover CPU time for game logic
-					mHasPendingDraw = false;
-					mConsecutiveFrameskips = 1;
-				}
-				else
-				{
-					DrawDirtyStuff();
-					mConsecutiveFrameskips = 0;
-				}
-
-				mLastFrameDuration = SDL_GetTicks() - aStartTime;
+				DrawDirtyStuff();
 			}
 			else
 			{

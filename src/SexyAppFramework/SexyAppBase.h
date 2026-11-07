@@ -345,10 +345,6 @@ public:
 	bool					mEnableWindowAspect;
 	Ratio					mWindowAspect;
 
-	int						mConsecutiveFrameskips;
-	bool					mSkipNextDraw;
-	uint32_t				mLastFrameDuration;
-
 	std::map<std::string, std::string, std::less<>>	mStringProperties;
 	StringBoolMap			mBoolProperties;
 	StringIntMap			mIntProperties;
@@ -428,8 +424,6 @@ public:
 
 	SexyAppBase();
 	virtual ~SexyAppBase();
-
-	virtual bool			IsInActiveGameplay() { return false; }
 
 	// Common overrides:
 	virtual MusicInterface*	CreateMusicInterface();
