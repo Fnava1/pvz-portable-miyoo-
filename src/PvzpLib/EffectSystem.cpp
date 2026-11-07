@@ -25,6 +25,7 @@
 #include "Reanimator.h"
 #include "PvzpParticle.h"
 #include "EffectSystem.h"
+#include <cmath>
 #include "../GameConstants.h"
 #include "graphics/GLImage.h"
 #include "graphics/GLInterface.h"
@@ -463,6 +464,38 @@ void PvzpTriangleGroup::AddTriangle(Graphics* g, Image* theImage, const SexyMatr
 	if (maxX < theClipRect.mX || minX > theClipRect.mX + theClipRect.mWidth ||
 		maxY < theClipRect.mY || minY > theClipRect.mY + theClipRect.mHeight)
 	{
+		return;
+	}
+
+	// 1:1 unrotated sprite fast-path using NEON SIMD blitter (bypasses software triangle rasterizer)
+	if (!gSexyAppBase->Is3DAccelerated() && g->mDestImage != nullptr &&
+		std::abs(theMatrix.m01) < 0.001f && std::abs(theMatrix.m10) < 0.001f &&
+		std::abs(theMatrix.m00 - 1.0f) < 0.001f && std::abs(theMatrix.m11 - 1.0f) < 0.001f &&
+		(theDrawMode == Graphics::DRAWMODE_NORMAL || theDrawMode == Graphics::DRAWMODE_ADDITIVE))
+	{
+		int dest_x = static_cast<int>(std::round(theMatrix.m02 - theSrcRect.mWidth * 0.5f));
+		int dest_y = static_cast<int>(std::round(theMatrix.m12 - theSrcRect.mHeight * 0.5f));
+
+		Rect effectiveClip = theClipRect.Intersection(Rect(0, 0, g->mDestImage->mWidth, g->mDestImage->mHeight));
+		Rect aDestRect = Rect(dest_x, dest_y, theSrcRect.mWidth, theSrcRect.mHeight).Intersection(effectiveClip);
+		if (aDestRect.mWidth > 0 && aDestRect.mHeight > 0)
+		{
+			Rect aSrcSubRect(theSrcRect.mX + (aDestRect.mX - dest_x),
+			                 theSrcRect.mY + (aDestRect.mY - dest_y),
+			                 aDestRect.mWidth,
+			                 aDestRect.mHeight);
+			if (aSrcSubRect.mX >= 0 && aSrcSubRect.mY >= 0 &&
+			    aSrcSubRect.mX + aSrcSubRect.mWidth <= theImage->mWidth &&
+			    aSrcSubRect.mY + aSrcSubRect.mHeight <= theImage->mHeight)
+			{
+				if (mTriangleCount > 0)
+				{
+					DrawGroup(g);
+				}
+				PvzpSandImageIfNeeded(theImage);
+				g->mDestImage->Blt(theImage, aDestRect.mX, aDestRect.mY, aSrcSubRect, theColor, theDrawMode, g->mLinearBlend);
+			}
+		}
 		return;
 	}
 

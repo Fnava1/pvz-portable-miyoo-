@@ -35,11 +35,7 @@ namespace Sexy
 //using namespace std;
 using namespace Sexy;
 
-#ifndef _WIN32
-constexpr const int MAX_PARTICLES_SIZE = 150;
-#else
 constexpr const int MAX_PARTICLES_SIZE = 900;
-#endif
 constexpr const int MAX_PARTICLE_FIELDS = 4;
 
 // Particle system definitions

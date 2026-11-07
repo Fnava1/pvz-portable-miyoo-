@@ -2755,38 +2755,6 @@ bool Plant::IsInPlay()
 	return IsOnBoard() && mApp->mGameMode != GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN && mApp->mGameMode != GameMode::GAMEMODE_TREE_OF_WISDOM;
 }
 
-bool Plant::CanUseCachedIdleDraw() const
-{
-	if (mApp->Is3DAccelerated() || !mIsOnBoard || mPottedPlantIndex != -1)
-		return false;
-	if (mImitaterType != SeedType::SEED_NONE || mHighlighted || mEatenFlashCountdown > 0 || mBeghouledFlashCountdown > 0)
-		return false;
-	if (mBodyReanimID == ReanimationID::REANIMATIONID_NULL)
-		return false;
-
-	Reanimation* aBodyReanim = mApp->ReanimationTryToGet(mBodyReanimID);
-	if (!aBodyReanim || !aBodyReanim->IsAnimPlaying("anim_idle"))
-		return false;
-
-	if (mIsAsleep || mSeedType == SeedType::SEED_FLOWERPOT || mSeedType == SeedType::SEED_LILYPAD ||
-		mSeedType == SeedType::SEED_SPIKEROCK || mSeedType == SeedType::SEED_SPIKEWEED)
-	{
-		return true;
-	}
-
-	if (mBoard && (mBoard->mPlants.mSize > 20 || mBoard->mZombies.mSize > 15))
-	{
-		if (mSeedType == SeedType::SEED_SUNFLOWER || mSeedType == SeedType::SEED_TWINSUNFLOWER ||
-			mSeedType == SeedType::SEED_INSTANT_COFFEE ||
-			((mSeedType == SeedType::SEED_WALLNUT || mSeedType == SeedType::SEED_TALLNUT) && mPlantHealth >= mPlantMaxHealth))
-		{
-			return true;
-		}
-	}
-
-	return false;
-}
-
 void Plant::UpdateReanim()
 {
 	Reanimation* aBodyReanim = mApp->ReanimationTryToGet(mBodyReanimID);
@@ -2839,17 +2807,7 @@ void Plant::UpdateReanim()
 	}
 
 	bool skipPlantUpdate = false;
-	if (CanUseCachedIdleDraw())
-	{
-		skipPlantUpdate = true;
-	}
-	else if (mBoard && (mBoard->mPlants.mSize > 25 || mBoard->mZombies.mSize > 15) && IsOnBoard() && mPottedPlantIndex == -1 && aBodyReanim->IsAnimPlaying("anim_idle") &&
-		(mSeedType == SeedType::SEED_SUNFLOWER || mSeedType == SeedType::SEED_TWINSUNFLOWER ||
-		 mSeedType == SeedType::SEED_PUMPKINSHELL || mSeedType == SeedType::SEED_TORCHWOOD ||
-		 mSeedType == SeedType::SEED_SPIKEROCK || mSeedType == SeedType::SEED_SPIKEWEED ||
-		 mSeedType == SeedType::SEED_WALLNUT || mSeedType == SeedType::SEED_TALLNUT ||
-		 mSeedType == SeedType::SEED_REPEATER || mSeedType == SeedType::SEED_GATLINGPEA ||
-		 mSeedType == SeedType::SEED_SNOWPEA || mSeedType == SeedType::SEED_PEASHOOTER))
+	if (mBoard && (mBoard->mPlants.mSize > 25 || mBoard->mZombies.mSize > 15) && IsOnBoard() && mPottedPlantIndex == -1 && aBodyReanim->IsAnimPlaying("anim_idle"))
 	{
 		if (((mPlantCol + mRow + mBoard->mBoardUpdateCounter) & 1) != 0)
 		{
@@ -4084,7 +4042,10 @@ void Plant::Draw(Graphics* g)
 			aPumpkin = this;
 		}
 
-		DrawShadow(g, aOffsetX, aOffsetY);
+		if (aPumpkin == nullptr || aPumpkin == this)
+		{
+			DrawShadow(g, aOffsetX, aOffsetY);
+		}
 
 		if (Plant::IsFlying(mSeedType))
 		{
@@ -4115,7 +4076,12 @@ void Plant::Draw(Graphics* g)
 			Reanimation* aBodyReanim = mApp->ReanimationTryToGet(mBodyReanimID);
 			if (aBodyReanim)
 			{
-				if (CanUseCachedIdleDraw())
+				if (!mApp->Is3DAccelerated() && (mSeedType == SeedType::SEED_FLOWERPOT || mSeedType == SeedType::SEED_LILYPAD) && IsOnBoard() &&
+					aBodyReanim->mAnimRate == 0.0f && aBodyReanim->IsAnimPlaying("anim_idle"))
+				{
+					mApp->mReanimatorCache->DrawCachedPlant(g, aOffsetX, aOffsetY, mSeedType, DrawVariation::VARIATION_NORMAL);
+				}
+				else if (!mApp->Is3DAccelerated() && mIsAsleep && IsOnBoard() && aBodyReanim->IsAnimPlaying("anim_idle"))
 				{
 					mApp->mReanimatorCache->DrawCachedPlant(g, aOffsetX, aOffsetY, mSeedType, DrawVariation::VARIATION_NORMAL);
 				}

@@ -2519,11 +2519,15 @@ PvzpParticleSystem* LawnApp::AddPvzpParticle(float theX, float theY, int theRend
 
 ParticleSystemID LawnApp::ParticleGetID(PvzpParticleSystem* theParticle)
 {
+	if (theParticle == nullptr)
+		return ParticleSystemID::PARTICLESYSTEMID_NULL;
 	return (ParticleSystemID)mEffectSystem->mParticleHolder->mParticleSystems.DataArrayGetID(theParticle);
 }
 
 ReanimationID LawnApp::ReanimationGetID(Reanimation* theReanimation)
 {
+	if (theReanimation == nullptr)
+		return ReanimationID::REANIMATIONID_NULL;
 	return static_cast<ReanimationID>(mEffectSystem->mReanimationHolder->mReanimations.DataArrayGetID(theReanimation));
 }
 

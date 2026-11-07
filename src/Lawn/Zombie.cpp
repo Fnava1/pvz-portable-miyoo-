@@ -5286,15 +5286,6 @@ void Zombie::UpdateReanim()
 	if (aBodyReanim == nullptr || aBodyReanim->mDead)
 		return;
 
-	if (mBoard && mZombieType != ZombieType::ZOMBIE_BOSS)
-	{
-		float aScreenX = mPosX + mBoard->mX;
-		if (aScreenX > BOARD_WIDTH + 80.0f || aScreenX < -150.0f)
-		{
-			return;
-		}
-	}
-
 	if (mZombieType == ZombieType::ZOMBIE_CATAPULT)
 	{
 		if (GetBodyDamageIndex() == 2 || mZombiePhase == ZombiePhase::PHASE_ZOMBIE_DYING)
