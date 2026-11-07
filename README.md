@@ -35,9 +35,9 @@ A port of **Plants vs. Zombies: Game of the Year Edition** for the **Miyoo Mini 
 | **A** | Plant Selected Seed / Confirm | Select / Purchase | **Equip / Apply Tool to Plant** | Hit / Whack / Select |
 | **B** | Cancel Seed Selection / Deselect | Back / Close Menu | **Cancel / Drop Held Tool (`ClearCursor`)** | Deselect / Back |
 | **X** | **Quick Shovel Toggle** (or Slot Lever) | — | Secondary Action | Special Action |
-| **Y** | Inspect Tile / Cancel | — | Cancel / Drop Tool | — |
+| **Y** | **Auto-Sun Collection Toggle (ON / OFF)** | Back / Cancel | Cancel / Drop Tool | — |
 | **Start** | In-Game Pause & Options Menu | Pause | Pause Menu | Pause Menu |
-| **Select** | Fast Forward / Toggle Cursor Mode | — | Fast Forward / Toggle Cursor Mode | — |
+| **Select** | **Fast Forward Turbo (1X / 2X)** | — | Fast Forward Turbo (1X / 2X) | Fast Forward Turbo (1X / 2X) |
 | **MENU** | **Universal Pause / Exit (ESC)** | Exit / Return to OS | Universal Pause / Exit (ESC) | Universal Pause / Exit (ESC) |
 
 > **Tip:** In lawn battles, simply guide your cursor across falling or grounded sun tokens and they will be vacuumed instantly into your bank.

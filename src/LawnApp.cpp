@@ -125,6 +125,7 @@ LawnApp::LawnApp()
 	mDaisyMode = false;
 	mSukhbirMode = false;
 	mGameSpeed = GameSpeedMode::SPEED_1X;
+	mAutoCollectSuns = false;
 	mGameScene = GameScenes::SCENE_LOADING;
 	mCloseRequest = false;
 	mWidth = BOARD_WIDTH;
@@ -254,6 +255,7 @@ void LawnApp::ShutdownHook()
 void LawnApp::KillBoard()
 {
 	mGameSpeed = GameSpeedMode::SPEED_1X;
+	mAutoCollectSuns = false;
 	FinishModelessDialogs();
 	KillSeedChooserScreen();
 	if (mBoard)
@@ -1790,8 +1792,6 @@ void LawnApp::CycleGameSpeed()
 {
 	if (mGameSpeed == GameSpeedMode::SPEED_1X)
 		mGameSpeed = GameSpeedMode::SPEED_2X;
-	else if (mGameSpeed == GameSpeedMode::SPEED_2X)
-		mGameSpeed = GameSpeedMode::SPEED_4X;
 	else
 		mGameSpeed = GameSpeedMode::SPEED_1X;
 
@@ -1801,6 +1801,12 @@ void LawnApp::CycleGameSpeed()
 void LawnApp::SetGameSpeed(GameSpeedMode theSpeed)
 {
 	mGameSpeed = theSpeed;
+}
+
+void LawnApp::ToggleAutoCollectSuns()
+{
+	mAutoCollectSuns = !mAutoCollectSuns;
+	PlaySample(Sexy::SOUND_BUTTONCLICK);
 }
 
 void LawnApp::LoadGroup(const char* theGroupName, int theGroupAveMsToLoad)

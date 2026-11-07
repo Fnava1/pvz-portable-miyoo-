@@ -856,11 +856,24 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 					mWidgetManager->MouseDown((int)sVirtualCursorX, (int)sVirtualCursorY, 1);
 					break;
 				}
-				else if (event.key.keysym.sym == SDLK_LCTRL || event.key.keysym.sym == SDLK_LALT ||
-						 event.key.keysym.sym == 'x' || event.key.keysym.sym == 'X' ||
-						 event.key.keysym.sym == 'a' || event.key.keysym.sym == 'A')
+				else if (event.key.keysym.sym == SDLK_LALT || event.key.keysym.sym == 'a' || event.key.keysym.sym == 'A')
 				{
-					// Button B / Y: Right Click (Cancel / Drop / Deselect)
+					// Button Y (SDLK_LALT on Miyoo): Toggle Auto Sun Collection during active gameplay, or Right Click in menus
+					if (gLawnApp && gLawnApp->mGameScene == GameScenes::SCENE_PLAYING &&
+						gLawnApp->mBoard && !gLawnApp->mBoard->mPaused && gLawnApp->GetDialogCount() == 0)
+					{
+						gLawnApp->ToggleAutoCollectSuns();
+					}
+					else
+					{
+						mWidgetManager->MouseMove((int)sVirtualCursorX, (int)sVirtualCursorY);
+						mWidgetManager->MouseDown((int)sVirtualCursorX, (int)sVirtualCursorY, -1);
+					}
+					break;
+				}
+				else if (event.key.keysym.sym == SDLK_LCTRL || event.key.keysym.sym == 'x' || event.key.keysym.sym == 'X')
+				{
+					// Button B: Right Click (Cancel / Drop / Deselect)
 					mWidgetManager->MouseMove((int)sVirtualCursorX, (int)sVirtualCursorY);
 					mWidgetManager->MouseDown((int)sVirtualCursorX, (int)sVirtualCursorY, -1);
 					break;
@@ -965,9 +978,20 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 					mWidgetManager->MouseUp((int)sVirtualCursorX, (int)sVirtualCursorY, 1);
 					break;
 				}
-				else if (event.key.keysym.sym == SDLK_LCTRL || event.key.keysym.sym == SDLK_LALT ||
-						 event.key.keysym.sym == 'x' || event.key.keysym.sym == 'X' ||
-						 event.key.keysym.sym == 'a' || event.key.keysym.sym == 'A')
+				else if (event.key.keysym.sym == SDLK_LALT || event.key.keysym.sym == 'a' || event.key.keysym.sym == 'A')
+				{
+					if (gLawnApp && gLawnApp->mGameScene == GameScenes::SCENE_PLAYING &&
+						gLawnApp->mBoard && !gLawnApp->mBoard->mPaused && gLawnApp->GetDialogCount() == 0)
+					{
+						// Handled on keydown
+					}
+					else
+					{
+						mWidgetManager->MouseUp((int)sVirtualCursorX, (int)sVirtualCursorY, -1);
+					}
+					break;
+				}
+				else if (event.key.keysym.sym == SDLK_LCTRL || event.key.keysym.sym == 'x' || event.key.keysym.sym == 'X')
 				{
 					mWidgetManager->MouseUp((int)sVirtualCursorX, (int)sVirtualCursorY, -1);
 					break;

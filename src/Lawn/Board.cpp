@@ -6230,6 +6230,21 @@ void Board::Update()
 		mGridCursorActive = false;
 	}
 
+	// Auto sun collection mode toggled via Y button
+	if (mApp->mAutoCollectSuns && mApp->mGameScene == GameScenes::SCENE_PLAYING && !mPaused)
+	{
+		for (Coin* aCoin : mCoins)
+		{
+			if (aCoin->mDead || aCoin->mIsBeingCollected)
+				continue;
+			if (aCoin->IsSun() && aCoin->mCoinAge >= 20)
+			{
+				aCoin->PlayCollectSound();
+				aCoin->Collect();
+			}
+		}
+	}
+
 	// Handheld hover auto-collection: collect suns and coins falling onto or near the active cursor
 	if (mApp->mGameScene == GameScenes::SCENE_PLAYING && !mPaused)
 	{
@@ -7697,8 +7712,8 @@ void Board::DrawTopRightUI(Graphics* g)
 
 	if (mApp->mGameSpeed != GameSpeedMode::SPEED_1X)
 	{
-		std::string aSpeedStr = (mApp->mGameSpeed == GameSpeedMode::SPEED_2X) ? ">> 2X" : ">>> 4X";
-		Color aSpeedColor = (mApp->mGameSpeed == GameSpeedMode::SPEED_2X) ? Color(120, 255, 120) : Color(255, 215, 0);
+		std::string aSpeedStr = ">> 2X";
+		Color aSpeedColor = Color(120, 255, 120);
 
 		g->SetColor(Color(0, 0, 0, 160));
 		g->FillRect(588, 4, 82, 24);

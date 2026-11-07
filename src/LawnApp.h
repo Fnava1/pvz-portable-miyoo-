@@ -52,8 +52,7 @@ class AlmanacDialog;
 enum class GameSpeedMode : int
 {
 	SPEED_1X = 1,
-	SPEED_2X = 2,
-	SPEED_4X = 4
+	SPEED_2X = 2
 };
 class TypingCheck;
 
@@ -145,6 +144,7 @@ public:
 	bool							mMuteSoundsForCutscene;
 	bool							mDeferredNewGame;
 	GameSpeedMode					mGameSpeed;
+	bool							mAutoCollectSuns;
 
 public:
 	LawnApp();
@@ -152,6 +152,7 @@ public:
 
 	void							CycleGameSpeed();
 	void							SetGameSpeed(GameSpeedMode theSpeed);
+	void							ToggleAutoCollectSuns();
 
 	bool							KillNewOptionsDialog();
 	void							GotFocus() override;
