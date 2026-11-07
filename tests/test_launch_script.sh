@@ -93,6 +93,8 @@ for script in "$LAUNCH_SH" "$PKG_LAUNCH_SH"; do
     assert_pattern "$script" 'SDL_MMIYOO_TEXTURE_POOL_MAX_BYTES=16777216' "${script_name} exports 16MB texture pool"
     assert_pattern "$script" 'SDL_MMIYOO_VSYNC_MODE=adaptive' "${script_name} exports SDL_MMIYOO_VSYNC_MODE=adaptive"
     assert_pattern "$script" 'PVZ_SMOOTH_SCALE=1' "${script_name} exports PVZ_SMOOTH_SCALE=1"
+    assert_pattern "$script" 'swapoff[[:space:]]+-a' "${script_name} disables swap early"
+    assert_pattern "$script" 'drop_caches' "${script_name} drops page cache before execution"
     assert_pattern "$script" 'setup_miyoo' "${script_name} handles setup_miyoo lifecycle"
     assert_pattern "$script" 'main_mmp\.pak' "${script_name} detects main_mmp.pak"
 done
@@ -102,6 +104,8 @@ done
 # ------------------------------------------------------------------------------
 for port in "$PORT_FILE" "$PKG_PORT_FILE"; do
     port_name="$(basename "$port")"
+    assert_pattern "$port" 'ONION_PORT=1' "${port_name} exports ONION_PORT=1"
+    assert_pattern "$port" 'disable_menu_button' "${port_name} manages disable_menu_button lock"
     assert_pattern "$port" 'Games/Plants vs\. Zombies' "${port_name} references Games/Plants vs. Zombies"
     assert_pattern "$port" '/mnt/SDCARD/Roms/PORTS/Games/Plants vs\. Zombies' "${port_name} contains /mnt/SDCARD fallback"
     assert_pattern "$port" 'launch_standalone\.sh' "${port_name} checks launch_standalone.sh fallback"

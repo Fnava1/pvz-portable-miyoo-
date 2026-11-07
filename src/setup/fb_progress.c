@@ -240,7 +240,10 @@ int fb_progress_init(void) {
 
     s_fb_active = 1;
 
-    // Clear screen to deep slate
+    // Clear entire mapped framebuffer to pure black first (ensuring clean borders on 752x560 panels)
+    memset(s_fb_ptr, 0, s_fb_size);
+
+    // Clear active area to deep slate
     fill_rect(0, 0, s_fb_width, s_fb_height, 20, 26, 32);
 
     // Initial title rendering
@@ -311,6 +314,12 @@ void fb_progress_close(void) {
         s_fb_ptr = NULL;
     }
     if (s_fb_fd >= 0) {
+        struct fb_var_screeninfo vinfo;
+        if (ioctl(s_fb_fd, FBIOGET_VSCREENINFO, &vinfo) == 0) {
+            vinfo.xoffset = 0;
+            vinfo.yoffset = 0;
+            ioctl(s_fb_fd, FBIOPAN_DISPLAY, &vinfo);
+        }
         close(s_fb_fd);
         s_fb_fd = -1;
     }

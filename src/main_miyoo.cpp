@@ -20,6 +20,7 @@
 
 #ifndef PVZ_UNIT_TEST
 #include "LawnApp.h"
+#include "Lawn/Board.h"
 #include "Resources.h"
 #include "PvzpLib/PvzpStringFile.h"
 
@@ -35,11 +36,9 @@ void ResetFramebuffer() {
     if (fb >= 0) {
         struct fb_var_screeninfo vinfo;
         if (ioctl(fb, FBIOGET_VSCREENINFO, &vinfo) == 0) {
-            if (vinfo.yoffset != 0 || vinfo.xoffset != 0) {
-                vinfo.yoffset = 0;
-                vinfo.xoffset = 0;
-                ioctl(fb, FBIOPAN_DISPLAY, &vinfo);
-            }
+            vinfo.yoffset = 0;
+            vinfo.xoffset = 0;
+            ioctl(fb, FBIOPAN_DISPLAY, &vinfo);
         }
         close(fb);
     }
@@ -267,6 +266,32 @@ static void* HardwareWatchdogThreadFunc(void* arg) {
                                 if (isDown) {
                                     emergencyTriggered = true;
                                 }
+                            }
+                        }
+#ifndef EV_SW
+#define EV_SW 0x05
+#endif
+#ifndef SW_LID
+#define SW_LID 0x00
+#endif
+                        else if (ev.type == EV_SW && ev.code == SW_LID) {
+                            if (ev.value != 0) {
+                                // Miyoo Flip clamshell lid closed: pause gameplay and mute audio
+#ifndef PVZ_UNIT_TEST
+                                if (gLawnApp) {
+                                    if (gLawnApp->mBoard) {
+                                        gLawnApp->mBoard->Pause(true);
+                                    }
+                                    gLawnApp->Mute(true);
+                                }
+#endif
+                            } else {
+                                // Miyoo Flip clamshell lid opened: unmute audio, keep gameplay paused for safety
+#ifndef PVZ_UNIT_TEST
+                                if (gLawnApp) {
+                                    gLawnApp->Unmute(true);
+                                }
+#endif
                             }
                         }
                     }

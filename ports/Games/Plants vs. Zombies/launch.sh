@@ -1,7 +1,7 @@
 #!/bin/sh
 # ==============================================================================
-# Plants vs. Zombies for Miyoo Mini Plus (OnionOS)
-# Native 640x480 port with 0.8x asset optimization & lifecycle resilience
+# Plants vs. Zombies for Miyoo Mini / Miyoo Mini Plus (OnionOS)
+# Native 640x480 port with 0.8x asset optimization & multi-hardware resilience
 # ==============================================================================
 
 GAMEDIR="$(dirname "$0")"
@@ -11,15 +11,34 @@ cd "$GAMEDIR"
 exec > /dev/null 2>&1
 rm -f ./launch.log 2>/dev/null
 
+# Disable swap to protect microSD flash longevity and prevent kernel I/O locks
+swapoff -a 2>/dev/null || true
 
 # ------------------------------------------------------------------------------
 # Lifecycle Traps & Power Resiliency
 # ------------------------------------------------------------------------------
+set_cpu() {
+    FREQ_MHZ="$1"
+    FREQ_KHZ="${FREQ_MHZ}000"
+    if [ -f "/mnt/SDCARD/.tmp_update/bin/cpuclock" ]; then
+        /mnt/SDCARD/.tmp_update/bin/cpuclock "$FREQ_MHZ" 2>/dev/null
+    elif command -v cpuclock >/dev/null 2>&1; then
+        cpuclock "$FREQ_MHZ" 2>/dev/null
+    fi
+    if [ -f "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor" ]; then
+        echo userspace > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || true
+    fi
+    if [ -f "/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed" ]; then
+        echo "$FREQ_KHZ" > /sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed 2>/dev/null || true
+    fi
+}
+
 cleanup() {
     # 1. Flush dirty filesystem buffers to SD card to prevent theme/FAT corruption
     sync
 
     # 2. Restore safe CPU clock to 1200 MHz
+    set_cpu 1200
     if [ -f "/mnt/SDCARD/.tmp_update/bin/cpuclock" ]; then
         /mnt/SDCARD/.tmp_update/bin/cpuclock 1200 2>/dev/null
     elif command -v cpuclock >/dev/null 2>&1; then
@@ -28,14 +47,17 @@ cleanup() {
 
     # 3. Restore CPU governor to ondemand
     if [ -f "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor" ]; then
-        echo ondemand > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null
+        echo ondemand > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || true
     fi
 
-    # 4. Restart OnionOS audioserver
-    if [ -x "/customer/app/audioserver" ]; then
-        /customer/app/audioserver &
-    elif command -v audioserver >/dev/null 2>&1; then
-        audioserver &
+    # 4. Restart OnionOS audioserver only if not launched by launch_standalone.sh (which manages it)
+    # and if no instance is already running (prevents dual daemon driver deadlock)
+    if [ "$ONION_PORT" != "1" ] && ! pgrep audioserver > /dev/null 2>&1; then
+        if [ -x "/customer/app/audioserver" ]; then
+            /customer/app/audioserver &
+        elif command -v audioserver >/dev/null 2>&1; then
+            audioserver &
+        fi
     fi
 
     # 5. Purge any leftover diagnostic log files
@@ -95,6 +117,7 @@ else
 fi
 export TARGET_CPU_MHZ="$CPU_FREQ"
 
+set_cpu $CPU_FREQ
 if [ -f "/mnt/SDCARD/.tmp_update/bin/cpuclock" ]; then
     /mnt/SDCARD/.tmp_update/bin/cpuclock $CPU_FREQ 2>/dev/null
 elif command -v cpuclock >/dev/null 2>&1; then
@@ -109,21 +132,21 @@ export PVZ_SMOOTH_SCALE=1
 export SDL_HINT_RENDER_SCALE_QUALITY=0
 export LD_LIBRARY_PATH="$GAMEDIR/libs:/mnt/SDCARD/Roms/PORTS/Games/Plants vs. Zombies/libs:./libs:$LD_LIBRARY_PATH"
 
-# 3. Audio device isolation: kill audioserver to prevent MI_AO hardware conflict
-killall -9 audioserver 2>/dev/null
+# 3. Audio device isolation: clean stop with killall fallback
+if [ -f "/mnt/SDCARD/.tmp_update/script/stop_audioserver.sh" ]; then
+    /mnt/SDCARD/.tmp_update/script/stop_audioserver.sh 2>/dev/null || true
+else
+    killall -9 audioserver audioserver.mod 2>/dev/null || true
+fi
+
+# 4. Drop page cache to free maximum physical RAM for 128 MB devices
+echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true
 
 # ------------------------------------------------------------------------------
 # Execute Game Binary
 # ------------------------------------------------------------------------------
-echo "Files in game directory:"
-ls -la .
-echo "Checking executable ./PvZ:"
-ls -la ./PvZ
 chmod +x ./PvZ 2>/dev/null
-echo "Launching ./PvZ..."
 ./PvZ "$@"
 PvZ_EXIT=$?
-echo "PvZ terminated with exit code: $PvZ_EXIT"
 
-
-# Cleanup trap automatically executes upon script exit or signal
+exit $PvZ_EXIT

@@ -21,6 +21,10 @@ else
     GAMEDIR="/mnt/SDCARD/Roms/PORTS/Games/Plants vs. Zombies"
 fi
 
+# Notificar a OnionOS y deshabilitar interrupcion del boton MENU por keymon
+export ONION_PORT=1
+touch /tmp/disable_menu_button 2>/dev/null
+
 # "main*.pak" matches either the raw PC main.pak (converted on first launch)
 # or the converted main_mmp.pak, for both '~Import ports' and the launcher.
 if [ -f "/mnt/SDCARD/Emu/PORTS/launch_standalone.sh" ]; then
@@ -35,3 +39,6 @@ else
         ./PvZ
     fi
 fi
+
+# Restaurar comportamiento normal del boton MENU al salir
+rm -f /tmp/disable_menu_button 2>/dev/null
