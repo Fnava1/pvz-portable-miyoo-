@@ -1436,6 +1436,7 @@ static inline void DownscaleRow800To640(const uint32_t* src, uint32_t* dst)
 
 	for (int i = 0; i < 160; ++i)
 	{
+		__builtin_prefetch(src + 20, 0, 0);
 		uint8x16_t v1 = vld1q_u8(reinterpret_cast<const uint8_t*>(src));
 		uint8x16_t v2 = vld1q_u8(reinterpret_cast<const uint8_t*>(src) + 4);
 
@@ -1522,6 +1523,8 @@ static inline void AverageAndDownscaleRow800To640(const uint32_t* src1, const ui
 
 	for (int i = 0; i < 160; ++i)
 	{
+		__builtin_prefetch(src1 + 20, 0, 0);
+		__builtin_prefetch(src2 + 20, 0, 0);
 		uint8x16_t a1 = vld1q_u8(reinterpret_cast<const uint8_t*>(src1));
 		uint8x16_t b1 = vld1q_u8(reinterpret_cast<const uint8_t*>(src2));
 		uint8x16_t v1 = vrhaddq_u8(a1, b1);
@@ -1680,6 +1683,12 @@ void GLInterface::Flush()
 					for (int block = 0; block < 120; ++block)
 					{
 						int sy = block * 5;
+						if (block + 1 < 120)
+						{
+							__builtin_prefetch(srcBits + (sy + 5) * 800, 0, 0);
+							__builtin_prefetch(dstRow + 4 * texPitch, 1, 0);
+						}
+
 						DownscaleRow800To640(srcBits + (sy + 0) * 800, (uint32_t*)(dstRow + 0 * texPitch));
 						DownscaleRow800To640(srcBits + (sy + 1) * 800, (uint32_t*)(dstRow + 1 * texPitch));
 						DownscaleRow800To640(srcBits + (sy + 2) * 800, (uint32_t*)(dstRow + 2 * texPitch));

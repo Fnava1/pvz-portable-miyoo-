@@ -2837,6 +2837,23 @@ bool SexyAppBase::Process(bool allowSleep)
 				mPendingUpdatesAcc -= 1.0;
 			}
 
+			// Fixed Tick Rate: Catch up pending game logic if rendering or I/O delayed the frame.
+			// This maintains 1.0x real-world game speed and eliminates slow-motion sluggishness.
+			int aCatchupCount = 0;
+			constexpr int MAX_CATCHUP_TICKS = 2; // Up to 2 extra updates (max 3 total per render frame)
+			while (mUpdateFTimeAcc >= aFrameFTime * 2.0 && aCatchupCount < MAX_CATCHUP_TICKS)
+			{
+				ProcessDemo();
+				++mNonDrawCount;
+				bool hasRealUpdate = DoUpdateFrames();
+				if (!hasRealUpdate)
+					break;
+
+				ProcessSafeDeleteList();
+				mUpdateFTimeAcc -= aFrameFTime;
+				aCatchupCount++;
+			}
+
 			DoUpdateFramesF(static_cast<float>(anUpdatesPerUpdateF));
 			ProcessSafeDeleteList();
 
@@ -2848,7 +2865,12 @@ bool SexyAppBase::Process(bool allowSleep)
 			if (isVSynched)
 				mUpdateFTimeAcc = std::max(mUpdateFTimeAcc - aFrameFTime - 0.2f, 0.0);
 			else
-				mUpdateFTimeAcc -= aFrameFTime;
+				mUpdateFTimeAcc = std::max(mUpdateFTimeAcc - aFrameFTime, 0.0);
+
+			// Anti-spiral safety: if a long stall occurred (e.g. file loading or OS sleep),
+			// clamp remaining accumulator to avoid physics explosions or hyper-speed jumps.
+			if (mUpdateFTimeAcc > aFrameFTime * 5.0)
+				mUpdateFTimeAcc = 0.0;
 
 			if (mRelaxUpdateBacklogCount > 0)
 				mUpdateFTimeAcc = 0;
