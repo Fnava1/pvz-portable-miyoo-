@@ -153,6 +153,8 @@ public:
 	LawnApp();
 	~LawnApp() override;
 
+	bool							IsInActiveGameplay() override;
+
 	void							CycleGameSpeed();
 	void							SetGameSpeed(GameSpeedMode theSpeed);
 	void							ToggleAutoCollectSuns();

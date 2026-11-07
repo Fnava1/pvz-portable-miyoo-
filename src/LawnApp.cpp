@@ -1828,6 +1828,11 @@ void LawnApp::SetGameSpeed(GameSpeedMode theSpeed)
 	mGameSpeed = theSpeed;
 }
 
+bool LawnApp::IsInActiveGameplay()
+{
+	return mGameScene == GameScenes::SCENE_PLAYING && mBoard && !mBoard->mPaused && GetDialogCount() == 0;
+}
+
 void LawnApp::ToggleAutoCollectSuns()
 {
 	mAutoCollectSuns = !mAutoCollectSuns;
