@@ -124,6 +124,7 @@ LawnApp::LawnApp()
 	mDanceMode = false;
 	mDaisyMode = false;
 	mSukhbirMode = false;
+	mGameSpeed = GameSpeedMode::SPEED_1X;
 	mGameScene = GameScenes::SCENE_LOADING;
 	mCloseRequest = false;
 	mWidth = BOARD_WIDTH;
@@ -252,6 +253,7 @@ void LawnApp::ShutdownHook()
 
 void LawnApp::KillBoard()
 {
+	mGameSpeed = GameSpeedMode::SPEED_1X;
 	FinishModelessDialogs();
 	KillSeedChooserScreen();
 	if (mBoard)
@@ -337,12 +339,7 @@ bool LawnApp::WriteCurrentUserConfig()
 
 void LawnApp::PreNewGame(GameMode theGameMode, bool theLookForSavedGame)
 {
-	//if (NeedRegister())
-	//{
-	//	ShowGameSelector();
-	//	return;
-	//}
-
+	mGameSpeed = GameSpeedMode::SPEED_1X;
 	mGameMode = theGameMode;
 	if (theLookForSavedGame && TryLoadGame())
 		return;
@@ -1654,7 +1651,11 @@ void LawnApp::UpdateFrames()
 #endif
 
 	int aUpdateCount = 1;
-	if (gSlowMo)
+	if (mGameScene == GameScenes::SCENE_PLAYING && mBoard && !mBoard->mPaused && GetDialogCount() == 0)
+	{
+		aUpdateCount = static_cast<int>(mGameSpeed);
+	}
+	else if (gSlowMo)
 	{
 		++gSlowMoCounter;
 		if (gSlowMoCounter < 4)
@@ -1783,6 +1784,23 @@ void LawnApp::ToggleFastMo()
 {
 	gSlowMo = false;
 	gFastMo = !gFastMo;
+}
+
+void LawnApp::CycleGameSpeed()
+{
+	if (mGameSpeed == GameSpeedMode::SPEED_1X)
+		mGameSpeed = GameSpeedMode::SPEED_2X;
+	else if (mGameSpeed == GameSpeedMode::SPEED_2X)
+		mGameSpeed = GameSpeedMode::SPEED_4X;
+	else
+		mGameSpeed = GameSpeedMode::SPEED_1X;
+
+	PlaySample(Sexy::SOUND_BUTTONCLICK);
+}
+
+void LawnApp::SetGameSpeed(GameSpeedMode theSpeed)
+{
+	mGameSpeed = theSpeed;
 }
 
 void LawnApp::LoadGroup(const char* theGroupName, int theGroupAveMsToLoad)

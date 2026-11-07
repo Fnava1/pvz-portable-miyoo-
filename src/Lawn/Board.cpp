@@ -7691,6 +7691,19 @@ void Board::DrawTopRightUI(Graphics* g)
 		mStoreButton->Draw(g);
 		g->SetColorizeImages(false);
 	}
+
+	if (mApp->mGameSpeed != GameSpeedMode::SPEED_1X)
+	{
+		std::string aSpeedStr = (mApp->mGameSpeed == GameSpeedMode::SPEED_2X) ? ">> 2X" : ">>> 4X";
+		Color aSpeedColor = (mApp->mGameSpeed == GameSpeedMode::SPEED_2X) ? Color(120, 255, 120) : Color(255, 215, 0);
+
+		g->SetColor(Color(0, 0, 0, 160));
+		g->FillRect(588, 4, 82, 24);
+		g->SetColor(aSpeedColor);
+		g->DrawRect(588, 4, 82, 24);
+
+		PvzpDrawString(g, aSpeedStr, 629, 21, Sexy::FONT_DWARVENTODCRAFT15, aSpeedColor, DrawStringJustification::DS_ALIGN_CENTER);
+	}
 }
 
 void Board::DrawUIBottom(Graphics* g)

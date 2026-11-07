@@ -794,7 +794,16 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 #if !PVZ_ENABLE_GLES
 				// Universal emergency exit combo (SELECT + START held together)
 				if (event.key.keysym.sym == SDLK_ESCAPE)
+				{
 					sSelectDown = true;
+					// In active gameplay without open dialogs, Select toggles turbo speed on keyup.
+					// Suppress sending KEYCODE_ESCAPE on keydown so options dialog does not open.
+					if (gLawnApp && gLawnApp->mGameScene == GameScenes::SCENE_PLAYING &&
+						gLawnApp->mBoard && !gLawnApp->mBoard->mPaused && gLawnApp->GetDialogCount() == 0)
+					{
+						break;
+					}
+				}
 				if (event.key.keysym.sym == SDLK_RETURN || event.key.keysym.sym == SDLK_KP_ENTER)
 					sStartDown = true;
 
@@ -911,7 +920,19 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 				mLastUserInputTick = mLastTimerTime;
 #if !PVZ_ENABLE_GLES
 				if (event.key.keysym.sym == SDLK_ESCAPE)
+				{
+					bool wasSelectDown = sSelectDown;
 					sSelectDown = false;
+					if (wasSelectDown && !sStartDown)
+					{
+						if (gLawnApp && gLawnApp->mGameScene == GameScenes::SCENE_PLAYING &&
+							gLawnApp->mBoard && !gLawnApp->mBoard->mPaused && gLawnApp->GetDialogCount() == 0)
+						{
+							gLawnApp->CycleGameSpeed();
+							break;
+						}
+					}
+				}
 				if (event.key.keysym.sym == SDLK_RETURN || event.key.keysym.sym == SDLK_KP_ENTER)
 					sStartDown = false;
 

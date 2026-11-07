@@ -48,6 +48,13 @@ class TitleScreen;
 class ChallengeScreen;
 class StoreScreen;
 class AlmanacDialog;
+
+enum class GameSpeedMode : int
+{
+	SPEED_1X = 1,
+	SPEED_2X = 2,
+	SPEED_4X = 4
+};
 class TypingCheck;
 
 namespace Sexy
@@ -137,10 +144,14 @@ public:
 	bool							mDebugTrialLocked;
 	bool							mMuteSoundsForCutscene;
 	bool							mDeferredNewGame;
+	GameSpeedMode					mGameSpeed;
 
 public:
 	LawnApp();
 	~LawnApp() override;
+
+	void							CycleGameSpeed();
+	void							SetGameSpeed(GameSpeedMode theSpeed);
 
 	bool							KillNewOptionsDialog();
 	void							GotFocus() override;
