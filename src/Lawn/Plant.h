@@ -296,6 +296,7 @@ public:
 	void                    CobCannonFire(int theTargetX, int theTargetY);
 	void                    UpdateGoldMagnetShroom();
 	bool         IsOnBoard();
+	bool         CanUseCachedIdleDraw() const;
 	void                    RemoveEffects();
 	void                    UpdateCoffeeBean();
 	void                    UpdateUmbrella();

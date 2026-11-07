@@ -2755,6 +2755,38 @@ bool Plant::IsInPlay()
 	return IsOnBoard() && mApp->mGameMode != GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN && mApp->mGameMode != GameMode::GAMEMODE_TREE_OF_WISDOM;
 }
 
+bool Plant::CanUseCachedIdleDraw() const
+{
+	if (mApp->Is3DAccelerated() || !mIsOnBoard || mPottedPlantIndex != -1)
+		return false;
+	if (mImitaterType != SeedType::SEED_NONE || mHighlighted || mEatenFlashCountdown > 0 || mBeghouledFlashCountdown > 0)
+		return false;
+	if (mBodyReanimID == ReanimationID::REANIMATIONID_NULL)
+		return false;
+
+	Reanimation* aBodyReanim = mApp->ReanimationTryToGet(mBodyReanimID);
+	if (!aBodyReanim || !aBodyReanim->IsAnimPlaying("anim_idle"))
+		return false;
+
+	if (mIsAsleep || mSeedType == SeedType::SEED_FLOWERPOT || mSeedType == SeedType::SEED_LILYPAD ||
+		mSeedType == SeedType::SEED_SPIKEROCK || mSeedType == SeedType::SEED_SPIKEWEED)
+	{
+		return true;
+	}
+
+	if (mBoard && (mBoard->mPlants.mSize > 20 || mBoard->mZombies.mSize > 15))
+	{
+		if (mSeedType == SeedType::SEED_SUNFLOWER || mSeedType == SeedType::SEED_TWINSUNFLOWER ||
+			mSeedType == SeedType::SEED_INSTANT_COFFEE ||
+			((mSeedType == SeedType::SEED_WALLNUT || mSeedType == SeedType::SEED_TALLNUT) && mPlantHealth >= mPlantMaxHealth))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 void Plant::UpdateReanim()
 {
 	Reanimation* aBodyReanim = mApp->ReanimationTryToGet(mBodyReanimID);
@@ -2807,7 +2839,11 @@ void Plant::UpdateReanim()
 	}
 
 	bool skipPlantUpdate = false;
-	if (mBoard && mBoard->mZombies.mSize > 40 && IsOnBoard() && mPottedPlantIndex == -1 && aBodyReanim->IsAnimPlaying("anim_idle") &&
+	if (CanUseCachedIdleDraw())
+	{
+		skipPlantUpdate = true;
+	}
+	else if (mBoard && (mBoard->mPlants.mSize > 25 || mBoard->mZombies.mSize > 15) && IsOnBoard() && mPottedPlantIndex == -1 && aBodyReanim->IsAnimPlaying("anim_idle") &&
 		(mSeedType == SeedType::SEED_SUNFLOWER || mSeedType == SeedType::SEED_TWINSUNFLOWER ||
 		 mSeedType == SeedType::SEED_PUMPKINSHELL || mSeedType == SeedType::SEED_TORCHWOOD ||
 		 mSeedType == SeedType::SEED_SPIKEROCK || mSeedType == SeedType::SEED_SPIKEWEED ||
@@ -4079,12 +4115,7 @@ void Plant::Draw(Graphics* g)
 			Reanimation* aBodyReanim = mApp->ReanimationTryToGet(mBodyReanimID);
 			if (aBodyReanim)
 			{
-				if (!mApp->Is3DAccelerated() && (mSeedType == SeedType::SEED_FLOWERPOT || mSeedType == SeedType::SEED_LILYPAD) && IsOnBoard() &&
-					aBodyReanim->mAnimRate == 0.0f && aBodyReanim->IsAnimPlaying("anim_idle"))
-				{
-					mApp->mReanimatorCache->DrawCachedPlant(g, aOffsetX, aOffsetY, mSeedType, DrawVariation::VARIATION_NORMAL);
-				}
-				else if (!mApp->Is3DAccelerated() && mIsAsleep && IsOnBoard() && aBodyReanim->IsAnimPlaying("anim_idle"))
+				if (CanUseCachedIdleDraw())
 				{
 					mApp->mReanimatorCache->DrawCachedPlant(g, aOffsetX, aOffsetY, mSeedType, DrawVariation::VARIATION_NORMAL);
 				}
