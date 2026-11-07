@@ -2525,6 +2525,19 @@ Plant* Board::AddPlant(int theGridX, int theGridY, SeedType theSeedType, SeedTyp
 		mMushroomsUsed = true;
 	}
 
+	if (theSeedType == SeedType::SEED_FLOWERPOT)
+	{
+		mFlowerPotCount++;
+		if (theGridX >= 0 && theGridX < MAX_GRID_SIZE_X && theGridY >= 0 && theGridY < MAX_GRID_SIZE_Y)
+			mFlowerPotGrid[theGridX][theGridY] = aPlant;
+	}
+	else if (theSeedType == SeedType::SEED_PUMPKINSHELL)
+	{
+		mPumpkinCount++;
+		if (theGridX >= 0 && theGridX < MAX_GRID_SIZE_X && theGridY >= 0 && theGridY < MAX_GRID_SIZE_Y)
+			mPumpkinGrid[theGridX][theGridY] = aPlant;
+	}
+
 	return aPlant;
 }
 
@@ -2533,7 +2546,11 @@ Plant* Board::GetPumpkinAt(int theGridX, int theGridY)
 	if (mPumpkinCount <= 0 || theGridX < 0 || theGridX >= MAX_GRID_SIZE_X || theGridY < 0 || theGridY >= MAX_GRID_SIZE_Y)
 		return nullptr;
 
-	return mPumpkinGrid[theGridX][theGridY];
+	Plant* aPlant = mPumpkinGrid[theGridX][theGridY];
+	if (aPlant && !aPlant->mDead && !aPlant->NotOnGround() && aPlant->mSeedType == SeedType::SEED_PUMPKINSHELL)
+		return aPlant;
+
+	return nullptr;
 }
 
 Plant* Board::GetFlowerPotAt(int theGridX, int theGridY)
@@ -2541,7 +2558,11 @@ Plant* Board::GetFlowerPotAt(int theGridX, int theGridY)
 	if (mFlowerPotCount <= 0 || theGridX < 0 || theGridX >= MAX_GRID_SIZE_X || theGridY < 0 || theGridY >= MAX_GRID_SIZE_Y)
 		return nullptr;
 
-	return mFlowerPotGrid[theGridX][theGridY];
+	Plant* aPlant = mFlowerPotGrid[theGridX][theGridY];
+	if (aPlant && !aPlant->mDead && !aPlant->NotOnGround() && aPlant->mSeedType == SeedType::SEED_FLOWERPOT)
+		return aPlant;
+
+	return nullptr;
 }
 
 void Board::GetPlantsOnLawn(int theGridX, int theGridY, PlantsOnLawn* thePlantOnLawn)
@@ -9024,6 +9045,20 @@ void Board::ProcessDeleteQueue()
 		{
 			if (aPlant->mDead)
 			{
+				if (aPlant->mPlantCol >= 0 && aPlant->mPlantCol < MAX_GRID_SIZE_X &&
+					aPlant->mRow >= 0 && aPlant->mRow < MAX_GRID_SIZE_Y)
+				{
+					if (mFlowerPotGrid[aPlant->mPlantCol][aPlant->mRow] == aPlant)
+					{
+						mFlowerPotGrid[aPlant->mPlantCol][aPlant->mRow] = nullptr;
+						if (mFlowerPotCount > 0) mFlowerPotCount--;
+					}
+					if (mPumpkinGrid[aPlant->mPlantCol][aPlant->mRow] == aPlant)
+					{
+						mPumpkinGrid[aPlant->mPlantCol][aPlant->mRow] = nullptr;
+						if (mPumpkinCount > 0) mPumpkinCount--;
+					}
+				}
 				mPlants.DataArrayFree(aPlant);
 			}
 		}

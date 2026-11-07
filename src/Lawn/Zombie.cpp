@@ -10582,8 +10582,7 @@ void Zombie::PreloadZombieResources(ZombieType theZombieType)
 
 		for (size_t i = 0; i < LENGTH(gBossZombieList); i++)
 		{
-			const ZombieDefinition& aDef = GetZombieDefinition(gBossZombieList[i]);
-			ReanimatorEnsureDefinitionLoaded(aDef.mReanimationType, true);
+			PreloadZombieResources(gBossZombieList[i]);
 		}
 	}
 	else if (theZombieType == ZombieType::ZOMBIE_DANCER)

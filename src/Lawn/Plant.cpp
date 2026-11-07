@@ -2314,13 +2314,21 @@ void Plant::UpdateGoldMagnetShroom()
 void Plant::RemoveEffects()
 {
 	mApp->RemoveParticle(mParticleID);
+	mParticleID = ParticleSystemID::PARTICLESYSTEMID_NULL;
 	mApp->RemoveReanimation(mBodyReanimID);
+	mBodyReanimID = ReanimationID::REANIMATIONID_NULL;
 	mApp->RemoveReanimation(mHeadReanimID);
+	mHeadReanimID = ReanimationID::REANIMATIONID_NULL;
 	mApp->RemoveReanimation(mHeadReanimID2);
+	mHeadReanimID2 = ReanimationID::REANIMATIONID_NULL;
 	mApp->RemoveReanimation(mHeadReanimID3);
+	mHeadReanimID3 = ReanimationID::REANIMATIONID_NULL;
 	mApp->RemoveReanimation(mLightReanimID);
+	mLightReanimID = ReanimationID::REANIMATIONID_NULL;
 	mApp->RemoveReanimation(mBlinkReanimID);
+	mBlinkReanimID = ReanimationID::REANIMATIONID_NULL;
 	mApp->RemoveReanimation(mSleepingReanimID);
+	mSleepingReanimID = ReanimationID::REANIMATIONID_NULL;
 }
 
 void Plant::Squish()
@@ -4879,6 +4887,9 @@ Zombie* Plant::FindTargetZombie(int theRow, PlantWeapon thePlantWeapon)
 				}
 			}
 
+			Rect aCurAttackRect = aAttackRect;
+			int aCurExtraRange = aExtraRange;
+
 			if (mSeedType == SeedType::SEED_POTATOMINE)
 			{
 				if ((aZombie->mZombieType == ZombieType::ZOMBIE_POGO && aZombie->mHasObject) ||
@@ -4889,8 +4900,8 @@ Zombie* Plant::FindTargetZombie(int theRow, PlantWeapon thePlantWeapon)
 
 				if (aZombie->mZombieType == ZombieType::ZOMBIE_POLEVAULTER)
 				{
-					aAttackRect.mX += 40;
-					aAttackRect.mWidth -= 40;  // classic potato mine quirk; lets pole-vaulters set off the mine ("four pole-vaulters" trick)
+					aCurAttackRect.mX += 40;
+					aCurAttackRect.mWidth -= 40;  // classic potato mine quirk; lets pole-vaulters set off the mine ("four pole-vaulters" trick)
 				}
 
 				if (aZombie->mZombieType == ZombieType::ZOMBIE_BUNGEE && aZombie->mTargetCol != mPlantCol)
@@ -4900,7 +4911,7 @@ Zombie* Plant::FindTargetZombie(int theRow, PlantWeapon thePlantWeapon)
 
 				if (aZombie->mIsEating)
 				{
-					aExtraRange = 30;
+					aCurExtraRange = 30;
 				}
 			}
 
@@ -4911,7 +4922,7 @@ Zombie* Plant::FindTargetZombie(int theRow, PlantWeapon thePlantWeapon)
 			}
 
 			Rect aZombieRect = aZombie->GetZombieRect();
-			if (!needPortalCheck && GetRectOverlap(aAttackRect, aZombieRect) < -aExtraRange)
+			if (!needPortalCheck && GetRectOverlap(aCurAttackRect, aZombieRect) < -aCurExtraRange)
 			{
 				return;
 			}
@@ -5004,6 +5015,29 @@ void Plant::Die()
 	mDead = true;
 	RemoveEffects();
 
+	if (mSeedType == SeedType::SEED_FLOWERPOT)
+	{
+		if (mBoard && mPlantCol >= 0 && mPlantCol < MAX_GRID_SIZE_X && mRow >= 0 && mRow < MAX_GRID_SIZE_Y)
+		{
+			if (mBoard->mFlowerPotGrid[mPlantCol][mRow] == this)
+			{
+				mBoard->mFlowerPotGrid[mPlantCol][mRow] = nullptr;
+				if (mBoard->mFlowerPotCount > 0) mBoard->mFlowerPotCount--;
+			}
+		}
+	}
+	else if (mSeedType == SeedType::SEED_PUMPKINSHELL)
+	{
+		if (mBoard && mPlantCol >= 0 && mPlantCol < MAX_GRID_SIZE_X && mRow >= 0 && mRow < MAX_GRID_SIZE_Y)
+		{
+			if (mBoard->mPumpkinGrid[mPlantCol][mRow] == this)
+			{
+				mBoard->mPumpkinGrid[mPlantCol][mRow] = nullptr;
+				if (mBoard->mPumpkinCount > 0) mBoard->mPumpkinCount--;
+			}
+		}
+	}
+
 	if (!Plant::IsFlying(mSeedType) && IsOnBoard())
 	{
 		GridItem* aLadder = mBoard->GetLadderAt(mPlantCol, mRow);
@@ -5017,10 +5051,11 @@ void Plant::Die()
 	{
 		Plant* aTopPlant = mBoard->GetTopPlantAt(mPlantCol, mRow, PlantPriority::TOPPLANT_BUNGEE_ORDER);
 		Plant* aFlowerPot = mBoard->GetFlowerPotAt(mPlantCol, mRow);
-		if (aFlowerPot && aTopPlant == aFlowerPot)
+		if (aFlowerPot && aTopPlant == aFlowerPot && !aFlowerPot->mSquished)
 		{
-			Reanimation* aPotReanim = mApp->ReanimationGet(aFlowerPot->mBodyReanimID);
-			aPotReanim->mAnimRate = RandRangeFloat(10.0f, 15.0f);
+			Reanimation* aPotReanim = mApp->ReanimationTryToGet(aFlowerPot->mBodyReanimID);
+			if (aPotReanim)
+				aPotReanim->mAnimRate = RandRangeFloat(10.0f, 15.0f);
 		}
 	}
 }
@@ -5266,6 +5301,11 @@ void Plant::PreloadPlantResources(SeedType theSeedType)
 	else if (theSeedType == SeedType::SEED_JALAPENO)
 	{
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_JALAPENO_FIRE, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);
+	}
+	else if (theSeedType == SeedType::SEED_DOOMSHROOM)
+	{
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);
 	}
 	else if (theSeedType == SeedType::SEED_TORCHWOOD)
 	{
