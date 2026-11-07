@@ -153,8 +153,6 @@ public:
 	LawnApp();
 	~LawnApp() override;
 
-	bool							ShouldUseFastLawnScaler() override;
-
 	void							CycleGameSpeed();
 	void							SetGameSpeed(GameSpeedMode theSpeed);
 	void							ToggleAutoCollectSuns();

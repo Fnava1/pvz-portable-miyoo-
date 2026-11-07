@@ -1828,18 +1828,6 @@ void LawnApp::SetGameSpeed(GameSpeedMode theSpeed)
 	mGameSpeed = theSpeed;
 }
 
-bool LawnApp::ShouldUseFastLawnScaler()
-{
-	if (mGameScene == GameScenes::SCENE_PLAYING && mBoard && !mBoard->mPaused)
-	{
-		if (mBoard->mPlants.mSize > 20 || mBoard->mZombies.mSize > 15)
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
 void LawnApp::ToggleAutoCollectSuns()
 {
 	mAutoCollectSuns = !mAutoCollectSuns;

@@ -425,8 +425,6 @@ public:
 	SexyAppBase();
 	virtual ~SexyAppBase();
 
-	virtual bool			ShouldUseFastLawnScaler() { return false; }
-
 	// Common overrides:
 	virtual MusicInterface*	CreateMusicInterface();
 	virtual void			InitHook();
