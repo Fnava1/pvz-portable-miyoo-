@@ -10573,6 +10573,7 @@ void Zombie::PreloadZombieResources(ZombieType theZombieType)
 	{
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_DIGGER_DIRT, true);
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_DIGGER, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_SURPRISE, true);
 	}
 	else if (theZombieType == ZombieType::ZOMBIE_BOSS)
 	{
@@ -10597,7 +10598,8 @@ void Zombie::PreloadZombieResources(ZombieType theZombieType)
 	}
 	else if (theZombieType == ZombieType::ZOMBIE_ZAMBONI)
 	{
-		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_IMP, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_BOBSLED, true);
+		PreloadZombieResources(ZombieType::ZOMBIE_BOBSLED);
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_ZAMBONI, true);
 	}
 	else if (theZombieType == ZombieType::ZOMBIE_CATAPULT)
@@ -10607,6 +10609,42 @@ void Zombie::PreloadZombieResources(ZombieType theZombieType)
 	else if (theZombieType == ZombieType::ZOMBIE_IMP)
 	{
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_IMP, true);
+	}
+	else if (theZombieType == ZombieType::ZOMBIE_NEWSPAPER)
+	{
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_SURPRISE, true);
+	}
+	else if (theZombieType == ZombieType::ZOMBIE_FLAG)
+	{
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_FLAG, true);
+	}
+	else if (theZombieType == ZombieType::ZOMBIE_BUNGEE)
+	{
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_BUNGEE, true);
+	}
+	else if (theZombieType == ZombieType::ZOMBIE_PEA_HEAD)
+	{
+		Plant::PreloadPlantResources(SeedType::SEED_PEASHOOTER);
+	}
+	else if (theZombieType == ZombieType::ZOMBIE_WALLNUT_HEAD)
+	{
+		Plant::PreloadPlantResources(SeedType::SEED_WALLNUT);
+	}
+	else if (theZombieType == ZombieType::ZOMBIE_JALAPENO_HEAD)
+	{
+		Plant::PreloadPlantResources(SeedType::SEED_JALAPENO);
+	}
+	else if (theZombieType == ZombieType::ZOMBIE_GATLING_HEAD)
+	{
+		Plant::PreloadPlantResources(SeedType::SEED_GATLINGPEA);
+	}
+	else if (theZombieType == ZombieType::ZOMBIE_SQUASH_HEAD)
+	{
+		Plant::PreloadPlantResources(SeedType::SEED_SQUASH);
+	}
+	else if (theZombieType == ZombieType::ZOMBIE_TALLNUT_HEAD)
+	{
+		Plant::PreloadPlantResources(SeedType::SEED_TALLNUT);
 	}
 
 	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_PUFF, true);

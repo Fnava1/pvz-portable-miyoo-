@@ -358,6 +358,37 @@ void CutScene::PreloadResources()
 		}
 	}
 
+	for (int aZombieType = ZombieType::ZOMBIE_NORMAL; aZombieType < ZombieType::NUM_ZOMBIE_TYPES; aZombieType++)
+	{
+		if (mBoard->mZombieAllowed[aZombieType])
+		{
+			Zombie::PreloadZombieResources(static_cast<ZombieType>(aZombieType));
+		}
+	}
+
+	// Universal preloading for surprise ambushes, drops, and common reanimations across all game modes & minigames
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_BUNGEE, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_IMP, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_BACKUP_DANCER, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_BOBSLED, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_SURPRISE, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_IMP, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_DIGGER, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_ZAMBONI, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_CATAPULT, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_GARGANTUAR, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_PUFF, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_FLAG, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_LAWN_MOWERED_ZOMBIE, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_FINAL_WAVE, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIES_WON, true);
+
+	if (mApp->IsFinalBossLevel())
+	{
+		Zombie::PreloadZombieResources(ZombieType::ZOMBIE_BOSS);
+	}
+
 	for (SeedType aSeedType = SeedType::SEED_PEASHOOTER; aSeedType < SeedType::NUM_SEED_TYPES; aSeedType = static_cast<SeedType>(static_cast<int>(aSeedType) + 1))
 	{
 		if (mApp->HasSeedType(aSeedType))
@@ -408,7 +439,6 @@ void CutScene::PreloadResources()
 	if (mBoard->StageHasRoof())
 	{
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ROOF_CLEANER, true);
-		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_BUNGEE, true);
 	}
 	else
 	{
