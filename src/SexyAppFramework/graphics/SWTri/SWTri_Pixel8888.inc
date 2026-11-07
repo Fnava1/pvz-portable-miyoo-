@@ -39,31 +39,30 @@
 					unsigned int p = *pix;
 					unsigned int da = p >> 24;
 
-					unsigned int tr,tg,tb;
-					#if !defined(LINEAR_BLEND)
-					{
-						tr = ((tex&0xFF0000)*alpha)&0xFF000000;
-						tg = ((tex&0x00FF00)*alpha)&0x00FF0000;
-						tb = ((tex&0x0000FF)*alpha)&0x0000FF00;
-					}
-					#else
-					{
-						tr = (tex&0xFF0000)<<8;
-						tg = (tex&0x00FF00)<<8;
-						tb = (tex&0x0000FF)<<8;
-					}
-					#endif
-
 					if (da >= 254)
 					{
 						unsigned int inv_a = 256 - alpha;
-						tr = ((tr + inv_a * (p & 0xFF0000)) >> 8) & 0xFF0000;
-						tg = ((tg + inv_a * (p & 0x00FF00)) >> 8) & 0x00FF00;
-						tb = ((tb + inv_a * (p & 0x0000FF)) >> 8) & 0x0000FF;
-						*pix = 0xFF000000 | tr | tg | tb;
+#if !defined(LINEAR_BLEND)
+						unsigned int rb = (((tex & 0x00FF00FF) * alpha + (p & 0x00FF00FF) * inv_a) >> 8) & 0x00FF00FF;
+						unsigned int g  = (((tex & 0x0000FF00) * alpha + (p & 0x0000FF00) * inv_a) >> 8) & 0x0000FF00;
+#else
+						unsigned int rb = (((tex & 0x00FF00FF) << 8) + (p & 0x00FF00FF) * inv_a) >> 8;
+						unsigned int g  = (((tex & 0x0000FF00) << 8) + (p & 0x0000FF00) * inv_a) >> 8;
+#endif
+						*pix = 0xFF000000 | (rb & 0x00FF00FF) | (g & 0x0000FF00);
 					}
 					else
 					{
+						unsigned int tr,tg,tb;
+#if !defined(LINEAR_BLEND)
+						tr = ((tex&0xFF0000)*alpha)&0xFF000000;
+						tg = ((tex&0x00FF00)*alpha)&0x00FF0000;
+						tb = ((tex&0x0000FF)*alpha)&0x0000FF00;
+#else
+						tr = (tex&0xFF0000)<<8;
+						tg = (tex&0x00FF00)<<8;
+						tb = (tex&0x0000FF)<<8;
+#endif
 						unsigned int dr = (((p&0xFF0000)*da)>>8) & 0xFF0000;
 						unsigned int dg = (((p&0x00FF00)*da)>>8) & 0x00FF00;
 						unsigned int db = (((p&0x0000FF)*da)>>8) & 0x0000FF;

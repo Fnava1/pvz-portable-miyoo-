@@ -6851,6 +6851,9 @@ void Board::DrawGameObjects(Graphics* g)
 
 	std::sort(aRenderList, aRenderList + aRenderItemCount, RenderItemSortFunc);
 
+	float aRowLastShadowX[MAX_GRID_SIZE_Y][8];
+	int aRowLastShadowCount[MAX_GRID_SIZE_Y] = { 0 };
+
 	for (int i = 0; i < aRenderItemCount; i++)
 	{
 		RenderItem& aRenderItem = aRenderList[i];
@@ -6910,12 +6913,28 @@ void Board::DrawGameObjects(Graphics* g)
 		case RenderObjectType::RENDER_ITEM_ZOMBIE_SHADOW:
 		{
 			Zombie* aZombie = aRenderItem.mZombie;
-			if (mZombies.mSize > 40 && aZombie->mRow >= 0 && aZombie->mRow < MAX_GRID_SIZE_Y && mRowZombies[aZombie->mRow].size() > 6)
+			int aRow = aZombie->mRow;
+			if (mZombies.mSize > 15 && aRow >= 0 && aRow < MAX_GRID_SIZE_Y && aZombie->mZombieType != ZombieType::ZOMBIE_BOSS)
 			{
-				// In dense zombie hordes, decimate redundant shadow rendering to conserve memory fillrate
-				if ((reinterpret_cast<uintptr_t>(aZombie) >> 4) & 1)
+				float aX = aZombie->mPosX;
+				bool aDuplicate = false;
+				int aCount = aRowLastShadowCount[aRow];
+				for (int s = 0; s < aCount; ++s)
+				{
+					if (std::abs(aRowLastShadowX[aRow][s] - aX) < 25.0f)
+					{
+						aDuplicate = true;
+						break;
+					}
+				}
+				if (aDuplicate)
 				{
 					break;
+				}
+				if (aCount < 8)
+				{
+					aRowLastShadowX[aRow][aCount] = aX;
+					aRowLastShadowCount[aRow] = aCount + 1;
 				}
 			}
 			if (aZombie->BeginDraw(g))

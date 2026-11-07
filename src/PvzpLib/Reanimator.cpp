@@ -612,14 +612,37 @@ void Reanimation::GetTransformAtTime(int theTrackIndex, ReanimatorTransform* the
 
 void Reanimation::MatrixFromTransform(const ReanimatorTransform& theTransform, SexyMatrix3& theMatrix)
 {
+	if (theTransform.mSkewX == 0.0f && theTransform.mSkewY == 0.0f)
+	{
+		theMatrix.m00 = theTransform.mScaleX;
+		theMatrix.m10 = 0.0f;
+		theMatrix.m20 = 0.0f;
+		theMatrix.m01 = 0.0f;
+		theMatrix.m11 = theTransform.mScaleY;
+		theMatrix.m21 = 0.0f;
+		theMatrix.m02 = theTransform.mTransX;
+		theMatrix.m12 = theTransform.mTransY;
+		theMatrix.m22 = 1.0f;
+		return;
+	}
+
 	float aSkewX = -DEG_TO_RAD(theTransform.mSkewX);
 	float aSkewY = -DEG_TO_RAD(theTransform.mSkewY);
 
-	theMatrix.m00 = cos(aSkewX) * theTransform.mScaleX;
-	theMatrix.m10 = -sin(aSkewX) * theTransform.mScaleX;
+	float sinX, cosX, sinY, cosY;
+#if defined(__GNUC__) || defined(__arm__) || defined(__aarch64__)
+	sincosf(aSkewX, &sinX, &cosX);
+	sincosf(aSkewY, &sinY, &cosY);
+#else
+	sinX = sinf(aSkewX); cosX = cosf(aSkewX);
+	sinY = sinf(aSkewY); cosY = cosf(aSkewY);
+#endif
+
+	theMatrix.m00 = cosX * theTransform.mScaleX;
+	theMatrix.m10 = -sinX * theTransform.mScaleX;
 	theMatrix.m20 = 0.0f;
-	theMatrix.m01 = sin(aSkewY) * theTransform.mScaleY;
-	theMatrix.m11 = cos(aSkewY) * theTransform.mScaleY;
+	theMatrix.m01 = sinY * theTransform.mScaleY;
+	theMatrix.m11 = cosY * theTransform.mScaleY;
 	theMatrix.m21 = 0.0f;
 	theMatrix.m02 = theTransform.mTransX;
 	theMatrix.m12 = theTransform.mTransY;

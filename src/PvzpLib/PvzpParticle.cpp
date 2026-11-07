@@ -1024,7 +1024,13 @@ void PvzpParticleEmitter::DrawParticle(Graphics* g, PvzpParticle* theParticle, P
 	if (GetRenderParams(theParticle, &aParams))
 	{
 		int aAlpha = std::clamp(FloatRoundToInt(aParams.mAlpha), 0, 255);
-		if (aAlpha <= 4)
+		int aMinAlpha = 4;
+		if (mParticleSystem && mParticleSystem->mParticleHolder &&
+		    mParticleSystem->mParticleHolder->mParticles.mSize > 120)
+		{
+			aMinAlpha = 20;
+		}
+		if (aAlpha <= aMinAlpha)
 			return;
 
 		float posX = aParams.mPosX + g->mTransX;
