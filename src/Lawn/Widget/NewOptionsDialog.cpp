@@ -77,6 +77,7 @@ NewOptionsDialog::NewOptionsDialog(LawnApp* theApp, bool theFromGameSelector) :
 
 	mFullscreenCheckbox = MakeNewCheckbox(NewOptionsDialog::NewOptionsDialog_Fullscreen, this, !theApp->mIsWindowed);
 	mHardwareAccelerationCheckbox = MakeNewCheckbox(NewOptionsDialog::NewOptionsDialog_HardwareAcceleration, this, theApp->Is3DAccelerated());
+	mFastSpeedButton = MakeButton(NewOptionsDialog::NewOptionsDialog_FastSpeed, this, (theApp->mFastSpeedPreference == GameSpeedMode::SPEED_1_5X) ? "1.5X" : "2.0X");
 
 	if (mFromGameSelector)
 	{
@@ -127,7 +128,7 @@ void NewOptionsDialog::AddedToManager(Sexy::WidgetManager* theWidgetManager)
 	AddWidget(mBackToMainButton.get());
 	AddWidget(mMusicVolumeSlider.get());
 	AddWidget(mSfxVolumeSlider.get());
-	AddWidget(mHardwareAccelerationCheckbox.get());
+	AddWidget(mFastSpeedButton.get());
 	AddWidget(mFullscreenCheckbox.get());
 	AddWidget(mBackToGameButton.get());
 
@@ -149,7 +150,7 @@ void NewOptionsDialog::RemovedFromManager(Sexy::WidgetManager* theWidgetManager)
 	RemoveWidget(mMusicVolumeSlider.get());
 	RemoveWidget(mSfxVolumeSlider.get());
 	RemoveWidget(mFullscreenCheckbox.get());
-	RemoveWidget(mHardwareAccelerationCheckbox.get());
+	RemoveWidget(mFastSpeedButton.get());
 	RemoveWidget(mBackToMainButton.get());
 	RemoveWidget(mBackToGameButton.get());
 	RemoveWidget(mRestartButton.get());
@@ -160,7 +161,7 @@ void NewOptionsDialog::Resize(int theX, int theY, int theWidth, int theHeight)
 	Dialog::Resize(theX, theY, theWidth, theHeight);
 	mMusicVolumeSlider->Resize(199, 116, 135, 40);
 	mSfxVolumeSlider->Resize(199, 143, 135, 40);
-	mHardwareAccelerationCheckbox->Resize(283, 175, 46, 45);
+	mFastSpeedButton->Resize(245, 172, 80, 32);
 	mFullscreenCheckbox->Resize(284, 206, 46, 45);
 	mAlmanacButton->Resize(107, 241, 209, 46);
 	mRestartButton->Resize(mAlmanacButton->mX, mAlmanacButton->mY + 43, 209, 46);
@@ -171,7 +172,7 @@ void NewOptionsDialog::Resize(int theX, int theY, int theWidth, int theHeight)
 	{
 		mMusicVolumeSlider->mY += 5;
 		mSfxVolumeSlider->mY += 10;
-		mHardwareAccelerationCheckbox->mY += 15;
+		mFastSpeedButton->mY += 15;
 		mFullscreenCheckbox->mY += 20;
 	}
 
@@ -205,7 +206,7 @@ void NewOptionsDialog::Draw(Sexy::Graphics* g)
 		g->SetScale(aFontScale, aFontScale, 0.0f, 0.0f);
 	PvzpDrawString(g, mApp->GetString("OPTIONS_MUSIC_LABEL", "Music"), aSliderLabelsX, 140 + aMusicOffset, FONT_DWARVENTODCRAFT18, aTextColor, DrawStringJustification::DS_ALIGN_RIGHT);
 	PvzpDrawString(g, mApp->GetString("OPTIONS_SOUNDFX", "Sound FX"), aSliderLabelsX, 167 + aSfxOffset, FONT_DWARVENTODCRAFT18, aTextColor, DrawStringJustification::DS_ALIGN_RIGHT);
-	PvzpDrawString(g, mApp->GetString("OPTIONS_3D_ACCELERATION", "3D Acceleration"), aCheckboxLabelsX, 197 + a3DAccelOffset, FONT_DWARVENTODCRAFT18, aTextColor, DrawStringJustification::DS_ALIGN_RIGHT);
+	PvzpDrawString(g, "Modo Turbo", aCheckboxLabelsX - 35, 197 + a3DAccelOffset, FONT_DWARVENTODCRAFT18, aTextColor, DrawStringJustification::DS_ALIGN_RIGHT);
 	PvzpDrawString(g, mApp->GetString("OPTIONS_FULL_SCREEN", "Full Screen"), aCheckboxLabelsX, 229 + aFullScreenOffset, FONT_DWARVENTODCRAFT18, aTextColor, DrawStringJustification::DS_ALIGN_RIGHT);
 	if (aFontScale != 1.0f)
 		g->SetScale(1.0f, 1.0f, 0.0f, 0.0f);
@@ -319,6 +320,24 @@ void NewOptionsDialog::ButtonDepress(int theId)
 
 	switch (theId)
 	{
+	case NewOptionsDialog::NewOptionsDialog_FastSpeed:
+	{
+		if (mApp->mFastSpeedPreference == GameSpeedMode::SPEED_1_5X)
+			mApp->mFastSpeedPreference = GameSpeedMode::SPEED_2X;
+		else
+			mApp->mFastSpeedPreference = GameSpeedMode::SPEED_1_5X;
+
+		if (mFastSpeedButton)
+			mFastSpeedButton->SetLabel((mApp->mFastSpeedPreference == GameSpeedMode::SPEED_1_5X) ? "1.5X" : "2.0X");
+
+		if (mApp->mGameSpeed != GameSpeedMode::SPEED_1X)
+			mApp->mGameSpeed = mApp->mFastSpeedPreference;
+
+		mApp->WriteToRegistry();
+		mApp->PlaySample(SOUND_BUTTONCLICK);
+		break;
+	}
+
 	case NewOptionsDialog::NewOptionsDialog_Almanac:
 	{
 		AlmanacDialog* aDialog = mApp->DoAlmanacDialog(SeedType::SEED_NONE, ZombieType::ZOMBIE_INVALID);

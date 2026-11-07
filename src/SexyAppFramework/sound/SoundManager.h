@@ -33,7 +33,7 @@ namespace Sexy
 class SoundInstance;
 
 constexpr const int MAX_SOURCE_SOUNDS = 256;
-constexpr const int MAX_CHANNELS = 32;
+constexpr const int MAX_CHANNELS = 16;
 
 class SoundManager
 {

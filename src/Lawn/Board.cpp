@@ -7720,8 +7720,8 @@ void Board::DrawTopRightUI(Graphics* g)
 
 	if (mApp->mGameSpeed != GameSpeedMode::SPEED_1X)
 	{
-		std::string aSpeedStr = ">> 2X";
-		Color aSpeedColor = Color(120, 255, 120);
+		std::string aSpeedStr = (mApp->mGameSpeed == GameSpeedMode::SPEED_1_5X) ? ">> 1.5X" : ">> 2X";
+		Color aSpeedColor = (mApp->mGameSpeed == GameSpeedMode::SPEED_1_5X) ? Color(255, 220, 100) : Color(120, 255, 120);
 
 		g->SetColor(Color(0, 0, 0, 160));
 		g->FillRect(588, 4, 82, 24);

@@ -1675,11 +1675,23 @@ void GLInterface::Flush()
 					sSmoothScaleInit = true;
 				}
 
+				static int sScaleX[640];
+				static bool sScaleXInit = false;
+				if (!sScaleXInit)
+				{
+					for (int x = 0; x < 640; ++x)
+						sScaleX[x] = (x * 5) / 4;
+					sScaleXInit = true;
+				}
+
 				if (sSmoothScale)
 				{
-					// Option A: Fused 1-pass edge-smoothing downscaler (800x600 -> 640x480)
-					// Rows 0, 1, 2: direct 1-pass horizontal NEON downscale straight to texture
-					// Row 3: fast average with skipped row 4 to eliminate vertical aliasing
+					bool useFastLawn = (mApp && mApp->ShouldUseFastLawnScaler());
+
+					// Zoned downscaler: (800x600 -> 640x480)
+					// Blocks 0..15 (Y: 0..79): Top UI (seeds, sun, menu) -> Fused smooth bilinear NEON
+					// Blocks 16..115 (Y: 80..579): Combat lawn -> Nearest-Neighbor 5:4 fast blit when under heavy gameplay
+					// Blocks 116..119 (Y: 580..599): Bottom UI (wave progress) -> Fused smooth bilinear NEON
 					for (int block = 0; block < 120; ++block)
 					{
 						int sy = block * 5;
@@ -1689,26 +1701,37 @@ void GLInterface::Flush()
 							__builtin_prefetch(dstRow + 4 * texPitch, 1, 0);
 						}
 
-						DownscaleRow800To640(srcBits + (sy + 0) * 800, (uint32_t*)(dstRow + 0 * texPitch));
-						DownscaleRow800To640(srcBits + (sy + 1) * 800, (uint32_t*)(dstRow + 1 * texPitch));
-						DownscaleRow800To640(srcBits + (sy + 2) * 800, (uint32_t*)(dstRow + 2 * texPitch));
+						bool isLawn = (block >= 16 && block < 116);
+						if (useFastLawn && isLawn)
+						{
+							for (int r = 0; r < 4; ++r)
+							{
+								int srcY = sy + (r * 5) / 4;
+								const uint32_t* srcRow = srcBits + (srcY * 800);
+								uint32_t* dst = (uint32_t*)(dstRow + r * texPitch);
+								for (int dx = 0; dx < 640; dx += 4)
+								{
+									dst[dx + 0] = srcRow[sScaleX[dx + 0]];
+									dst[dx + 1] = srcRow[sScaleX[dx + 1]];
+									dst[dx + 2] = srcRow[sScaleX[dx + 2]];
+									dst[dx + 3] = srcRow[sScaleX[dx + 3]];
+								}
+							}
+						}
+						else
+						{
+							DownscaleRow800To640(srcBits + (sy + 0) * 800, (uint32_t*)(dstRow + 0 * texPitch));
+							DownscaleRow800To640(srcBits + (sy + 1) * 800, (uint32_t*)(dstRow + 1 * texPitch));
+							DownscaleRow800To640(srcBits + (sy + 2) * 800, (uint32_t*)(dstRow + 2 * texPitch));
 
-						AverageAndDownscaleRow800To640(srcBits + (sy + 3) * 800, srcBits + (sy + 4) * 800, (uint32_t*)(dstRow + 3 * texPitch));
+							AverageAndDownscaleRow800To640(srcBits + (sy + 3) * 800, srcBits + (sy + 4) * 800, (uint32_t*)(dstRow + 3 * texPitch));
+						}
 
 						dstRow += 4 * texPitch;
 					}
 				}
 				else
 				{
-					static int sScaleX[640];
-					static bool sScaleXInit = false;
-					if (!sScaleXInit)
-					{
-						for (int x = 0; x < 640; ++x)
-							sScaleX[x] = (x * 5) / 4;
-						sScaleXInit = true;
-					}
-
 					for (int dy = 0; dy < 480; ++dy)
 					{
 						int sy = (dy * 5) / 4;

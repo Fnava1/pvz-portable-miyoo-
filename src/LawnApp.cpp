@@ -125,6 +125,8 @@ LawnApp::LawnApp()
 	mDaisyMode = false;
 	mSukhbirMode = false;
 	mGameSpeed = GameSpeedMode::SPEED_1X;
+	mFastSpeedPreference = GameSpeedMode::SPEED_2X;
+	mSpeedUpdateCounter = 0;
 	mAutoCollectSuns = false;
 	mGameScene = GameScenes::SCENE_LOADING;
 	mCloseRequest = false;
@@ -317,6 +319,8 @@ void LawnApp::LostFocus()
 
 void LawnApp::WriteToRegistry()
 {
+	RegistryWriteInteger("FastSpeedPreference", static_cast<int>(mFastSpeedPreference));
+
 	if (mPlayerInfo)
 	{
 		RegistryWriteString("CurUser", mPlayerInfo->mName);
@@ -329,6 +333,15 @@ void LawnApp::WriteToRegistry()
 void LawnApp::ReadFromRegistry()
 {
 	SexyApp::ReadFromRegistry();
+
+	int aSpeedPref = 0;
+	if (RegistryReadInteger("FastSpeedPreference", &aSpeedPref))
+	{
+		if (aSpeedPref == static_cast<int>(GameSpeedMode::SPEED_1_5X))
+			mFastSpeedPreference = GameSpeedMode::SPEED_1_5X;
+		else
+			mFastSpeedPreference = GameSpeedMode::SPEED_2X;
+	}
 }
 
 bool LawnApp::WriteCurrentUserConfig()
@@ -1655,7 +1668,19 @@ void LawnApp::UpdateFrames()
 	int aUpdateCount = 1;
 	if (mGameScene == GameScenes::SCENE_PLAYING && mBoard && !mBoard->mPaused && GetDialogCount() == 0)
 	{
-		aUpdateCount = static_cast<int>(mGameSpeed);
+		if (mGameSpeed == GameSpeedMode::SPEED_2X)
+		{
+			aUpdateCount = 2;
+		}
+		else if (mGameSpeed == GameSpeedMode::SPEED_1_5X)
+		{
+			// 1.5X speed cadence: alternates 1 and 2 updates per frame (3 ticks per 2 frames)
+			aUpdateCount = ((++mSpeedUpdateCounter) & 1) ? 2 : 1;
+		}
+		else
+		{
+			aUpdateCount = 1;
+		}
 	}
 	else if (gSlowMo)
 	{
@@ -1791,7 +1816,7 @@ void LawnApp::ToggleFastMo()
 void LawnApp::CycleGameSpeed()
 {
 	if (mGameSpeed == GameSpeedMode::SPEED_1X)
-		mGameSpeed = GameSpeedMode::SPEED_2X;
+		mGameSpeed = mFastSpeedPreference;
 	else
 		mGameSpeed = GameSpeedMode::SPEED_1X;
 
@@ -1801,6 +1826,18 @@ void LawnApp::CycleGameSpeed()
 void LawnApp::SetGameSpeed(GameSpeedMode theSpeed)
 {
 	mGameSpeed = theSpeed;
+}
+
+bool LawnApp::ShouldUseFastLawnScaler()
+{
+	if (mGameScene == GameScenes::SCENE_PLAYING && mBoard && !mBoard->mPaused)
+	{
+		if (mBoard->mPlants.mSize > 20 || mBoard->mZombies.mSize > 15)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 void LawnApp::ToggleAutoCollectSuns()

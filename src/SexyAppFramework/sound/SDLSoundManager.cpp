@@ -377,10 +377,6 @@ SoundInstance* SDLSoundManager::GetSoundInstance(intptr_t theSfxID)
 	if ((theSfxID < 0) || (theSfxID >= MAX_SOURCE_SOUNDS))
 		return nullptr;
 
-	int aFreeChannel = FindFreeChannel();
-	if (aFreeChannel < 0)
-		return nullptr;
-
 	if (mSourceSounds[theSfxID] == nullptr)
 	{
 #ifdef LOW_MEMORY
@@ -390,6 +386,28 @@ SoundInstance* SDLSoundManager::GetSoundInstance(intptr_t theSfxID)
 		return nullptr;
 #endif
 	}
+
+	// Concurrency limiter: prevent audio thread starvation and clipping from repetitive sound bursts
+	if (mSourceSounds[theSfxID] != nullptr)
+	{
+		int activeCount = 0;
+		for (int i = 0; i < MAX_CHANNELS; i++)
+		{
+			if (mPlayingSounds[i] != nullptr && !mPlayingSounds[i]->IsReleased() && mPlayingSounds[i]->mMixChunk == mSourceSounds[theSfxID])
+			{
+				if (mPlayingSounds[i]->IsPlaying())
+				{
+					activeCount++;
+					if (activeCount >= 2)
+						return nullptr;
+				}
+			}
+		}
+	}
+
+	int aFreeChannel = FindFreeChannel();
+	if (aFreeChannel < 0)
+		return nullptr;
 
 	if (!mPlayingSounds[aFreeChannel])
 	{
