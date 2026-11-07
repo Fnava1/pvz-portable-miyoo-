@@ -96,7 +96,6 @@ void	funcname(SWHelper::SWVertex* pVerts, void* pFrameBuffer, const unsigned int
 	const int tex_pitch = textureInfo->pitch;
 	const unsigned int tex_endpos = textureInfo->endpos;
 
-	const SWHelper::signed64 bigOne = static_cast<SWHelper::signed64>(1) << 48;
 #define  swap(a,b,type) {type tmp = a; a = b; b = tmp;}
 
 	const unsigned int* pTexture;
@@ -143,20 +142,20 @@ void	funcname(SWHelper::SWVertex* pVerts, void* pFrameBuffer, const unsigned int
 
 	// Calculate long-edge deltas
 
-	SWHelper::signed64	oneOverHeight = bigOne / (v2->y - v0->y);
+	float invHeight = 65536.0f / static_cast<float>(v2->y - v0->y);
 	[[maybe_unused]] int		ldx, ldr, ldg, ldb, lda, ldu, ldv;
-	ldx = static_cast<int>(((v2->x - v0->x) * oneOverHeight) >> 32);
+	ldx = static_cast<int>(static_cast<float>(v2->x - v0->x) * invHeight);
 
 #if defined(MOD_ARGB)
-	lda = static_cast<int>(((v2->a - v0->a) * oneOverHeight) >> 32);
-	ldr = static_cast<int>(((v2->r - v0->r) * oneOverHeight) >> 32);
-	ldg = static_cast<int>(((v2->g - v0->g) * oneOverHeight) >> 32);
-	ldb = static_cast<int>(((v2->b - v0->b) * oneOverHeight) >> 32);
+	lda = static_cast<int>(static_cast<float>(v2->a - v0->a) * invHeight);
+	ldr = static_cast<int>(static_cast<float>(v2->r - v0->r) * invHeight);
+	ldg = static_cast<int>(static_cast<float>(v2->g - v0->g) * invHeight);
+	ldb = static_cast<int>(static_cast<float>(v2->b - v0->b) * invHeight);
 #endif
 
 #if defined(TEXTURED)
-	ldu = static_cast<int>(((v2->u - v0->u) * oneOverHeight) >> 32);
-	ldv = static_cast<int>(((v2->v - v0->v) * oneOverHeight) >> 32);
+	ldu = static_cast<int>(static_cast<float>(v2->u - v0->u) * invHeight);
+	ldv = static_cast<int>(static_cast<float>(v2->v - v0->v) * invHeight);
 #endif
 
 	// Long-edge midpoint
@@ -186,22 +185,21 @@ void	funcname(SWHelper::SWVertex* pVerts, void* pFrameBuffer, const unsigned int
 
 	// Scanline deltas
 
-	SWHelper::signed64	oneOverWidth;
 	[[maybe_unused]] int		dr, dg, db, da, du, dv;
 #if defined(TEXTURED) || defined(MOD_ARGB)
-	oneOverWidth = bigOne / (v1->x - mid);
+	float invWidth = 65536.0f / static_cast<float>(v1->x - mid);
 #endif
 
 #if defined (MOD_ARGB)
-	da = static_cast<int>(((v1->a - (v0->a + ((topHeight * lda) >> 16)))* oneOverWidth) >> 32);
-	dr = static_cast<int>(((v1->r - (v0->r + ((topHeight * ldr) >> 16)))* oneOverWidth) >> 32);
-	dg = static_cast<int>(((v1->g - (v0->g + ((topHeight * ldg) >> 16)))* oneOverWidth) >> 32);
-	db = static_cast<int>(((v1->b - (v0->b + ((topHeight * ldb) >> 16)))* oneOverWidth) >> 32);
+	da = static_cast<int>(static_cast<float>(v1->a - (v0->a + ((topHeight * lda) >> 16))) * invWidth);
+	dr = static_cast<int>(static_cast<float>(v1->r - (v0->r + ((topHeight * ldr) >> 16))) * invWidth);
+	dg = static_cast<int>(static_cast<float>(v1->g - (v0->g + ((topHeight * ldg) >> 16))) * invWidth);
+	db = static_cast<int>(static_cast<float>(v1->b - (v0->b + ((topHeight * ldb) >> 16))) * invWidth);
 #endif
 
 #if defined (TEXTURED)
-	du = static_cast<int>(((v1->u - (v0->u + ((topHeight * ldu) >> 16)))* oneOverWidth) >> 32);
-	dv = static_cast<int>(((v1->v - (v0->v + ((topHeight * ldv) >> 16)))* oneOverWidth) >> 32);
+	du = static_cast<int>(static_cast<float>(v1->u - (v0->u + ((topHeight * ldu) >> 16))) * invWidth);
+	dv = static_cast<int>(static_cast<float>(v1->v - (v0->v + ((topHeight * ldv) >> 16))) * invWidth);
 #endif
 
 	// Screen info
@@ -214,8 +212,8 @@ void	funcname(SWHelper::SWVertex* pVerts, void* pFrameBuffer, const unsigned int
 	{
 		// Short edge delta X
 
-		oneOverHeight = bigOne / topHeight;
-		int	sdx = static_cast<int>(((v1->x - v0->x) * oneOverHeight) >> 32);
+		float invTopHeight = 65536.0f / static_cast<float>(topHeight);
+		int	sdx = static_cast<int>(static_cast<float>(v1->x - v0->x) * invTopHeight);
 
 		// Edge variables (short)
 
@@ -254,8 +252,8 @@ void	funcname(SWHelper::SWVertex* pVerts, void* pFrameBuffer, const unsigned int
 
 	// Short edge along bottom half
 
-	oneOverHeight = bigOne / (v2->y - v1->y);
-	int	sdx = static_cast<int>(((v2->x - v1->x) * oneOverHeight) >> 32);
+	float invBottomHeight = 65536.0f / static_cast<float>(v2->y - v1->y);
+	int	sdx = static_cast<int>(static_cast<float>(v2->x - v1->x) * invBottomHeight);
 
 	subPix = (y1 << 16) - v1->y;
 	int	sx = v1->x + static_cast<int>((sdx * subPix) >> 16);

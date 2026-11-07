@@ -479,10 +479,12 @@ void SWHelper::SWDrawShape(XYZStruct *theVerts, int theNumVerts, MemoryImage *th
 
 			if (textured)
 			{
+				float aTexWidthFixed = static_cast<float>(theImage->mWidth) * 65536.0f;
+				float aTexHeightFixed = static_cast<float>(theImage->mHeight) * 65536.0f;
 				for (unsigned int i = 0; i < vCount; ++i)
 				{
-					pVerts[i].u = static_cast<int>(clipped[i]->mU * (float) theImage->mWidth * 65536.0f);
-					pVerts[i].v = static_cast<int>(clipped[i]->mV * (float) theImage->mHeight * 65536.0f);
+					pVerts[i].u = static_cast<int>(clipped[i]->mU * aTexWidthFixed);
+					pVerts[i].v = static_cast<int>(clipped[i]->mV * aTexHeightFixed);
 				}
 
 				textureInfo.pTexture = reinterpret_cast<unsigned int *>(theImage->GetBits());

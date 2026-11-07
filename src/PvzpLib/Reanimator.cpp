@@ -610,6 +610,38 @@ void Reanimation::GetTransformAtTime(int theTrackIndex, ReanimatorTransform* the
 		theTransform->mFrame = aTransBefore.mFrame;
 }
 
+struct SinCosEntry {
+	float sinVal;
+	float cosVal;
+};
+
+static SinCosEntry gSinCosLUT[2048];
+static bool gSinCosLUTInit = false;
+
+static void InitSinCosLUT()
+{
+	constexpr float step = (2.0f * 3.14159265358979323846f) / 2048.0f;
+	for (int i = 0; i < 2048; ++i)
+	{
+		float angle = static_cast<float>(i) * step;
+		gSinCosLUT[i].sinVal = sinf(angle);
+		gSinCosLUT[i].cosVal = cosf(angle);
+	}
+	gSinCosLUTInit = true;
+}
+
+static inline void FastSinCos(float rad, float* s, float* c)
+{
+	if (__builtin_expect(!gSinCosLUTInit, 0))
+	{
+		InitSinCosLUT();
+	}
+	constexpr float radToIdx = 2048.0f / (2.0f * 3.14159265358979323846f);
+	int idx = static_cast<int>(std::floor(rad * radToIdx)) & 2047;
+	*s = gSinCosLUT[idx].sinVal;
+	*c = gSinCosLUT[idx].cosVal;
+}
+
 void Reanimation::MatrixFromTransform(const ReanimatorTransform& theTransform, SexyMatrix3& theMatrix)
 {
 	if (theTransform.mSkewX == 0.0f && theTransform.mSkewY == 0.0f)
@@ -627,16 +659,19 @@ void Reanimation::MatrixFromTransform(const ReanimatorTransform& theTransform, S
 	}
 
 	float aSkewX = -DEG_TO_RAD(theTransform.mSkewX);
-	float aSkewY = -DEG_TO_RAD(theTransform.mSkewY);
-
 	float sinX, cosX, sinY, cosY;
-#if defined(__GNUC__) || defined(__arm__) || defined(__aarch64__)
-	sincosf(aSkewX, &sinX, &cosX);
-	sincosf(aSkewY, &sinY, &cosY);
-#else
-	sinX = sinf(aSkewX); cosX = cosf(aSkewX);
-	sinY = sinf(aSkewY); cosY = cosf(aSkewY);
-#endif
+	FastSinCos(aSkewX, &sinX, &cosX);
+
+	if (theTransform.mSkewX == theTransform.mSkewY)
+	{
+		sinY = sinX;
+		cosY = cosX;
+	}
+	else
+	{
+		float aSkewY = -DEG_TO_RAD(theTransform.mSkewY);
+		FastSinCos(aSkewY, &sinY, &cosY);
+	}
 
 	theMatrix.m00 = cosX * theTransform.mScaleX;
 	theMatrix.m10 = -sinX * theTransform.mScaleX;

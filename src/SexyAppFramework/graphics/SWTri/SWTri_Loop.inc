@@ -37,6 +37,8 @@
 	#if defined(TEXTURED)
 		u = lu + static_cast<int>((du * subTex)>>16);
 		v = lv + static_cast<int>((dv * subTex)>>16);
+		unsigned int current_v_int = v >> 16;
+		unsigned int v_row_offset = current_v_int * tex_pitch;
 	#endif
 
 	[[maybe_unused]] PTYPE *		pix = fb + (x0>>16);

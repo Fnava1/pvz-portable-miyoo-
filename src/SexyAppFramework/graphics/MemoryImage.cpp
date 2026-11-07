@@ -1241,7 +1241,7 @@ void MemoryImage::AdditiveBlt(Image* theImage, int theX, int theY, const Rect& t
 {
 	theImage->mDrawn = true;
 
-	MemoryImage* aSrcMemoryImage = dynamic_cast<MemoryImage*>(theImage);
+	MemoryImage* aSrcMemoryImage = static_cast<MemoryImage*>(theImage);
 
 	uchar* aMaxTable = mApp->mAdd8BitMaxTable;
 
@@ -1281,7 +1281,7 @@ void MemoryImage::NormalBlt(Image* theImage, int theX, int theY, const Rect& the
 {
 	theImage->mDrawn = true;
 
-	MemoryImage* aSrcMemoryImage = dynamic_cast<MemoryImage*>(theImage);
+	MemoryImage* aSrcMemoryImage = static_cast<MemoryImage*>(theImage);
 
 	if (aSrcMemoryImage != nullptr)
 	{
@@ -1436,7 +1436,7 @@ void MemoryImage::BltRotated(Image* theImage, float theX, float theY, const Rect
 	if (!BltRotatedClipHelper(theX, theY, theSrcRect, theClipRect, theRot, aDestRect,theRotCenterX,theRotCenterY))
 		return;
 
-	MemoryImage* aMemoryImage = dynamic_cast<MemoryImage*>(theImage);
+	MemoryImage* aMemoryImage = static_cast<MemoryImage*>(theImage);
 	uchar* aMaxTable = mApp->mAdd8BitMaxTable;
 
 	if (aMemoryImage != nullptr)
@@ -1494,7 +1494,7 @@ void MemoryImage::SlowStretchBlt(Image* theImage, const Rect& theDestRect, const
 
 	[[maybe_unused]] uint32_t* aDestEnd = GetBits() + (mWidth * mHeight);  // Unused in Release mode
 
-	MemoryImage* aSrcMemoryImage = dynamic_cast<MemoryImage*>(theImage);
+	MemoryImage* aSrcMemoryImage = static_cast<MemoryImage*>(theImage);
 
 	if (aSrcMemoryImage != nullptr)
 	{
@@ -1536,7 +1536,7 @@ void MemoryImage::FastStretchBlt(Image* theImage, const Rect& theDestRect, const
 	if (theDestRect.mWidth <= 0 || theDestRect.mHeight <= 0)
 		return;
 
-	MemoryImage* aSrcMemoryImage = dynamic_cast<MemoryImage*>(theImage);
+	MemoryImage* aSrcMemoryImage = static_cast<MemoryImage*>(theImage);
 	if (aSrcMemoryImage == nullptr)
 		return;
 
@@ -1768,7 +1768,7 @@ void MemoryImage::StretchBlt(Image* theImage, const Rect& theDestRect, const Rec
 
 void MemoryImage::BltMatrixHelper(Image* theImage, float x, float y, const SexyMatrix3 &theMatrix, const Rect& theClipRect, const Color& theColor, int theDrawMode, const Rect &theSrcRect, void *theSurface, int theBytePitch, int thePixelFormat, bool blend)
 {
-	MemoryImage *anImage = dynamic_cast<MemoryImage*>(theImage);
+	MemoryImage *anImage = static_cast<MemoryImage*>(theImage);
 	if (anImage==nullptr)
 		return;
 
@@ -1819,7 +1819,7 @@ void MemoryImage::BltMatrix(Image* theImage, float x, float y, const SexyMatrix3
 
 void MemoryImage::BltTrianglesTexHelper(Image *theTexture, const TriVertex theVertices[][3], int theNumTriangles, const Rect &theClipRect, const Color &theColor, int theDrawMode, void *theSurface, int theBytePitch, int thePixelFormat, float tx, float ty, bool blend)
 {
-	MemoryImage *anImage = dynamic_cast<MemoryImage*>(theTexture);
+	MemoryImage *anImage = static_cast<MemoryImage*>(theTexture);
 //	if (anImage==nullptr)
 //		return;
 

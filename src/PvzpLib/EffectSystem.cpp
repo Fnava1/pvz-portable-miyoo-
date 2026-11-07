@@ -26,6 +26,9 @@
 #include "PvzpParticle.h"
 #include "EffectSystem.h"
 #include <cmath>
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+#include <arm_neon.h>
+#endif
 #include "../GameConstants.h"
 #include "graphics/GLImage.h"
 #include "graphics/GLInterface.h"
@@ -436,6 +439,49 @@ void PvzpTriangleGroup::AddTriangle(Graphics* g, Image* theImage, const SexyMatr
 		DrawGroup(g);
 	mImage = theImage;
 
+	SexyVector2 tp[4];
+	float minX, maxX, minY, maxY;
+
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+	float x = -theSrcRect.mWidth * 0.5f;
+	float y = -theSrcRect.mHeight * 0.5f;
+	float w = static_cast<float>(theSrcRect.mWidth);
+	float h = static_cast<float>(theSrcRect.mHeight);
+
+	float32x4_t vx = { x, x, x + w, x + w };
+	float32x4_t vy = { y, y + h, y, y + h };
+
+	float32x4_t vm00 = vdupq_n_f32(theMatrix.m00);
+	float32x4_t vm01 = vdupq_n_f32(theMatrix.m01);
+	float32x4_t voff_x = vdupq_n_f32(theMatrix.m02 - 0.5f);
+	float32x4_t vres_x = vmlaq_f32(voff_x, vm00, vx);
+	vres_x = vmlaq_f32(vres_x, vm01, vy);
+
+	float32x4_t vm10 = vdupq_n_f32(theMatrix.m10);
+	float32x4_t vm11 = vdupq_n_f32(theMatrix.m11);
+	float32x4_t voff_y = vdupq_n_f32(theMatrix.m12 - 0.5f);
+	float32x4_t vres_y = vmlaq_f32(voff_y, vm10, vx);
+	vres_y = vmlaq_f32(vres_y, vm11, vy);
+
+	float32x4x2_t v_xy = { vres_x, vres_y };
+	vst2q_f32(reinterpret_cast<float*>(tp), v_xy);
+
+	float32x2_t min2_x = vmin_f32(vget_low_f32(vres_x), vget_high_f32(vres_x));
+	min2_x = vpmin_f32(min2_x, min2_x);
+	minX = vget_lane_f32(min2_x, 0);
+
+	float32x2_t max2_x = vmax_f32(vget_low_f32(vres_x), vget_high_f32(vres_x));
+	max2_x = vpmax_f32(max2_x, max2_x);
+	maxX = vget_lane_f32(max2_x, 0);
+
+	float32x2_t min2_y = vmin_f32(vget_low_f32(vres_y), vget_high_f32(vres_y));
+	min2_y = vpmin_f32(min2_y, min2_y);
+	minY = vget_lane_f32(min2_y, 0);
+
+	float32x2_t max2_y = vmax_f32(vget_low_f32(vres_y), vget_high_f32(vres_y));
+	max2_y = vpmax_f32(max2_y, max2_y);
+	maxY = vget_lane_f32(max2_y, 0);
+#else
 	SexyVector2 p[4];
 	float x = -theSrcRect.mWidth * 0.5f;
 	float y = -theSrcRect.mHeight * 0.5f;
@@ -447,7 +493,6 @@ void PvzpTriangleGroup::AddTriangle(Graphics* g, Image* theImage, const SexyMatr
 	p[2].y = y;
 	p[3].x = x + theSrcRect.mWidth;
 	p[3].y = y + theSrcRect.mHeight;
-	SexyVector2 tp[4];
 	for (int i = 0; i < 4; i++)
 	{
 		tp[i] = theMatrix * p[i];
@@ -455,11 +500,11 @@ void PvzpTriangleGroup::AddTriangle(Graphics* g, Image* theImage, const SexyMatr
 		tp[i].y -= 0.5f;
 	}
 
-	// Early bounding-box culling against clip rect
-	float minX = std::min({tp[0].x, tp[1].x, tp[2].x, tp[3].x});
-	float maxX = std::max({tp[0].x, tp[1].x, tp[2].x, tp[3].x});
-	float minY = std::min({tp[0].y, tp[1].y, tp[2].y, tp[3].y});
-	float maxY = std::max({tp[0].y, tp[1].y, tp[2].y, tp[3].y});
+	minX = std::min({tp[0].x, tp[1].x, tp[2].x, tp[3].x});
+	maxX = std::max({tp[0].x, tp[1].x, tp[2].x, tp[3].x});
+	minY = std::min({tp[0].y, tp[1].y, tp[2].y, tp[3].y});
+	maxY = std::max({tp[0].y, tp[1].y, tp[2].y, tp[3].y});
+#endif
 
 	if (maxX < theClipRect.mX || minX > theClipRect.mX + theClipRect.mWidth ||
 		maxY < theClipRect.mY || minY > theClipRect.mY + theClipRect.mHeight)
@@ -518,14 +563,8 @@ void PvzpTriangleGroup::AddTriangle(Graphics* g, Image* theImage, const SexyMatr
 		if ((
 				theClipRect.mX == 0 && theClipRect.mY == 0 && theClipRect.mWidth == BOARD_WIDTH && theClipRect.mHeight == BOARD_HEIGHT && gSexyAppBase->Is3DAccelerated()
 			) || (
-				theClipRect.mX <= tp[0].x && theClipRect.mX + theClipRect.mWidth >= tp[0].x &&
-				theClipRect.mX <= tp[1].x && theClipRect.mX + theClipRect.mWidth >= tp[1].x &&
-				theClipRect.mX <= tp[2].x && theClipRect.mX + theClipRect.mWidth >= tp[2].x &&
-				theClipRect.mX <= tp[3].x && theClipRect.mX + theClipRect.mWidth >= tp[3].x &&
-				theClipRect.mY <= tp[0].y && theClipRect.mY + theClipRect.mHeight >= tp[0].y &&
-				theClipRect.mY <= tp[1].y && theClipRect.mY + theClipRect.mHeight >= tp[1].y &&
-				theClipRect.mY <= tp[2].y && theClipRect.mY + theClipRect.mHeight >= tp[2].y &&
-				theClipRect.mY <= tp[3].y && theClipRect.mY + theClipRect.mHeight >= tp[3].y
+				theClipRect.mX <= minX && theClipRect.mX + theClipRect.mWidth >= maxX &&
+				theClipRect.mY <= minY && theClipRect.mY + theClipRect.mHeight >= maxY
 			))
 		{
 			aNoClipping = true;

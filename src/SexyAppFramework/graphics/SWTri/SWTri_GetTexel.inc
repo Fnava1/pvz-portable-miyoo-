@@ -27,8 +27,14 @@
 	unsigned int tex;
 	#if !defined(LINEAR_BLEND)
 	{
-		unsigned int	t_pos = ((v)>>16)*tex_pitch + ((u)>>16);
-		tex = t_pos<tex_endpos?pTexture[t_pos]:0;
+		unsigned int v_int = v >> 16;
+		if (__builtin_expect(v_int != current_v_int, 0))
+		{
+			current_v_int = v_int;
+			v_row_offset = v_int * tex_pitch;
+		}
+		unsigned int t_pos = v_row_offset + ((u) >> 16);
+		tex = t_pos < tex_endpos ? pTexture[t_pos] : 0;
 	}
 	#else
 	{
