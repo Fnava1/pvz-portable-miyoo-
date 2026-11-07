@@ -49,7 +49,6 @@ class ReanimatorCache
 {
 public:
 	std::array<std::unique_ptr<MemoryImage>, SeedType::NUM_SEED_TYPES> mPlantImages;
-	std::array<std::unique_ptr<MemoryImage>, SeedType::NUM_SEED_TYPES> mPlantAnimImages;
 	ImageVariationList      mImageVariationList;
 	std::array<std::unique_ptr<MemoryImage>, LawnMowerType::NUM_MOWER_TYPES> mLawnMowers;
 	std::array<std::unique_ptr<MemoryImage>, ZombieType::NUM_CACHED_ZOMBIE_TYPES> mZombieImages;
@@ -62,16 +61,14 @@ public:
 	void                    ReanimatorCacheDispose();
 	void                    PrecacheAll();
 	void                    DrawCachedPlant(Graphics* g, float thePosX, float thePosY, SeedType theSeedType, DrawVariation theDrawVariation);
-	void                    DrawCachedPlantAnim(Graphics* g, float thePosX, float thePosY, SeedType theSeedType, float theAnimTime);
 	void                    DrawCachedMower(Graphics* g, float thePosX, float thePosY, LawnMowerType theMowerType);
 	void                    DrawCachedZombie(Graphics* g, float thePosX, float thePosY, ZombieType theZombieType);
 	std::unique_ptr<MemoryImage> MakeBlankMemoryImage(int theWidth, int theHeight);
 	std::unique_ptr<MemoryImage> MakeCachedPlantFrame(SeedType theSeedType, DrawVariation theDrawVariation);
-	std::unique_ptr<MemoryImage> MakeCachedPlantAnimLoop(SeedType theSeedType, DrawVariation theDrawVariation);
 	std::unique_ptr<MemoryImage> MakeCachedMowerFrame(LawnMowerType theMowerType);
 	std::unique_ptr<MemoryImage> MakeCachedZombieFrame(ZombieType theZombieType);
 	void         GetPlantImageSize(SeedType theSeedType, int& theOffsetX, int& theOffsetY, int& theWidth, int& theHeight);
-	void                    DrawReanimatorFrame(Graphics* g, float thePosX, float thePosY, ReanimationType theReanimationType, const char* theTrackName, DrawVariation theDrawVariation, float theAnimTime = -1.0f);
+	void                    DrawReanimatorFrame(Graphics* g, float thePosX, float thePosY, ReanimationType theReanimationType, const char* theTrackName, DrawVariation theDrawVariation);
 	void                    UpdateReanimationForVariation(Reanimation* theReanim, DrawVariation theDrawVariation);
 };
 

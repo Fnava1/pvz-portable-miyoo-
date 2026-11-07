@@ -79,7 +79,7 @@ void ReanimatorCache::UpdateReanimationForVariation(Reanimation* theReanim, Draw
 	}
 }
 
-void ReanimatorCache::DrawReanimatorFrame(Graphics* g, float thePosX, float thePosY, ReanimationType theReanimationType, const char* theTrackName, DrawVariation theDrawVariation, float theAnimTime)
+void ReanimatorCache::DrawReanimatorFrame(Graphics* g, float thePosX, float thePosY, ReanimationType theReanimationType, const char* theTrackName, DrawVariation theDrawVariation)
 {
 	Reanimation aReanim;
 	aReanim.ReanimationInitializeType(thePosX, thePosY, theReanimationType);
@@ -92,13 +92,9 @@ void ReanimatorCache::DrawReanimatorFrame(Graphics* g, float thePosX, float theP
 	{
 		aReanim.AssignRenderGroupToTrack("Cornpult_butter", RENDER_GROUP_HIDDEN);
 	}
-	else if (theReanimationType == ReanimationType::REANIM_SUNFLOWER && theAnimTime < 0.0f)
+	else if (theReanimationType == ReanimationType::REANIM_SUNFLOWER)
 	{
 		aReanim.mAnimTime = 0.15f;
-	}
-	if (theAnimTime >= 0.0f)
-	{
-		aReanim.mAnimTime = theAnimTime;
 	}
 	aReanim.AssignRenderGroupToTrack("anim_waterline", RENDER_GROUP_HIDDEN);
 
@@ -262,40 +258,6 @@ std::unique_ptr<MemoryImage> ReanimatorCache::MakeCachedPlantFrame(SeedType theS
 	return aMemoryImage;
 }
 
-std::unique_ptr<MemoryImage> ReanimatorCache::MakeCachedPlantAnimLoop(SeedType theSeedType, DrawVariation theDrawVariation)
-{
-	int aOffsetX, aOffsetY, aWidth, aHeight;
-	GetPlantImageSize(theSeedType, aOffsetX, aOffsetY, aWidth, aHeight);
-
-	const int NUM_FRAMES = 6;
-	auto aMemoryImage = MakeBlankMemoryImage(aWidth * NUM_FRAMES, aHeight);
-	aMemoryImage->mNumCols = NUM_FRAMES;
-	aMemoryImage->mNumRows = 1;
-
-	Graphics aMemoryGraphics(aMemoryImage.get());
-	aMemoryGraphics.SetLinearBlend(true);
-
-	const PlantDefinition& aPlantDef = GetPlantDefinition(theSeedType);
-	ReanimatorEnsureDefinitionLoaded(aPlantDef.mReanimationType, true);
-
-	for (int f = 0; f < NUM_FRAMES; ++f)
-	{
-		float aAnimTime = static_cast<float>(f) / static_cast<float>(NUM_FRAMES);
-		float aDrawX = -aOffsetX + (f * aWidth);
-		float aDrawY = -aOffsetY;
-
-		DrawReanimatorFrame(&aMemoryGraphics, aDrawX, aDrawY, aPlantDef.mReanimationType, "anim_idle", theDrawVariation, aAnimTime);
-
-		if (theSeedType == SeedType::SEED_PEASHOOTER || theSeedType == SeedType::SEED_SNOWPEA || theSeedType == SeedType::SEED_REPEATER ||
-			theSeedType == SeedType::SEED_LEFTPEATER || theSeedType == SeedType::SEED_GATLINGPEA)
-		{
-			DrawReanimatorFrame(&aMemoryGraphics, aDrawX, aDrawY, aPlantDef.mReanimationType, "anim_head_idle", theDrawVariation, aAnimTime);
-		}
-	}
-
-	return aMemoryImage;
-}
-
 std::unique_ptr<MemoryImage> ReanimatorCache::MakeCachedZombieFrame(ZombieType theZombieType)
 {
 	auto aMemoryImage = MakeBlankMemoryImage(200, 210);
@@ -388,11 +350,6 @@ void ReanimatorCache::ReanimatorCacheDispose()
 		if (aImageVariation.mImage != nullptr)
 			delete aImageVariation.mImage;
 	}
-
-	for (auto& aImage : mPlantAnimImages)
-	{
-		aImage.reset();
-	}
 }
 
 void ReanimatorCache::PrecacheAll()
@@ -476,38 +433,6 @@ void ReanimatorCache::DrawCachedPlant(Graphics* g, float thePosX, float thePosY,
 	else
 	{
 		PvzpDrawImageScaledF(g, aImage, thePosX + (aOffsetX * g->mScaleX), thePosY + (aOffsetY * g->mScaleY), g->mScaleX, g->mScaleY);
-	}
-}
-
-void ReanimatorCache::DrawCachedPlantAnim(Graphics* g, float thePosX, float thePosY, SeedType theSeedType, float theAnimTime)
-{
-	PVZP_ASSERT(theSeedType >= 0 && theSeedType < SeedType::NUM_SEED_TYPES);
-
-	if (mPlantAnimImages[theSeedType] == nullptr)
-	{
-		mPlantAnimImages[theSeedType] = MakeCachedPlantAnimLoop(theSeedType, DrawVariation::VARIATION_NORMAL);
-	}
-
-	MemoryImage* aImage = mPlantAnimImages[theSeedType].get();
-	if (aImage == nullptr)
-		return;
-
-	int aNumCols = aImage->mNumCols > 0 ? aImage->mNumCols : 6;
-	float aNormalizedTime = theAnimTime - floorf(theAnimTime);
-	int aCel = static_cast<int>(aNormalizedTime * static_cast<float>(aNumCols));
-	if (aCel < 0) aCel = 0;
-	if (aCel >= aNumCols) aCel = aNumCols - 1;
-
-	int aOffsetX, aOffsetY, aWidth, aHeight;
-	GetPlantImageSize(theSeedType, aOffsetX, aOffsetY, aWidth, aHeight);
-
-	if (!mApp->Is3DAccelerated() && g->mScaleX == 1.0f && g->mScaleY == 1.0f)
-	{
-		PvzpDrawImageCelF(g, aImage, thePosX + aOffsetX, thePosY + aOffsetY, aCel, 0);
-	}
-	else
-	{
-		PvzpDrawImageCelF(g, aImage, thePosX + (aOffsetX * g->mScaleX), thePosY + (aOffsetY * g->mScaleY), aCel, 0);
 	}
 }
 
