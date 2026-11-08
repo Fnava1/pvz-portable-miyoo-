@@ -44,6 +44,42 @@
 	[[maybe_unused]] PTYPE *		pix = fb + (x0>>16);
 	int		width = ((x1-x0)>>16);
 
+#if defined(TEXTURED) && !defined(LINEAR_BLEND) && !defined(MOD_ARGB)
+	while (width >= 4)
+	{
+		unsigned int u0 = u >> 16;
+		unsigned int u1 = (u + du) >> 16;
+		unsigned int u2 = (u + du * 2) >> 16;
+		unsigned int u3 = (u + du * 3) >> 16;
+
+		unsigned int v0 = v >> 16;
+		unsigned int v1 = (v + dv) >> 16;
+		unsigned int v2 = (v + dv * 2) >> 16;
+		unsigned int v3 = (v + dv * 3) >> 16;
+
+		unsigned int t0 = v0 * tex_pitch + u0;
+		unsigned int t1 = v1 * tex_pitch + u1;
+		unsigned int t2 = v2 * tex_pitch + u2;
+		unsigned int t3 = v3 * tex_pitch + u3;
+
+		unsigned int tex0 = t0 < tex_endpos ? pTexture[t0] : 0;
+		unsigned int tex1 = t1 < tex_endpos ? pTexture[t1] : 0;
+		unsigned int tex2 = t2 < tex_endpos ? pTexture[t2] : 0;
+		unsigned int tex3 = t3 < tex_endpos ? pTexture[t3] : 0;
+
+		if ((tex0 >> 24) <= 8 && (tex1 >> 24) <= 8 && (tex2 >> 24) <= 8 && (tex3 >> 24) <= 8)
+		{
+			pix += 4;
+			u += du * 4;
+			v += dv * 4;
+			width -= 4;
+			continue;
+		}
+
+		break;
+	}
+#endif
+
 	while(width-- > 0)
 	{
 		#include PIXEL_INCLUDE
