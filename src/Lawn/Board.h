@@ -108,6 +108,60 @@ inline bool RenderItemSortFunc(const RenderItem& theItem1, const RenderItem& the
 	return theItem1.mZPos < theItem2.mZPos;
 }
 
+inline void RadixSortRenderItems(RenderItem* aList, RenderItem* aTemp, int aCount)
+{
+	if (aCount <= 1)
+		return;
+
+	int minZ = aList[0].mZPos;
+	int maxZ = aList[0].mZPos;
+	for (int i = 1; i < aCount; ++i)
+	{
+		if (aList[i].mZPos < minZ) minZ = aList[i].mZPos;
+		if (aList[i].mZPos > maxZ) maxZ = aList[i].mZPos;
+	}
+
+	if (minZ < 0 || maxZ >= (1 << 20))
+	{
+		std::sort(aList, aList + aCount, RenderItemSortFunc);
+		return;
+	}
+
+	uint32_t count0[1024] = { 0 };
+	for (int i = 0; i < aCount; ++i)
+	{
+		count0[aList[i].mZPos & 0x3FF]++;
+	}
+	uint32_t offset0[1024];
+	offset0[0] = 0;
+	for (int i = 1; i < 1024; ++i)
+	{
+		offset0[i] = offset0[i - 1] + count0[i - 1];
+	}
+	for (int i = 0; i < aCount; ++i)
+	{
+		uint32_t bucket = aList[i].mZPos & 0x3FF;
+		aTemp[offset0[bucket]++] = aList[i];
+	}
+
+	uint32_t count1[1024] = { 0 };
+	for (int i = 0; i < aCount; ++i)
+	{
+		count1[(aTemp[i].mZPos >> 10) & 0x3FF]++;
+	}
+	uint32_t offset1[1024];
+	offset1[0] = 0;
+	for (int i = 1; i < 1024; ++i)
+	{
+		offset1[i] = offset1[i - 1] + count1[i - 1];
+	}
+	for (int i = 0; i < aCount; ++i)
+	{
+		uint32_t bucket = (aTemp[i].mZPos >> 10) & 0x3FF;
+		aList[offset1[bucket]++] = aTemp[i];
+	}
+}
+
 struct ZombiePicker
 {
 	int								mZombieCount;

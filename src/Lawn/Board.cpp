@@ -6855,7 +6855,8 @@ void Board::DrawGameObjects(Graphics* g)
 	}
 	AddGameObjectRenderItemCursorPreview(aRenderList, aRenderItemCount, RenderObjectType::RENDER_ITEM_CURSOR_PREVIEW, mCursorPreview.get());
 
-	std::sort(aRenderList, aRenderList + aRenderItemCount, RenderItemSortFunc);
+	static RenderItem sTempRenderList[MAX_RENDER_ITEMS];
+	RadixSortRenderItems(aRenderList, sTempRenderList, aRenderItemCount);
 
 	float aRowLastShadowX[MAX_GRID_SIZE_Y][8];
 	int aRowLastShadowCount[MAX_GRID_SIZE_Y] = { 0 };
