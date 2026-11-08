@@ -1528,7 +1528,6 @@ void MemoryImage::SlowStretchBlt(Image* theImage, const Rect& theDestRect, const
 	}
 }
 
-//TODO: Make the special version
 void MemoryImage::FastStretchBlt(Image* theImage, const Rect& theDestRect, const FRect& theSrcRect, const Color& theColor, [[maybe_unused]] int theDrawMode)
 {
 	theImage->mDrawn = true;
@@ -1543,10 +1542,10 @@ void MemoryImage::FastStretchBlt(Image* theImage, const Rect& theDestRect, const
 	uint32_t* aDestPixelsRow = ((uint32_t*) GetBits()) + (theDestRect.mY * mWidth) + theDestRect.mX;
 	uint32_t* aSrcPixelsRow = (uint32_t*) aSrcMemoryImage->GetBits();
 
-	int32_t aSrcYFixed = (int32_t)(theSrcRect.mY * 65536.0);
-	int32_t anAddXFixed = (int32_t)((theSrcRect.mWidth / (double)theDestRect.mWidth) * 65536.0);
-	int32_t anAddYFixed = (int32_t)((theSrcRect.mHeight / (double)theDestRect.mHeight) * 65536.0);
-	int32_t aSrcXStartFixed = (int32_t)(theSrcRect.mX * 65536.0);
+	int32_t aSrcYFixed = (int32_t)(theSrcRect.mY * 65536.0f);
+	int32_t anAddXFixed = (int32_t)((theSrcRect.mWidth / (float)theDestRect.mWidth) * 65536.0f);
+	int32_t anAddYFixed = (int32_t)((theSrcRect.mHeight / (float)theDestRect.mHeight) * 65536.0f);
+	int32_t aSrcXStartFixed = (int32_t)(theSrcRect.mX * 65536.0f);
 
 	int maxSrcX = aSrcMemoryImage->mWidth - 1;
 	int maxSrcY = aSrcMemoryImage->mHeight - 1;
@@ -1556,190 +1555,237 @@ void MemoryImage::FastStretchBlt(Image* theImage, const Rect& theDestRect, const
 	int cg = theColor.mGreen;
 	int cb = theColor.mBlue;
 
+	bool is1to1X = (anAddXFixed == 0x10000) && (aSrcXStartFixed >= 0) &&
+	               ((aSrcXStartFixed >> 16) + theDestRect.mWidth <= aSrcMemoryImage->mWidth);
+
 	if (theColor == Color::White || (ca == 255 && cr == 255 && cg == 255 && cb == 255))
 	{
-		for (int y = 0; y < theDestRect.mHeight; y++)
+		int srcXOffset = aSrcXStartFixed >> 16;
+		if (is1to1X)
 		{
-			int sy = aSrcYFixed >> 16;
-			if (sy < 0) sy = 0;
-			else if (sy > maxSrcY) sy = maxSrcY;
-			const uint32_t* aSrcRow = aSrcPixelsRow + (aSrcMemoryImage->mWidth * sy);
-			uint32_t* aDestPixels = aDestPixelsRow;
-			int32_t aSrcX = aSrcXStartFixed;
-
-			for (int x = 0; x < theDestRect.mWidth; x++)
+			for (int y = 0; y < theDestRect.mHeight; y++)
 			{
-				int sx = aSrcX >> 16;
-				if (sx < 0) sx = 0;
-				else if (sx > maxSrcX) sx = maxSrcX;
-				uint32_t src = aSrcRow[sx];
-				aSrcX += anAddXFixed;
+				int sy = aSrcYFixed >> 16;
+				if ((uint32_t)sy > (uint32_t)maxSrcY) sy = (sy < 0) ? 0 : maxSrcY;
+				const uint32_t* aSrcRow = aSrcPixelsRow + (aSrcMemoryImage->mWidth * sy) + srcXOffset;
+				PvZ::Graphics::NeonBlit_AlphaBlend_ARGB(aDestPixelsRow, aSrcRow, theDestRect.mWidth);
+				aDestPixelsRow += mWidth;
+				aSrcYFixed += anAddYFixed;
+			}
+		}
+		else
+		{
+			for (int y = 0; y < theDestRect.mHeight; y++)
+			{
+				int sy = aSrcYFixed >> 16;
+				if ((uint32_t)sy > (uint32_t)maxSrcY) sy = (sy < 0) ? 0 : maxSrcY;
+				const uint32_t* aSrcRow = aSrcPixelsRow + (aSrcMemoryImage->mWidth * sy);
+				uint32_t* aDestPixels = aDestPixelsRow;
+				int32_t aSrcX = aSrcXStartFixed;
 
-				uint32_t a = src >> 24;
-				if (a == 0)
+				for (int x = 0; x < theDestRect.mWidth; x++)
 				{
-					aDestPixels++;
-					continue;
-				}
+					int sx = aSrcX >> 16;
+					if ((uint32_t)sx > (uint32_t)maxSrcX) sx = (sx < 0) ? 0 : maxSrcX;
+					uint32_t src = aSrcRow[sx];
+					aSrcX += anAddXFixed;
 
-				if (a == 255)
-				{
-					*aDestPixels++ = src;
-					continue;
-				}
-
-				uint32_t dest = *aDestPixels;
-				uint32_t aDestAlpha = dest >> 24;
-				if (aDestAlpha == 255)
-				{
-					uint32_t oma = 256 - a;
-					uint32_t rb = ((((src & 0x00FF00FF) * a) + ((dest & 0x00FF00FF) * oma)) >> 8) & 0x00FF00FF;
-					uint32_t g  = ((((src & 0x0000FF00) * a) + ((dest & 0x0000FF00) * oma)) >> 8) & 0x0000FF00;
-					*aDestPixels++ = 0xFF000000 | rb | g;
-				}
-				else
-				{
-					uint32_t aNewDestAlpha = aDestAlpha + (((255 - aDestAlpha) * a) / 255);
-					if (aNewDestAlpha > 0)
+					uint32_t a = src >> 24;
+					if (a == 0)
 					{
-						uint32_t blend_a = (255 * a) / aNewDestAlpha;
-						uint32_t oma = 256 - blend_a;
-						uint32_t rb = ((((src & 0x00FF00FF) * blend_a) + ((dest & 0x00FF00FF) * oma)) >> 8) & 0x00FF00FF;
-						uint32_t g  = ((((src & 0x0000FF00) * blend_a) + ((dest & 0x0000FF00) * oma)) >> 8) & 0x0000FF00;
-						*aDestPixels++ = (aNewDestAlpha << 24) | rb | g;
+						aDestPixels++;
+						continue;
+					}
+
+					if (a == 255)
+					{
+						*aDestPixels++ = src;
+						continue;
+					}
+
+					uint32_t dest = *aDestPixels;
+					uint32_t aDestAlpha = dest >> 24;
+					if (aDestAlpha == 255)
+					{
+						uint32_t oma = 256 - a;
+						uint32_t rb = ((((src & 0x00FF00FF) * a) + ((dest & 0x00FF00FF) * oma)) >> 8) & 0x00FF00FF;
+						uint32_t g  = ((((src & 0x0000FF00) * a) + ((dest & 0x0000FF00) * oma)) >> 8) & 0x0000FF00;
+						*aDestPixels++ = 0xFF000000 | rb | g;
 					}
 					else
 					{
-						*aDestPixels++ = 0;
+						uint32_t aNewDestAlpha = aDestAlpha + (((255 - aDestAlpha) * a) / 255);
+						if (aNewDestAlpha > 0)
+						{
+							uint32_t blend_a = (255 * a) / aNewDestAlpha;
+							uint32_t oma = 256 - blend_a;
+							uint32_t rb = ((((src & 0x00FF00FF) * blend_a) + ((dest & 0x00FF00FF) * oma)) >> 8) & 0x00FF00FF;
+							uint32_t g  = ((((src & 0x0000FF00) * blend_a) + ((dest & 0x0000FF00) * oma)) >> 8) & 0x0000FF00;
+							*aDestPixels++ = (aNewDestAlpha << 24) | rb | g;
+						}
+						else
+						{
+							*aDestPixels++ = 0;
+						}
 					}
 				}
-			}
 
-			aDestPixelsRow += mWidth;
-			aSrcYFixed += anAddYFixed;
+				aDestPixelsRow += mWidth;
+				aSrcYFixed += anAddYFixed;
+			}
 		}
 	}
 	else if (cr == cg && cg == cb)
 	{
-		for (int y = 0; y < theDestRect.mHeight; y++)
+		int srcXOffset = aSrcXStartFixed >> 16;
+		uint32_t tint = ((uint32_t)ca << 24) | ((uint32_t)cr << 16) | ((uint32_t)cg << 8) | (uint32_t)cb;
+		if (is1to1X)
 		{
-			int sy = aSrcYFixed >> 16;
-			if (sy < 0) sy = 0;
-			else if (sy > maxSrcY) sy = maxSrcY;
-			const uint32_t* aSrcRow = aSrcPixelsRow + (aSrcMemoryImage->mWidth * sy);
-			uint32_t* aDestPixels = aDestPixelsRow;
-			int32_t aSrcX = aSrcXStartFixed;
-
-			for (int x = 0; x < theDestRect.mWidth; x++)
+			for (int y = 0; y < theDestRect.mHeight; y++)
 			{
-				int sx = aSrcX >> 16;
-				if (sx < 0) sx = 0;
-				else if (sx > maxSrcX) sx = maxSrcX;
-				uint32_t src = aSrcRow[sx];
-				aSrcX += anAddXFixed;
+				int sy = aSrcYFixed >> 16;
+				if ((uint32_t)sy > (uint32_t)maxSrcY) sy = (sy < 0) ? 0 : maxSrcY;
+				const uint32_t* aSrcRow = aSrcPixelsRow + (aSrcMemoryImage->mWidth * sy) + srcXOffset;
+				PvZ::Graphics::NeonBlit_AlphaBlend_Tint_ARGB(aDestPixelsRow, aSrcRow, theDestRect.mWidth, tint);
+				aDestPixelsRow += mWidth;
+				aSrcYFixed += anAddYFixed;
+			}
+		}
+		else
+		{
+			for (int y = 0; y < theDestRect.mHeight; y++)
+			{
+				int sy = aSrcYFixed >> 16;
+				if ((uint32_t)sy > (uint32_t)maxSrcY) sy = (sy < 0) ? 0 : maxSrcY;
+				const uint32_t* aSrcRow = aSrcPixelsRow + (aSrcMemoryImage->mWidth * sy);
+				uint32_t* aDestPixels = aDestPixelsRow;
+				int32_t aSrcX = aSrcXStartFixed;
 
-				uint32_t a = ((src >> 24) * ca) / 255;
-				if (a == 0)
+				for (int x = 0; x < theDestRect.mWidth; x++)
 				{
-					aDestPixels++;
-					continue;
-				}
+					int sx = aSrcX >> 16;
+					if ((uint32_t)sx > (uint32_t)maxSrcX) sx = (sx < 0) ? 0 : maxSrcX;
+					uint32_t src = aSrcRow[sx];
+					aSrcX += anAddXFixed;
 
-				uint32_t src_rb = (((src & 0x00FF00FF) * cr) >> 8) & 0x00FF00FF;
-				uint32_t src_g  = (((src & 0x0000FF00) * cr) >> 8) & 0x0000FF00;
-				uint32_t dest = *aDestPixels;
-				uint32_t aDestAlpha = dest >> 24;
-
-				if (aDestAlpha == 255)
-				{
-					uint32_t oma = 256 - a;
-					uint32_t rb = ((src_rb * a + (dest & 0x00FF00FF) * oma) >> 8) & 0x00FF00FF;
-					uint32_t g  = ((src_g * a  + (dest & 0x0000FF00) * oma) >> 8) & 0x0000FF00;
-					*aDestPixels++ = 0xFF000000 | rb | g;
-				}
-				else
-				{
-					uint32_t aNewDestAlpha = aDestAlpha + (((255 - aDestAlpha) * a) / 255);
-					if (aNewDestAlpha > 0)
+					uint32_t a = ((src >> 24) * ca) / 255;
+					if (a == 0)
 					{
-						uint32_t blend_a = (255 * a) / aNewDestAlpha;
-						uint32_t oma = 256 - blend_a;
-						uint32_t rb = ((src_rb * blend_a + (dest & 0x00FF00FF) * oma) >> 8) & 0x00FF00FF;
-						uint32_t g  = ((src_g * blend_a  + (dest & 0x0000FF00) * oma) >> 8) & 0x00FF00FF;
-						*aDestPixels++ = (aNewDestAlpha << 24) | rb | g;
+						aDestPixels++;
+						continue;
+					}
+
+					uint32_t src_rb = (((src & 0x00FF00FF) * cr) >> 8) & 0x00FF00FF;
+					uint32_t src_g  = (((src & 0x0000FF00) * cr) >> 8) & 0x0000FF00;
+					uint32_t dest = *aDestPixels;
+					uint32_t aDestAlpha = dest >> 24;
+
+					if (aDestAlpha == 255)
+					{
+						uint32_t oma = 256 - a;
+						uint32_t rb = ((src_rb * a + (dest & 0x00FF00FF) * oma) >> 8) & 0x00FF00FF;
+						uint32_t g  = ((src_g * a  + (dest & 0x0000FF00) * oma) >> 8) & 0x0000FF00;
+						*aDestPixels++ = 0xFF000000 | rb | g;
 					}
 					else
 					{
-						*aDestPixels++ = 0;
+						uint32_t aNewDestAlpha = aDestAlpha + (((255 - aDestAlpha) * a) / 255);
+						if (aNewDestAlpha > 0)
+						{
+							uint32_t blend_a = (255 * a) / aNewDestAlpha;
+							uint32_t oma = 256 - blend_a;
+							uint32_t rb = ((src_rb * blend_a + (dest & 0x00FF00FF) * oma) >> 8) & 0x00FF00FF;
+							uint32_t g  = ((src_g * blend_a  + (dest & 0x0000FF00) * oma) >> 8) & 0x00FF00FF;
+							*aDestPixels++ = (aNewDestAlpha << 24) | rb | g;
+						}
+						else
+						{
+							*aDestPixels++ = 0;
+						}
 					}
 				}
-			}
 
-			aDestPixelsRow += mWidth;
-			aSrcYFixed += anAddYFixed;
+				aDestPixelsRow += mWidth;
+				aSrcYFixed += anAddYFixed;
+			}
 		}
 	}
 	else
 	{
-		for (int y = 0; y < theDestRect.mHeight; y++)
+		int srcXOffset = aSrcXStartFixed >> 16;
+		uint32_t tint = ((uint32_t)ca << 24) | ((uint32_t)cr << 16) | ((uint32_t)cg << 8) | (uint32_t)cb;
+		if (is1to1X)
 		{
-			int sy = aSrcYFixed >> 16;
-			if (sy < 0) sy = 0;
-			else if (sy > maxSrcY) sy = maxSrcY;
-			const uint32_t* aSrcRow = aSrcPixelsRow + (aSrcMemoryImage->mWidth * sy);
-			uint32_t* aDestPixels = aDestPixelsRow;
-			int32_t aSrcX = aSrcXStartFixed;
-
-			for (int x = 0; x < theDestRect.mWidth; x++)
+			for (int y = 0; y < theDestRect.mHeight; y++)
 			{
-				int sx = aSrcX >> 16;
-				if (sx < 0) sx = 0;
-				else if (sx > maxSrcX) sx = maxSrcX;
-				uint32_t src = aSrcRow[sx];
-				aSrcX += anAddXFixed;
+				int sy = aSrcYFixed >> 16;
+				if ((uint32_t)sy > (uint32_t)maxSrcY) sy = (sy < 0) ? 0 : maxSrcY;
+				const uint32_t* aSrcRow = aSrcPixelsRow + (aSrcMemoryImage->mWidth * sy) + srcXOffset;
+				PvZ::Graphics::NeonBlit_AlphaBlend_Tint_ARGB(aDestPixelsRow, aSrcRow, theDestRect.mWidth, tint);
+				aDestPixelsRow += mWidth;
+				aSrcYFixed += anAddYFixed;
+			}
+		}
+		else
+		{
+			for (int y = 0; y < theDestRect.mHeight; y++)
+			{
+				int sy = aSrcYFixed >> 16;
+				if ((uint32_t)sy > (uint32_t)maxSrcY) sy = (sy < 0) ? 0 : maxSrcY;
+				const uint32_t* aSrcRow = aSrcPixelsRow + (aSrcMemoryImage->mWidth * sy);
+				uint32_t* aDestPixels = aDestPixelsRow;
+				int32_t aSrcX = aSrcXStartFixed;
 
-				uint32_t a = ((src >> 24) * ca) / 255;
-				if (a == 0)
+				for (int x = 0; x < theDestRect.mWidth; x++)
 				{
-					aDestPixels++;
-					continue;
-				}
+					int sx = aSrcX >> 16;
+					if ((uint32_t)sx > (uint32_t)maxSrcX) sx = (sx < 0) ? 0 : maxSrcX;
+					uint32_t src = aSrcRow[sx];
+					aSrcX += anAddXFixed;
 
-				uint32_t src_r = (((src & 0x00FF0000) * cr) >> 8) & 0x00FF0000;
-				uint32_t src_g = (((src & 0x0000FF00) * cg) >> 8) & 0x0000FF00;
-				uint32_t src_b = (((src & 0x000000FF) * cb) >> 8) & 0x000000FF;
-				uint32_t mod_src_rb = src_r | src_b;
-				uint32_t mod_src_g = src_g;
-				uint32_t dest = *aDestPixels;
-				uint32_t aDestAlpha = dest >> 24;
-
-				if (aDestAlpha == 255)
-				{
-					uint32_t oma = 256 - a;
-					uint32_t rb = ((mod_src_rb * a + (dest & 0x00FF00FF) * oma) >> 8) & 0x00FF00FF;
-					uint32_t g  = ((mod_src_g * a  + (dest & 0x0000FF00) * oma) >> 8) & 0x0000FF00;
-					*aDestPixels++ = 0xFF000000 | rb | g;
-				}
-				else
-				{
-					uint32_t aNewDestAlpha = aDestAlpha + (((255 - aDestAlpha) * a) / 255);
-					if (aNewDestAlpha > 0)
+					uint32_t a = ((src >> 24) * ca) / 255;
+					if (a == 0)
 					{
-						uint32_t blend_a = (255 * a) / aNewDestAlpha;
-						uint32_t oma = 256 - blend_a;
-						uint32_t rb = ((mod_src_rb * blend_a + (dest & 0x00FF00FF) * oma) >> 8) & 0x00FF00FF;
-						uint32_t g  = ((mod_src_g * blend_a  + (dest & 0x0000FF00) * oma) >> 8) & 0x00FF00FF;
-						*aDestPixels++ = (aNewDestAlpha << 24) | rb | g;
+						aDestPixels++;
+						continue;
+					}
+
+					uint32_t src_r = (((src & 0x00FF0000) * cr) >> 8) & 0x00FF0000;
+					uint32_t src_g = (((src & 0x0000FF00) * cg) >> 8) & 0x0000FF00;
+					uint32_t src_b = (((src & 0x000000FF) * cb) >> 8) & 0x000000FF;
+					uint32_t mod_src_rb = src_r | src_b;
+					uint32_t mod_src_g = src_g;
+					uint32_t dest = *aDestPixels;
+					uint32_t aDestAlpha = dest >> 24;
+
+					if (aDestAlpha == 255)
+					{
+						uint32_t oma = 256 - a;
+						uint32_t rb = ((mod_src_rb * a + (dest & 0x00FF00FF) * oma) >> 8) & 0x00FF00FF;
+						uint32_t g  = ((mod_src_g * a  + (dest & 0x0000FF00) * oma) >> 8) & 0x0000FF00;
+						*aDestPixels++ = 0xFF000000 | rb | g;
 					}
 					else
 					{
-						*aDestPixels++ = 0;
+						uint32_t aNewDestAlpha = aDestAlpha + (((255 - aDestAlpha) * a) / 255);
+						if (aNewDestAlpha > 0)
+						{
+							uint32_t blend_a = (255 * a) / aNewDestAlpha;
+							uint32_t oma = 256 - blend_a;
+							uint32_t rb = ((mod_src_rb * blend_a + (dest & 0x00FF00FF) * oma) >> 8) & 0x00FF00FF;
+							uint32_t g  = ((mod_src_g * blend_a  + (dest & 0x0000FF00) * oma) >> 8) & 0x00FF00FF;
+							*aDestPixels++ = (aNewDestAlpha << 24) | rb | g;
+						}
+						else
+						{
+							*aDestPixels++ = 0;
+						}
 					}
 				}
-			}
 
-			aDestPixelsRow += mWidth;
-			aSrcYFixed += anAddYFixed;
+				aDestPixelsRow += mWidth;
+				aSrcYFixed += anAddYFixed;
+			}
 		}
 	}
 
