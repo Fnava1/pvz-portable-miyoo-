@@ -2811,16 +2811,24 @@ void Plant::UpdateReanim()
 		aOffsetY += 80.0f - 80.0f * aScaleFactor;
 	}
 
-	bool skipPlantUpdate = false;
-	if (mBoard && (mBoard->mPlants.mSize > 25 || mBoard->mZombies.mSize > 15) && IsOnBoard() && mPottedPlantIndex == -1 && aBodyReanim->IsAnimPlaying("anim_idle"))
+	bool skipPlantBoneUpdate = false;
+	if (mBoard && (mBoard->mPlants.mSize > 15 || mBoard->mZombies.mSize > 10) && IsOnBoard() && mPottedPlantIndex == -1 &&
+	    mState != PlantState::STATE_DOINGSPECIAL && mState != PlantState::STATE_SQUASH_RISING &&
+	    mState != PlantState::STATE_SQUASH_FALLING && mState != PlantState::STATE_CHOMPER_BITING &&
+	    mRecentlyEatenCountdown == 0 && mEatenFlashCountdown == 0 &&
+	    mWakeUpCounter == 0 && aBodyReanim->IsAnimPlaying("anim_idle"))
 	{
 		if (((mPlantCol + mRow + mBoard->mBoardUpdateCounter) & 1) != 0)
 		{
-			skipPlantUpdate = true;
+			skipPlantBoneUpdate = true;
 		}
 	}
 
-	if (!skipPlantUpdate)
+	if (skipPlantBoneUpdate)
+	{
+		aBodyReanim->UpdateAnimationTimeOnly();
+	}
+	else
 	{
 		aBodyReanim->Update();
 	}
