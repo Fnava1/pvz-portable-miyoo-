@@ -1108,6 +1108,23 @@ bool Projectile::HasShadow() const
 
 void Projectile::DrawShadow(Graphics* g)
 {
+	if (!mBoard)
+		return;
+
+	if (mRow >= 0 && mRow < MAX_GRID_SIZE_Y && mBoard->mRowZombies[mRow].size() > 3)
+	{
+		int zombiesNear = 0;
+		for (Zombie* aZombie : mBoard->mRowZombies[mRow])
+		{
+			if (std::abs(aZombie->mPosX - mPosX) < 50.0f)
+			{
+				zombiesNear++;
+				if (zombiesNear >= 2)
+					return;
+			}
+		}
+	}
+
 	int aCelCol = 0;
 	float aScale = 1.0f;
 	float aStretch = 1.0f;
