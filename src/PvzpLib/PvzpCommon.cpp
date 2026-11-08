@@ -772,6 +772,22 @@ void PvzpDrawImageCelCenterScaledF(Graphics* g, Image* theImageStrip, float theP
 		return;
 	}
 
+	if (!gSexyAppBase->Is3DAccelerated() && theScaleX > 0.0f && theScaleY > 0.0f)
+	{
+		PvzpSandImageIfNeeded(theImageStrip);
+		int aWidth = FloatRoundToInt(theScaleX * aCelWidth);
+		int aHeight = FloatRoundToInt(theScaleY * aCelHeight);
+		int aPosX = FloatRoundToInt(thePosX + aCelWidth * 0.5f - aWidth * 0.5f);
+		int aPosY = FloatRoundToInt(thePosY + aCelHeight * 0.5f - aHeight * 0.5f);
+		Rect aDestRect(aPosX, aPosY, aWidth, aHeight);
+
+		bool aOldFastStretch = g->GetFastStretch();
+		g->SetFastStretch(true);
+		g->DrawImage(theImageStrip, aDestRect, aSrcRect);
+		g->SetFastStretch(aOldFastStretch);
+		return;
+	}
+
 	float aTransX = aCelWidth * 0.5f + thePosX + g->mTransX;
 	float aTransY = aCelHeight * 0.5f + thePosY + g->mTransY;
 

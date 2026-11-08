@@ -1557,6 +1557,8 @@ void MemoryImage::FastStretchBlt(Image* theImage, const Rect& theDestRect, const
 
 	bool is1to1X = (anAddXFixed == 0x10000) && (aSrcXStartFixed >= 0) &&
 	               ((aSrcXStartFixed >> 16) + theDestRect.mWidth <= aSrcMemoryImage->mWidth);
+	bool isSafeX = (aSrcXStartFixed >= 0) &&
+	               (((aSrcXStartFixed + anAddXFixed * (theDestRect.mWidth - 1)) >> 16) < aSrcMemoryImage->mWidth);
 
 	if (theColor == Color::White || (ca == 255 && cr == 255 && cg == 255 && cb == 255))
 	{
@@ -1586,7 +1588,7 @@ void MemoryImage::FastStretchBlt(Image* theImage, const Rect& theDestRect, const
 				for (int x = 0; x < theDestRect.mWidth; x++)
 				{
 					int sx = aSrcX >> 16;
-					if ((uint32_t)sx > (uint32_t)maxSrcX) sx = (sx < 0) ? 0 : maxSrcX;
+					if (!isSafeX && (uint32_t)sx > (uint32_t)maxSrcX) sx = (sx < 0) ? 0 : maxSrcX;
 					uint32_t src = aSrcRow[sx];
 					aSrcX += anAddXFixed;
 
@@ -1605,7 +1607,7 @@ void MemoryImage::FastStretchBlt(Image* theImage, const Rect& theDestRect, const
 
 					uint32_t dest = *aDestPixels;
 					uint32_t aDestAlpha = dest >> 24;
-					if (aDestAlpha == 255)
+					if (__builtin_expect(aDestAlpha >= 254, 1))
 					{
 						uint32_t oma = 256 - a;
 						uint32_t rb = ((((src & 0x00FF00FF) * a) + ((dest & 0x00FF00FF) * oma)) >> 8) & 0x00FF00FF;
@@ -1664,7 +1666,7 @@ void MemoryImage::FastStretchBlt(Image* theImage, const Rect& theDestRect, const
 				for (int x = 0; x < theDestRect.mWidth; x++)
 				{
 					int sx = aSrcX >> 16;
-					if ((uint32_t)sx > (uint32_t)maxSrcX) sx = (sx < 0) ? 0 : maxSrcX;
+					if (!isSafeX && (uint32_t)sx > (uint32_t)maxSrcX) sx = (sx < 0) ? 0 : maxSrcX;
 					uint32_t src = aSrcRow[sx];
 					aSrcX += anAddXFixed;
 
@@ -1680,7 +1682,7 @@ void MemoryImage::FastStretchBlt(Image* theImage, const Rect& theDestRect, const
 					uint32_t dest = *aDestPixels;
 					uint32_t aDestAlpha = dest >> 24;
 
-					if (aDestAlpha == 255)
+					if (__builtin_expect(aDestAlpha >= 254, 1))
 					{
 						uint32_t oma = 256 - a;
 						uint32_t rb = ((src_rb * a + (dest & 0x00FF00FF) * oma) >> 8) & 0x00FF00FF;
@@ -1739,7 +1741,7 @@ void MemoryImage::FastStretchBlt(Image* theImage, const Rect& theDestRect, const
 				for (int x = 0; x < theDestRect.mWidth; x++)
 				{
 					int sx = aSrcX >> 16;
-					if ((uint32_t)sx > (uint32_t)maxSrcX) sx = (sx < 0) ? 0 : maxSrcX;
+					if (!isSafeX && (uint32_t)sx > (uint32_t)maxSrcX) sx = (sx < 0) ? 0 : maxSrcX;
 					uint32_t src = aSrcRow[sx];
 					aSrcX += anAddXFixed;
 
@@ -1758,7 +1760,7 @@ void MemoryImage::FastStretchBlt(Image* theImage, const Rect& theDestRect, const
 					uint32_t dest = *aDestPixels;
 					uint32_t aDestAlpha = dest >> 24;
 
-					if (aDestAlpha == 255)
+					if (__builtin_expect(aDestAlpha >= 254, 1))
 					{
 						uint32_t oma = 256 - a;
 						uint32_t rb = ((mod_src_rb * a + (dest & 0x00FF00FF) * oma) >> 8) & 0x00FF00FF;
