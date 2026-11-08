@@ -1884,8 +1884,8 @@ void ZenGarden::GotoNextGarden()
 	{
 		mApp->mResourceManager->ReleaseTrackedResources(mLoadedResourceNames);
 		mLoadedResourceNames.clear();
-		mApp->KillBoard();
-		mApp->PreNewGame(GameMode::GAMEMODE_TREE_OF_WISDOM, false);
+		mApp->mGameMode = GameMode::GAMEMODE_TREE_OF_WISDOM;
+		mApp->mDeferredNewGame = true;
 		return;
 	}
 
@@ -2382,8 +2382,8 @@ void ZenGarden::OpenStore()
 
 	if (aStore->mGoToTreeNow)
 	{
-		mApp->KillBoard();
-		mApp->PreNewGame(GameMode::GAMEMODE_TREE_OF_WISDOM, false);
+		mApp->mGameMode = GameMode::GAMEMODE_TREE_OF_WISDOM;
+		mApp->mDeferredNewGame = true;
 	}
 	else
 	{

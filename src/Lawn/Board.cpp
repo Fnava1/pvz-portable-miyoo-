@@ -4901,6 +4901,8 @@ void Board::MouseDown(int x, int y, int theClickCount)
 				mChallenge->TreeOfWisdomNextGarden();
 			}
 			mApp->PlaySample(Sexy::SOUND_TAP);
+			if (mApp->mBoard != this || mApp->mDeferredNewGame)
+				return;
 			break;
 		case GameObjectType::OBJECT_TYPE_SHOVEL:
 		case GameObjectType::OBJECT_TYPE_WATERING_CAN:
@@ -6151,7 +6153,9 @@ void Board::UpdateGame()
 	if (mApp->mGameScene != GameScenes::SCENE_PLAYING && !mCutScene->ShouldRunUpsellBoard())
 		return;
 
-	if (mX == 0 && !mStaticBackdropValid)
+	if (mX == 0 && !mStaticBackdropValid &&
+	    mApp->mGameMode != GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN &&
+	    mApp->mGameMode != GameMode::GAMEMODE_TREE_OF_WISDOM)
 	{
 		UpdateStaticBackdrop();
 	}
@@ -6438,6 +6442,7 @@ Image* Board::GetBackgroundImage()
 	case BackgroundType::BACKGROUND_MUSHROOM_GARDEN:	return Sexy::IMAGE_BACKGROUND_MUSHROOMGARDEN;
 	case BackgroundType::BACKGROUND_GREENHOUSE:			return Sexy::IMAGE_BACKGROUND_GREENHOUSE;
 	case BackgroundType::BACKGROUND_ZOMBIQUARIUM:		return Sexy::IMAGE_AQUARIUM1;
+	case BackgroundType::BACKGROUND_TREEOFWISDOM:		return nullptr;
 	default:											return nullptr;
 	}
 }

@@ -505,7 +505,7 @@ void Plant::PlantInitialize(int theGridX, int theGridY, SeedType theSeedType, Se
 		}
 	}
 
-	if (mBoard && mBoard->mStaticBackdropValid)
+	if (mBoard && mBoard->mStaticBackdropValid && mApp->mGameMode != GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN)
 	{
 		mBoard->BakePlantShadow(this);
 	}
@@ -4049,7 +4049,8 @@ void Plant::Draw(Graphics* g)
 
 		if (aPumpkin == nullptr || aPumpkin == this)
 		{
-			if (!mBoard || !mBoard->mStaticBackdropValid || Plant::IsFlying(mSeedType) ||
+			if (mApp->mGameMode == GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN ||
+			    !mBoard || !mBoard->mStaticBackdropValid || Plant::IsFlying(mSeedType) ||
 			    mOnBungeeState != PlantOnBungeeState::NOT_ON_BUNGEE ||
 			    mState == PlantState::STATE_SQUASH_RISING || mState == PlantState::STATE_SQUASH_FALLING ||
 			    (mSeedType == SeedType::SEED_SUNSHROOM && mState == PlantState::STATE_SUNSHROOM_GROWING))
@@ -5051,7 +5052,7 @@ void Plant::Die()
 	mDead = true;
 	RemoveEffects();
 
-	if (mBoard && mBoard->mStaticBackdropValid)
+	if (mBoard && mBoard->mStaticBackdropValid && mApp->mGameMode != GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN)
 	{
 		mBoard->ClearPlantShadow(this);
 	}

@@ -749,8 +749,8 @@ void SeedChooserScreen::ButtonDepress(int theId)
 		aStore->WaitForResult();
 		if (aStore->mGoToTreeNow)
 		{
-			mApp->KillBoard();
-			mApp->PreNewGame(GAMEMODE_TREE_OF_WISDOM, false);
+			mApp->mGameMode = GAMEMODE_TREE_OF_WISDOM;
+			mApp->mDeferredNewGame = true;
 		}
 		else mApp->mMusic->MakeSureMusicIsPlaying(MUSIC_TUNE_CHOOSE_YOUR_SEEDS);
 	}

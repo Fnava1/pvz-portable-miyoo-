@@ -5292,8 +5292,8 @@ void Challenge::TreeOfWisdomLeave()
 void Challenge::TreeOfWisdomNextGarden()
 {
 	TreeOfWisdomLeave();
-	mApp->KillBoard();
-	mApp->PreNewGame(GAMEMODE_CHALLENGE_ZEN_GARDEN, false);
+	mApp->mGameMode = GAMEMODE_CHALLENGE_ZEN_GARDEN;
+	mApp->mDeferredNewGame = true;
 }
 
 void Challenge::TreeOfWisdomOpenStore()
