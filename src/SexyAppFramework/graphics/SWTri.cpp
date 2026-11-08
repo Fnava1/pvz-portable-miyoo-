@@ -522,6 +522,151 @@ void SWHelper::SWDrawShape(XYZStruct *theVerts, int theNumVerts, MemoryImage *th
 	}
 }
 
+void SWHelper::SWDrawTriangleBatchDirect(
+	const TriVertex theVertices[][3],
+	int theNumTriangles,
+	MemoryImage *theImage,
+	const Color &theColor,
+	[[maybe_unused]] int theDrawMode,
+	const Rect &theClipRect,
+	void *theSurface,
+	int thePitch,
+	int thePixelFormat,
+	float tx,
+	float ty,
+	bool blend)
+{
+	if (theClipRect.mWidth <= 0 || theClipRect.mHeight <= 0 || theSurface == nullptr || theNumTriangles <= 0)
+		return;
+
+	float tclx0 = std::max(0.0f, (float)theClipRect.mX);
+	float tcly0 = std::max(0.0f, (float)theClipRect.mY);
+	float tclx1 = (float)(theClipRect.mX + theClipRect.mWidth - 1);
+	float tcly1 = (float)(theClipRect.mY + theClipRect.mHeight - 1);
+
+	if (thePitch > 0)
+	{
+		float max_x = (float)((thePitch / 4) - 1);
+		if (tclx1 > max_x)
+			tclx1 = max_x;
+	}
+
+	if (tclx0 > tclx1 || tcly0 > tcly1)
+		return;
+
+	SWDiffuse globalDiffuse;
+	globalDiffuse.a = theColor.mAlpha;
+	globalDiffuse.r = theColor.mRed;
+	globalDiffuse.g = theColor.mGreen;
+	globalDiffuse.b = theColor.mBlue;
+
+	bool globalargb = theColor != Color::White;
+
+	if (theImage)
+		theImage->CommitBits();
+
+	bool textured = theImage != nullptr;
+	bool talpha = (textured && (theImage->mHasAlpha || theImage->mHasTrans || blend));
+
+	SWTextureInfo textureInfo;
+	float aTexWidthFixed = 0.0f;
+	float aTexHeightFixed = 0.0f;
+	if (textured)
+	{
+		textureInfo.pTexture = reinterpret_cast<unsigned int *>(theImage->GetBits());
+		textureInfo.pitch = theImage->mWidth;
+		textureInfo.endpos = theImage->mWidth * theImage->mHeight;
+		aTexWidthFixed = static_cast<float>(theImage->mWidth) * 65536.0f;
+		aTexHeightFixed = static_cast<float>(theImage->mHeight) * 65536.0f;
+	}
+
+	unsigned int *pFrameBuffer = reinterpret_cast<unsigned int *>(theSurface);
+
+	for (int i = 0; i < theNumTriangles; i++)
+	{
+		float x0 = theVertices[i][0].x + tx;
+		float y0 = theVertices[i][0].y + ty;
+		float x1 = theVertices[i][1].x + tx;
+		float y1 = theVertices[i][1].y + ty;
+		float x2 = theVertices[i][2].x + tx;
+		float y2 = theVertices[i][2].y + ty;
+
+		float minX = std::min(x0, std::min(x1, x2));
+		float maxX = std::max(x0, std::max(x1, x2));
+		float minY = std::min(y0, std::min(y1, y2));
+		float maxY = std::max(y0, std::max(y1, y2));
+
+		if (maxX < tclx0 || minX > tclx1 || maxY < tcly0 || minY > tcly1)
+			continue;
+
+		if (minX >= tclx0 && maxX <= tclx1 && minY >= tcly0 && maxY <= tcly1)
+		{
+			// Triangle is completely inside the clipping rectangle:
+			// Direct float-to-fixed point conversion bypassing Sutherland-Hodgman clipping and struct reallocations
+			SWVertex pVerts[3];
+			pVerts[0].x = static_cast<int>(x0 * 65536.0f);
+			pVerts[0].y = static_cast<int>(y0 * 65536.0f);
+			pVerts[1].x = static_cast<int>(x1 * 65536.0f);
+			pVerts[1].y = static_cast<int>(y1 * 65536.0f);
+			pVerts[2].x = static_cast<int>(x2 * 65536.0f);
+			pVerts[2].y = static_cast<int>(y2 * 65536.0f);
+
+			if (textured)
+			{
+				pVerts[0].u = static_cast<int>(theVertices[i][0].u * aTexWidthFixed);
+				pVerts[0].v = static_cast<int>(theVertices[i][0].v * aTexHeightFixed);
+				pVerts[1].u = static_cast<int>(theVertices[i][1].u * aTexWidthFixed);
+				pVerts[1].v = static_cast<int>(theVertices[i][1].v * aTexHeightFixed);
+				pVerts[2].u = static_cast<int>(theVertices[i][2].u * aTexWidthFixed);
+				pVerts[2].v = static_cast<int>(theVertices[i][2].v * aTexHeightFixed);
+			}
+
+			bool vertexColor = false;
+			uint32_t c0 = theVertices[i][0].color;
+			uint32_t c1 = theVertices[i][1].color;
+			uint32_t c2 = theVertices[i][2].color;
+			if (c0 != 0 || c1 != 0 || c2 != 0)
+			{
+				vertexColor = true;
+				pVerts[0].diffuse.a = (c0 >> 24) & 0xFF;
+				pVerts[0].diffuse.r = (c0 >> 16) & 0xFF;
+				pVerts[0].diffuse.g = (c0 >> 8) & 0xFF;
+				pVerts[0].diffuse.b = (c0) & 0xFF;
+
+				pVerts[1].diffuse.a = (c1 >> 24) & 0xFF;
+				pVerts[1].diffuse.r = (c1 >> 16) & 0xFF;
+				pVerts[1].diffuse.g = (c1 >> 8) & 0xFF;
+				pVerts[1].diffuse.b = (c1) & 0xFF;
+
+				pVerts[2].diffuse.a = (c2 >> 24) & 0xFF;
+				pVerts[2].diffuse.r = (c2 >> 16) & 0xFF;
+				pVerts[2].diffuse.g = (c2 >> 8) & 0xFF;
+				pVerts[2].diffuse.b = (c2) & 0xFF;
+			}
+
+			SWDrawTriangle(textured, talpha, vertexColor, globalargb,
+				pVerts, pFrameBuffer, thePitch,
+				textured ? &textureInfo : nullptr, globalDiffuse,
+				thePixelFormat, blend);
+		}
+		else
+		{
+			// Defensive fallback: triangle partially crosses sub-clip bounds
+			XYZStruct aVerts[3];
+			for (int j = 0; j < 3; j++)
+			{
+				aVerts[j].mX = theVertices[i][j].x + tx;
+				aVerts[j].mY = theVertices[i][j].y + ty;
+				aVerts[j].mU = theVertices[i][j].u;
+				aVerts[j].mV = theVertices[i][j].v;
+				aVerts[j].mDiffuse = theVertices[i][j].color;
+			}
+			bool vertexColor = (aVerts[0].mDiffuse != 0 || aVerts[1].mDiffuse != 0 || aVerts[2].mDiffuse != 0);
+			SWDrawShape(aVerts, 3, theImage, theColor, theDrawMode, theClipRect, theSurface, thePitch, thePixelFormat, blend, vertexColor);
+		}
+	}
+}
+
 
 static DrawTriFunc gDrawTriFunc[128] = {0};
 void Sexy::SWTri_AddDrawTriFunc(bool textured, bool talpha, bool mod_argb, bool global_argb, int thePixelFormat, bool blend, DrawTriFunc theFunc)

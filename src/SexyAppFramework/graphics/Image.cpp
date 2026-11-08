@@ -258,5 +258,6 @@ void Image::BltRotated(Image*, float, float, const Rect &, const Rect&, const Co
 void Image::StretchBlt(Image*, const Rect&, const Rect&, const Rect&, const Color&, int, bool){}
 void Image::BltMatrix(Image*, float, float, const SexyMatrix3&, const Rect&, const Color&, int, const Rect&, bool){}
 void Image::BltTrianglesTex(Image*, const TriVertex (*)[3], int, const Rect&, const Color &, int, float, float, bool){}
+void Image::BltTrianglesTexDirect(Image* theTexture, const TriVertex theVertices[][3], int theNumTriangles, const Rect& theClipRect, const Color &theColor, int theDrawMode, float tx, float ty, bool blend) { BltTrianglesTex(theTexture, theVertices, theNumTriangles, theClipRect, theColor, theDrawMode, tx, ty, blend); }
 void Image::BltMirror(Image*, int, int, const Rect&, const Color&, int, bool){}
 void Image::StretchBltMirror(Image*, const Rect&, const Rect&, const Rect&, const Color&, int, bool){}

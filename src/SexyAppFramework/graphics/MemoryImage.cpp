@@ -1900,6 +1900,26 @@ void MemoryImage::BltTrianglesTex(Image *theTexture, const TriVertex theVertices
 	BitsChanged();
 }
 
+void MemoryImage::BltTrianglesTexDirect(Image *theTexture, const TriVertex theVertices[][3], int theNumTriangles, const Rect& theClipRect, const Color &theColor, int theDrawMode, float tx, float ty, bool blend)
+{
+	theTexture->mDrawn = true;
+
+	Rect aClampedClip = theClipRect.Intersection(Rect(0, 0, mWidth, mHeight));
+	if (aClampedClip.mWidth <= 0 || aClampedClip.mHeight <= 0)
+		return;
+
+	uint32_t *aSurface = GetBits();
+
+	int aPitch = mWidth * 4;
+	int aFormat = 0x8888;
+	if (mForcedMode && !mHasAlpha && !mHasTrans)
+		aFormat = 0x888;
+
+	MemoryImage *anImage = static_cast<MemoryImage*>(theTexture);
+	SWHelper::SWDrawTriangleBatchDirect(theVertices, theNumTriangles, anImage, theColor, theDrawMode, aClampedClip, aSurface, aPitch, aFormat, tx, ty, blend);
+	BitsChanged();
+}
+
 bool MemoryImage::Palletize()
 {
 	CommitBits();

@@ -416,7 +416,7 @@ void PvzpTriangleGroup::DrawGroup(Graphics* g)
 			}
 			if (aClipRect.mWidth > 0 && aClipRect.mHeight > 0)
 			{
-				g->mDestImage->BltTrianglesTex(mImage, mVertArray, mTriangleCount, aClipRect, Color::White, mDrawMode, 0.0f, 0.0f, g->mLinearBlend);
+				g->mDestImage->BltTrianglesTexDirect(mImage, mVertArray, mTriangleCount, aClipRect, Color::White, mDrawMode, 0.0f, 0.0f, g->mLinearBlend);
 			}
 		}
 
