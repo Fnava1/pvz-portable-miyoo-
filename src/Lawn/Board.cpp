@@ -183,6 +183,7 @@ Board::Board(LawnApp* theApp)
 	mPumpkinCount = 0;
 	memset(mPumpkinGrid, 0, sizeof(mPumpkinGrid));
 	memset(mFlowerPotGrid, 0, sizeof(mFlowerPotGrid));
+	memset(mTorchwoodGrid, 0, sizeof(mTorchwoodGrid));
 	for (int i = 0; i < MAX_GRID_SIZE_Y; ++i)
 		mRowZombies[i].clear();
 	mFinalBossKilled = false;
@@ -5410,6 +5411,7 @@ void Board::UpdateRowPlantMask()
 	mPumpkinCount = 0;
 	memset(mPumpkinGrid, 0, sizeof(mPumpkinGrid));
 	memset(mFlowerPotGrid, 0, sizeof(mFlowerPotGrid));
+	memset(mTorchwoodGrid, 0, sizeof(mTorchwoodGrid));
 
 	for (Plant* aPlant : mPlants)
 	{
@@ -5422,7 +5424,11 @@ void Board::UpdateRowPlantMask()
 		if (aPlant->mSeedType == SeedType::SEED_TORCHWOOD)
 		{
 			if (aRow >= 0 && aRow < MAX_GRID_SIZE_Y)
+			{
 				mTorchwoodRowMask |= (1U << aRow);
+				if (aCol >= 0 && aCol < MAX_GRID_SIZE_X)
+					mTorchwoodGrid[aCol][aRow] = aPlant;
+			}
 		}
 		else if (aPlant->mSeedType == SeedType::SEED_FLOWERPOT)
 		{

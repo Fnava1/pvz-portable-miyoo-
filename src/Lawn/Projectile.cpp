@@ -201,23 +201,26 @@ bool Projectile::PeaAboutToHitTorchwood()
 	if (mProjectileType != ProjectileType::PROJECTILE_PEA && mProjectileType != ProjectileType::PROJECTILE_SNOWPEA)
 		return false;
 
-	if (mRow >= 0 && mRow < MAX_GRID_SIZE_Y && (mBoard->mTorchwoodRowMask & (1U << mRow)) == 0)
+	if (mRow < 0 || mRow >= MAX_GRID_SIZE_Y || (mBoard->mTorchwoodRowMask & (1U << mRow)) == 0)
 		return false;
 
-	for (Plant* aPlant : mBoard->mPlants)
-	{
-		if (aPlant->mDead)
-			continue;
-		if (aPlant->mSeedType == SeedType::SEED_TORCHWOOD && aPlant->mRow == mRow && !aPlant->NotOnGround() && mHitTorchwoodGridX != aPlant->mPlantCol)
-		{
-			Rect aPlantAttackRect = aPlant->GetPlantAttackRect(PlantWeapon::WEAPON_PRIMARY);
-			Rect aProjectileRect = GetProjectileRect();
-			aProjectileRect.mX += 40;
+	int aCol = mBoard->PixelToGridXKeepOnBoard(static_cast<int>(mPosX), static_cast<int>(mPosY));
+	int aColStart = std::max(0, aCol - 1);
+	int aColEnd = std::min(MAX_GRID_SIZE_X - 1, aCol + 1);
 
-			if (GetRectOverlap(aPlantAttackRect, aProjectileRect) > 10)
-			{
-				return true;
-			}
+	for (int c = aColStart; c <= aColEnd; c++)
+	{
+		Plant* aPlant = mBoard->mTorchwoodGrid[c][mRow];
+		if (aPlant == nullptr || aPlant->mDead || mHitTorchwoodGridX == aPlant->mPlantCol)
+			continue;
+
+		Rect aPlantAttackRect = aPlant->GetPlantAttackRect(PlantWeapon::WEAPON_PRIMARY);
+		Rect aProjectileRect = GetProjectileRect();
+		aProjectileRect.mX += 40;
+
+		if (GetRectOverlap(aPlantAttackRect, aProjectileRect) > 10)
+		{
+			return true;
 		}
 	}
 

@@ -245,6 +245,7 @@ public:
 	int32_t							mPumpkinCount;
 	Plant*							mPumpkinGrid[MAX_GRID_SIZE_X][MAX_GRID_SIZE_Y];
 	Plant*							mFlowerPotGrid[MAX_GRID_SIZE_X][MAX_GRID_SIZE_Y];
+	Plant*							mTorchwoodGrid[MAX_GRID_SIZE_X][MAX_GRID_SIZE_Y];
 	std::vector<Zombie*>			mRowZombies[MAX_GRID_SIZE_Y];
 	int32_t							mMaxSunPlants;
 	int64_t							mStartDrawTime;
