@@ -1747,7 +1747,13 @@ void GLInterface::Flush()
 		{
 			SDL_UpdateTexture(tex, nullptr, mScreenImage->GetBits(), mWidth * sizeof(uint32_t));
 		}
-		SDL_RenderClear(ren);
+		// If streaming texture is opaque (BLENDMODE_NONE) and covers the full presentation rect (e.g. 640x480 on Miyoo),
+		// SDL_RenderClear is redundant and wastes a full 1.23 MB DRAM memset per frame (~74 MB/s bandwidth).
+		// Only clear when letterboxed or partially sized.
+		if (texW < 640 || texH < 480)
+		{
+			SDL_RenderClear(ren);
+		}
 		SDL_RenderCopy(ren, tex, nullptr, nullptr);
 
 		// Render virtual cursor overlay for handheld navigation (menus, dialogs, etc.)
