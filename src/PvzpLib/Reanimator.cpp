@@ -421,7 +421,7 @@ void Reanimation::ReanimationInitialize(float theX, float theY, ReanimatorDefini
 		mFrameCount = 0;
 }
 
-void Reanimation::Update()
+void Reanimation::UpdateAnimationTimeOnly()
 {
 	if (mFrameCount == 0 || mDead)
 		return;
@@ -498,6 +498,13 @@ void Reanimation::Update()
 			break;
 		}
 	}
+}
+
+void Reanimation::Update()
+{
+	UpdateAnimationTimeOnly();
+	if (mDead)
+		return;
 
 	for (int aTrackIndex = 0; aTrackIndex < mDefinition->mTracks.count; aTrackIndex++)
 	{

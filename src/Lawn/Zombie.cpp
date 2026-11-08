@@ -5286,6 +5286,13 @@ void Zombie::UpdateReanim()
 	if (aBodyReanim == nullptr || aBodyReanim->mDead)
 		return;
 
+	float aScreenX = mPosX + (mBoard ? mBoard->mX : 0.0f);
+	if (aScreenX > 850.0f && mZombieType != ZombieType::ZOMBIE_BOSS && mZombieType != ZombieType::ZOMBIE_BUNGEE && mZombieType != ZombieType::ZOMBIE_BALLOON)
+	{
+		aBodyReanim->UpdateAnimationTimeOnly();
+		return;
+	}
+
 	if (mZombieType == ZombieType::ZOMBIE_CATAPULT)
 	{
 		if (GetBodyDamageIndex() == 2 || mZombiePhase == ZombiePhase::PHASE_ZOMBIE_DYING)

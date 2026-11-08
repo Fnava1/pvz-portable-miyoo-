@@ -221,6 +221,7 @@ public:
 	void                 ReanimationInitializeType(float theX, float theY, ReanimationType theReanimType);
 	void                            ReanimationDie();
 	void                            Update();
+	void                            UpdateAnimationTimeOnly();
 	void                 Draw(Graphics* g);
 	void                            DrawAllRenderGroups(Graphics* g, PvzpTriangleGroup* theTriangleGroup = nullptr);
 	void                            DrawRenderGroup(Graphics* g, int theRenderGroup, PvzpTriangleGroup* theTriangleGroup = nullptr);
