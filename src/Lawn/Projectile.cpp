@@ -934,23 +934,26 @@ void Projectile::DoImpact(Zombie* theZombie)
 	{
 		if (theZombie)
 		{
-			float aPosX = aSplatPosX + 52.0f - theZombie->mX;
-			float aPosY = aSplatPosY - theZombie->mY;
-			if (theZombie->mZombiePhase == ZombiePhase::PHASE_SNORKEL_WALKING_IN_POOL || theZombie->mZombiePhase == ZombiePhase::PHASE_DOLPHIN_WALKING_IN_POOL)
+			if (theZombie->CanAttachHitSplat())
 			{
-				aPosY += 60.0f;
-			}
-			if (mMotionType == ProjectileMotion::MOTION_BACKWARDS)
-			{
-				aPosX -= 80.0f;
-			}
-			else if (mPosX > theZombie->mX + 40 && mMotionType != ProjectileMotion::MOTION_LOBBED)
-			{
-				aPosX -= 60.0f;
-			}
+				float aPosX = aSplatPosX + 52.0f - theZombie->mX;
+				float aPosY = aSplatPosY - theZombie->mY;
+				if (theZombie->mZombiePhase == ZombiePhase::PHASE_SNORKEL_WALKING_IN_POOL || theZombie->mZombiePhase == ZombiePhase::PHASE_DOLPHIN_WALKING_IN_POOL)
+				{
+					aPosY += 60.0f;
+				}
+				if (mMotionType == ProjectileMotion::MOTION_BACKWARDS)
+				{
+					aPosX -= 80.0f;
+				}
+				else if (mPosX > theZombie->mX + 40 && mMotionType != ProjectileMotion::MOTION_LOBBED)
+				{
+					aPosX -= 60.0f;
+				}
 
-			aPosY = std::clamp(aPosY, 20.0f, 100.0f);
-			theZombie->AddAttachedParticle(aPosX, aPosY, aEffect);
+				aPosY = std::clamp(aPosY, 20.0f, 100.0f);
+				theZombie->AddAttachedParticle(aPosX, aPosY, aEffect);
+			}
 		}
 		else
 		{

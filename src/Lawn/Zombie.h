@@ -159,10 +159,14 @@ public:
 	ReanimationID                   mMoweredReanimID;
 	ReanimationID                   mZombatarHeadReanimID;
 	int32_t                         mLastPortalX;
+	int32_t                         mLastSplatTick;
+	int32_t                         mSplatCountInTick;
+	bool                            mIsHordeVanguard;
 
 public:
 	Zombie();
 	~Zombie();
+	bool                            CanAttachHitSplat();
 
 	void                            ZombieInitialize(int theRow, ZombieType theType, bool theVariant, Zombie* theParentZombie, int theFromWave);
 	void                            Animate();

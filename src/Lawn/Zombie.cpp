@@ -138,6 +138,28 @@ const ZombieDefinition& GetZombieDefinition(ZombieType theZombieType)
 
 Zombie::Zombie()
 {
+	mLastSplatTick = -1;
+	mSplatCountInTick = 0;
+	mIsHordeVanguard = true;
+}
+
+bool Zombie::CanAttachHitSplat()
+{
+	if (!mBoard)
+		return true;
+
+	int aCurrentTick = mBoard->mBoardUpdateCounter;
+	if (aCurrentTick == mLastSplatTick)
+	{
+		if (mSplatCountInTick >= 2)
+			return false;
+		mSplatCountInTick++;
+		return true;
+	}
+
+	mLastSplatTick = aCurrentTick;
+	mSplatCountInTick = 1;
+	return true;
 }
 
 void Zombie::ZombieInitialize(int theRow, ZombieType theType, bool theVariant, Zombie* theParentZombie, int theFromWave)
@@ -226,6 +248,9 @@ void Zombie::ZombieInitialize(int theRow, ZombieType theType, bool theVariant, Z
 	mMoweredReanimID = ReanimationID::REANIMATIONID_NULL;
 	mZombatarHeadReanimID = ReanimationID::REANIMATIONID_NULL;
 	mLastPortalX = -1;
+	mLastSplatTick = -1;
+	mSplatCountInTick = 0;
+	mIsHordeVanguard = true;
 	for (int i = 0; i < MAX_ZOMBIE_FOLLOWERS; i++)
 	{
 		mFollowerZombieID[i] = ZombieID::ZOMBIEID_NULL;
