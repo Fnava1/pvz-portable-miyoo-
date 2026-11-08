@@ -455,7 +455,7 @@ void Attachment::SetMatrix(const SexyTransform2D& theMatrix)
 	}
 }
 
-void Attachment::Draw(Graphics* g, bool theParentHidden)
+void Attachment::Draw(Graphics* g, bool theParentHidden, PvzpTriangleGroup* theTriangleGroup)
 {
 	PVZP_ASSERT(gEffectSystem);
 
@@ -479,6 +479,8 @@ void Attachment::Draw(Graphics* g, bool theParentHidden)
 			PvzpParticleSystem* aParticleSystem = aParticleSystems.DataArrayTryToGet(aAttachEffect->mEffectID);
 			if (aParticleSystem)
 			{
+				if (theTriangleGroup)
+					theTriangleGroup->DrawGroup(g);
 				aParticleSystem->Draw(g);
 			}
 			break;
@@ -489,6 +491,8 @@ void Attachment::Draw(Graphics* g, bool theParentHidden)
 			Trail* aTrail = aTrails.DataArrayTryToGet(aAttachEffect->mEffectID);
 			if (aTrail)
 			{
+				if (theTriangleGroup)
+					theTriangleGroup->DrawGroup(g);
 				aTrail->Draw(g);
 			}
 			break;
@@ -499,7 +503,7 @@ void Attachment::Draw(Graphics* g, bool theParentHidden)
 			Reanimation* aReanimation = aReanimations.DataArrayTryToGet(aAttachEffect->mEffectID);
 			if (aReanimation)
 			{
-				aReanimation->DrawAllRenderGroups(g);
+				aReanimation->DrawAllRenderGroups(g, theTriangleGroup);
 			}
 			break;
 		}
@@ -509,7 +513,7 @@ void Attachment::Draw(Graphics* g, bool theParentHidden)
 			Attachment* aAttachment = aAttachments.DataArrayTryToGet(aAttachEffect->mEffectID);
 			if (aAttachment)
 			{
-				aAttachment->Draw(g, theParentHidden);
+				aAttachment->Draw(g, theParentHidden, theTriangleGroup);
 			}
 			break;
 		}
@@ -868,7 +872,7 @@ void AttachmentCrossFade(AttachmentID& theAttachmentID, const char* theCrossFade
 	}
 }
 
-void AttachmentDraw(AttachmentID& theAttachmentID, Graphics* g, bool theParentHidden)
+void AttachmentDraw(AttachmentID& theAttachmentID, Graphics* g, bool theParentHidden, PvzpTriangleGroup* theTriangleGroup)
 {
 	if (theAttachmentID == AttachmentID::ATTACHMENTID_NULL)
 		return;
@@ -877,7 +881,7 @@ void AttachmentDraw(AttachmentID& theAttachmentID, Graphics* g, bool theParentHi
 	Attachment* aAttachment = gEffectSystem->mAttachmentHolder->mAttachments.DataArrayTryToGet((unsigned int)theAttachmentID);
 	if (aAttachment)
 	{
-		aAttachment->Draw(g, theParentHidden);
+		aAttachment->Draw(g, theParentHidden, theTriangleGroup);
 	}
 }
 

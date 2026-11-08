@@ -38,6 +38,7 @@ constexpr const int MAX_EFFECTS_PER_ATTACHMENT = 16;
 class Trail;
 class Reanimation;
 class PvzpParticleSystem;
+class PvzpTriangleGroup;
 
 class AttachEffect
 {
@@ -77,7 +78,7 @@ public:
 	void                    SetMatrix(const SexyTransform2D& theMatrix);
 	void                    OverrideColor(const Color& theColor);
 	void                    OverrideScale(float theScale);
-	void                    Draw(Graphics* g, bool theParentHidden);
+	void                    Draw(Graphics* g, bool theParentHidden, PvzpTriangleGroup* theTriangleGroup = nullptr);
 	void                    AttachmentDie();
 	void                    Detach();
 	void                    CrossFade(const char* theCrossFadeName);
@@ -92,7 +93,7 @@ void             AttachmentOverrideColor(AttachmentID& theAttachmentID, const Co
 void             AttachmentOverrideScale(AttachmentID& theAttachmentID, float theScale);
 void             AttachmentUpdateAndMove(AttachmentID& theAttachmentID, float theX, float theY);
 void             AttachmentUpdateAndSetMatrix(AttachmentID& theAttachmentID, SexyTransform2D& theMatrix);
-void             AttachmentDraw(AttachmentID& theAttachmentID, Graphics* g, bool theParentHidden);
+void             AttachmentDraw(AttachmentID& theAttachmentID, Graphics* g, bool theParentHidden, PvzpTriangleGroup* theTriangleGroup = nullptr);
 void             AttachmentDetach(AttachmentID& theAttachmentID);
 void             AttachmentDetachCrossFadeParticleType(AttachmentID& theAttachmentID, ParticleEffect theParticleEffect, const char* theCrossFadeName);
 void             AttachmentReanimTypeDie(AttachmentID& theAttachmentID, ReanimationType theReanimType);

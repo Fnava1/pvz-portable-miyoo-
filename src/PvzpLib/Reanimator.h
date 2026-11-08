@@ -222,8 +222,8 @@ public:
 	void                            ReanimationDie();
 	void                            Update();
 	void                 Draw(Graphics* g);
-	void                            DrawAllRenderGroups(Graphics* g);
-	void                            DrawRenderGroup(Graphics* g, int theRenderGroup);
+	void                            DrawAllRenderGroups(Graphics* g, PvzpTriangleGroup* theTriangleGroup = nullptr);
+	void                            DrawRenderGroup(Graphics* g, int theRenderGroup, PvzpTriangleGroup* theTriangleGroup = nullptr);
 	bool                            DrawTrack(Graphics* g, int theTrackIndex, int theRenderGroup, PvzpTriangleGroup* theTriangleGroup, ReanimatorFrameTime* theFrameTime = nullptr);
 	void                            GetCurrentTransform(int theTrackIndex, ReanimatorTransform* theTransformCurrent, ReanimatorFrameTime* theFrameTime = nullptr);
 	void                            GetTransformAtTime(int theTrackIndex, ReanimatorTransform* theTransform, ReanimatorFrameTime* theFrameTime);

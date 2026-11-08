@@ -1020,14 +1020,16 @@ void Reanimation::GetFrameTime(ReanimatorFrameTime* theFrameTime)
 	PVZP_ASSERT(theFrameTime->mAnimFrameBeforeInt >= 0 && theFrameTime->mAnimFrameAfterInt < mDefinition->mTracks.tracks[0].mTransforms.count);
 }
 
-void Reanimation::DrawRenderGroup(Graphics* g, int theRenderGroup)
+void Reanimation::DrawRenderGroup(Graphics* g, int theRenderGroup, PvzpTriangleGroup* theTriangleGroup)
 {
 	if (mDead)
 		return;
 	if (mDefinition->mTracks.count == 0)
 		return;
 
-	PvzpTriangleGroup aTriangleGroup;
+	PvzpTriangleGroup aLocalGroup;
+	PvzpTriangleGroup* aGroup = theTriangleGroup ? theTriangleGroup : &aLocalGroup;
+
 	ReanimatorFrameTime aFrameTime;
 	GetFrameTime(&aFrameTime);
 	for (int aTrackIndex = 0; aTrackIndex < mDefinition->mTracks.count; aTrackIndex++)
@@ -1035,15 +1037,17 @@ void Reanimation::DrawRenderGroup(Graphics* g, int theRenderGroup)
 		ReanimatorTrackInstance* aTrackInstance = &mTrackInstances[aTrackIndex];
 		if (aTrackInstance->mRenderGroup == theRenderGroup)
 		{
-			bool aTrackDrawn = DrawTrack(g, aTrackIndex, theRenderGroup, &aTriangleGroup, &aFrameTime);
+			bool aTrackDrawn = DrawTrack(g, aTrackIndex, theRenderGroup, aGroup, &aFrameTime);
 			if (aTrackInstance->mAttachmentID != AttachmentID::ATTACHMENTID_NULL)
 			{
-				aTriangleGroup.DrawGroup(g);
-				AttachmentDraw(aTrackInstance->mAttachmentID, g, !aTrackDrawn);
+				AttachmentDraw(aTrackInstance->mAttachmentID, g, !aTrackDrawn, aGroup);
 			}
 		}
 	}
-	aTriangleGroup.DrawGroup(g);
+	if (!theTriangleGroup)
+	{
+		aLocalGroup.DrawGroup(g);
+	}
 }
 
 void Reanimation::Draw(Graphics* g)
@@ -1051,10 +1055,10 @@ void Reanimation::Draw(Graphics* g)
 	DrawRenderGroup(g, RENDER_GROUP_NORMAL);
 }
 
-void Reanimation::DrawAllRenderGroups(Graphics* g)
+void Reanimation::DrawAllRenderGroups(Graphics* g, PvzpTriangleGroup* theTriangleGroup)
 {
 	for (int aRenderGroup = RENDER_GROUP_NORMAL; aRenderGroup <= RENDER_GROUP_MAX; aRenderGroup++)
-		DrawRenderGroup(g, aRenderGroup);
+		DrawRenderGroup(g, aRenderGroup, theTriangleGroup);
 }
 
 int Reanimation::FindTrackIndex(const char* theTrackName)
