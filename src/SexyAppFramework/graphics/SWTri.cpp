@@ -23,6 +23,7 @@
  */
 
 #include "SWTri.h"
+#include "TriVertex.h"
 #include "misc/Debug.h"
 #include <algorithm>
 
@@ -628,20 +629,20 @@ void SWHelper::SWDrawTriangleBatchDirect(
 			if (c0 != 0 || c1 != 0 || c2 != 0)
 			{
 				vertexColor = true;
-				pVerts[0].diffuse.a = (c0 >> 24) & 0xFF;
-				pVerts[0].diffuse.r = (c0 >> 16) & 0xFF;
-				pVerts[0].diffuse.g = (c0 >> 8) & 0xFF;
-				pVerts[0].diffuse.b = (c0) & 0xFF;
+				pVerts[0].a = ((unsigned int)c0 >>  8) & 0xff0000;
+				pVerts[0].r = ((unsigned int)c0 >>  0) & 0xff0000;
+				pVerts[0].g = ((unsigned int)c0 <<  8) & 0xff0000;
+				pVerts[0].b = ((unsigned int)c0 << 16) & 0xff0000;
 
-				pVerts[1].diffuse.a = (c1 >> 24) & 0xFF;
-				pVerts[1].diffuse.r = (c1 >> 16) & 0xFF;
-				pVerts[1].diffuse.g = (c1 >> 8) & 0xFF;
-				pVerts[1].diffuse.b = (c1) & 0xFF;
+				pVerts[1].a = ((unsigned int)c1 >>  8) & 0xff0000;
+				pVerts[1].r = ((unsigned int)c1 >>  0) & 0xff0000;
+				pVerts[1].g = ((unsigned int)c1 <<  8) & 0xff0000;
+				pVerts[1].b = ((unsigned int)c1 << 16) & 0xff0000;
 
-				pVerts[2].diffuse.a = (c2 >> 24) & 0xFF;
-				pVerts[2].diffuse.r = (c2 >> 16) & 0xFF;
-				pVerts[2].diffuse.g = (c2 >> 8) & 0xFF;
-				pVerts[2].diffuse.b = (c2) & 0xFF;
+				pVerts[2].a = ((unsigned int)c2 >>  8) & 0xff0000;
+				pVerts[2].r = ((unsigned int)c2 >>  0) & 0xff0000;
+				pVerts[2].g = ((unsigned int)c2 <<  8) & 0xff0000;
+				pVerts[2].b = ((unsigned int)c2 << 16) & 0xff0000;
 			}
 
 			SWDrawTriangle(textured, talpha, vertexColor, globalargb,
