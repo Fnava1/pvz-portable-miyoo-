@@ -513,7 +513,10 @@ void PvzpTriangleGroup::AddTriangle(Graphics* g, Image* theImage, const SexyMatr
 	}
 
 	// 1:1 unrotated sprite fast-path using NEON SIMD blitter (bypasses software triangle rasterizer)
-	if (!gSexyAppBase->Is3DAccelerated() && g->mDestImage != nullptr &&
+	// NOTE: Only use Blt if the triangle batch is currently empty (mTriangleCount == 0).
+	// If triangles are already batched (mTriangleCount > 0), do NOT flush the batch to draw a single 1:1 quad;
+	// keeping it in the unified triangle batch avoids severe batch thrashing between SWTri and Blt.
+	if (mTriangleCount == 0 && !gSexyAppBase->Is3DAccelerated() && g->mDestImage != nullptr &&
 		std::abs(theMatrix.m01) < 0.001f && std::abs(theMatrix.m10) < 0.001f &&
 		std::abs(theMatrix.m00 - 1.0f) < 0.001f && std::abs(theMatrix.m11 - 1.0f) < 0.001f &&
 		(theDrawMode == Graphics::DRAWMODE_NORMAL || theDrawMode == Graphics::DRAWMODE_ADDITIVE))
@@ -533,15 +536,11 @@ void PvzpTriangleGroup::AddTriangle(Graphics* g, Image* theImage, const SexyMatr
 			    aSrcSubRect.mX + aSrcSubRect.mWidth <= theImage->mWidth &&
 			    aSrcSubRect.mY + aSrcSubRect.mHeight <= theImage->mHeight)
 			{
-				if (mTriangleCount > 0)
-				{
-					DrawGroup(g);
-				}
 				PvzpSandImageIfNeeded(theImage);
 				g->mDestImage->Blt(theImage, aDestRect.mX, aDestRect.mY, aSrcSubRect, theColor, theDrawMode, g->mLinearBlend);
+				return;
 			}
 		}
-		return;
 	}
 
 	PVZP_ASSERT(theSrcRect.mX >= 0 && theSrcRect.mWidth >= 0 && theSrcRect.mX + theSrcRect.mWidth <= mImage->mWidth);
