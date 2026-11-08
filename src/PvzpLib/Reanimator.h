@@ -68,9 +68,11 @@ public:
 	const char*                     mName;                          //+0x0: track name
 	ReanimatorTransformArray        mTransforms;                    //+0x4: anim transforms for each frame
 	bool                            mIsAttacher;
+	bool                            mHasBasePoseMatrixInv;
+	SexyTransform2D                 mBasePoseMatrixInv;
 
 public:
-	ReanimatorTrack() : mName(""), mTransforms({nullptr,0}), mIsAttacher(false) { }
+	ReanimatorTrack() : mName(""), mTransforms({nullptr,0}), mIsAttacher(false), mHasBasePoseMatrixInv(false) { }
 };
 
 struct ReanimatorTrackArray {

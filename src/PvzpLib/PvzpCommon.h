@@ -147,6 +147,7 @@ void					SexyMatrix3ExtractScale(const SexyMatrix3& m, float& theScaleX, float& 
 void			SexyMatrix3Translation(SexyMatrix3& m, float x, float y);
 void					SexyMatrix3Transpose(const SexyMatrix3& m, SexyMatrix3& r);  // r = m ^ T
 void					SexyMatrix3Inverse(const SexyMatrix3& m, SexyMatrix3& r);  // r = m ^ -1
+void					SexyMatrix3InverseAffine2D(const SexyMatrix3& m, SexyMatrix3& r);  // analytical 2D affine inverse
 void					SexyMatrix3Multiply(SexyMatrix3& m, const SexyMatrix3& l, const SexyMatrix3& r);  // m = l × r
 bool					PvzpIsPointInPolygon(const SexyVector2* thePolygonPoint, int theNumberPolygonPoints, const SexyVector2& theCheckPoint);
 

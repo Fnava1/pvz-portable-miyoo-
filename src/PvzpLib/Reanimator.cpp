@@ -1122,10 +1122,32 @@ void Reanimation::GetAttachmentOverlayMatrix(int theTrackIndex, SexyTransform2D&
 	MatrixFromTransform(aTransform, aTransformMatrix);
 	SexyMatrix3Multiply(aTransformMatrix, mOverlayMatrix, aTransformMatrix);  // apply the overlay matrix
 
+	if (mFrameBasePose == NO_BASE_POSE)
+	{
+		theOverlayMatrix = aTransformMatrix;
+		return;
+	}
+
+	ReanimatorTrack* aTrack = (mDefinition && theTrackIndex >= 0 && theTrackIndex < mDefinition->mTracks.count) ?
+		&mDefinition->mTracks.tracks[theTrackIndex] : nullptr;
+
+	if (aTrack && aTrack->mHasBasePoseMatrixInv)
+	{
+		theOverlayMatrix = aTransformMatrix * aTrack->mBasePoseMatrixInv;
+		return;
+	}
+
 	SexyTransform2D aBasePoseMatrix;
 	GetTrackBasePoseMatrix(theTrackIndex, aBasePoseMatrix);
 	SexyTransform2D aBasePoseMatrixInv;
-	SexyMatrix3Inverse(aBasePoseMatrix, aBasePoseMatrixInv);
+	SexyMatrix3InverseAffine2D(aBasePoseMatrix, aBasePoseMatrixInv);
+
+	if (aTrack && (mFrameBasePose == 0 || mFrameBasePose == -1))
+	{
+		aTrack->mBasePoseMatrixInv = aBasePoseMatrixInv;
+		aTrack->mHasBasePoseMatrixInv = true;
+	}
+
 	theOverlayMatrix = aTransformMatrix * aBasePoseMatrixInv;
 }
 

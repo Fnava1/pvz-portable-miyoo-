@@ -975,8 +975,37 @@ void SexyMatrix3Transpose(const SexyMatrix3& m, SexyMatrix3 &r)
 	}
 }
 
+void SexyMatrix3InverseAffine2D(const SexyMatrix3& m, SexyMatrix3& r)
+{
+	float aDet = m.m00 * m.m11 - m.m01 * m.m10;
+	if (std::abs(aDet) < 1e-6f)
+	{
+		r.LoadIdentity();
+		return;
+	}
+	float aInvDet = 1.0f / aDet;
+
+	r.m00 = m.m11 * aInvDet;
+	r.m01 = -m.m01 * aInvDet;
+	r.m02 = (m.m01 * m.m12 - m.m11 * m.m02) * aInvDet;
+
+	r.m10 = -m.m10 * aInvDet;
+	r.m11 = m.m00 * aInvDet;
+	r.m12 = (m.m10 * m.m02 - m.m00 * m.m12) * aInvDet;
+
+	r.m20 = 0.0f;
+	r.m21 = 0.0f;
+	r.m22 = 1.0f;
+}
+
 void SexyMatrix3Inverse(const SexyMatrix3& m, SexyMatrix3 &r)
 {
+	if (m.m20 == 0.0f && m.m21 == 0.0f && m.m22 == 1.0f)
+	{
+		SexyMatrix3InverseAffine2D(m, r);
+		return;
+	}
+
 	float aDet = (m.m22 * m.m11 - m.m21 * m.m12) * m.m00- (m.m22 * m.m10 - m.m20 * m.m12) * m.m01 + (m.m21 * m.m10 - m.m20 * m.m11) * m.m02;
 	float aInvDet = 1.0f / aDet;
 
