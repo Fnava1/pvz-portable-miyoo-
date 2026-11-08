@@ -55,6 +55,7 @@ public:
 		const unsigned int *	pTexture;
 		int pitch;
 		unsigned int endpos;
+		bool is_tiled = false;
 	};
 	struct	SWDiffuse
 	{

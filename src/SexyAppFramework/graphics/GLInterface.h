@@ -196,6 +196,8 @@ public:
 	void*					mSdlTexture = nullptr;
 	int						mTexWidth = 0;
 	int						mTexHeight = 0;
+	bool					mIs16BitMode = false;
+	bool					mIsNative640 = false;
 
 	int						mNextCursorX;
 	int						mNextCursorY;

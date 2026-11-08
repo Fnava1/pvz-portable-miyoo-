@@ -28,6 +28,7 @@
 #include "graphics/Image.h"
 #include "misc/KeyCodes.h"
 #include "graphics/GLImage.h"
+#include "graphics/GLInterface.h"
 #include "SexyAppBase.h"
 #include "misc/PerfTimer.h"
 #include "misc/Debug.h"
@@ -441,6 +442,8 @@ bool WidgetManager::DrawScreen()
 	mDeferredOverlayWidgets.resize(0);
 
 	Graphics aScrG(mImage);
+	if (mApp && mApp->mGLInterface && mApp->mGLInterface->mIsNative640)
+		aScrG.SetScale(0.8f, 0.8f, 0, 0);
 	mCurG = &aScrG;
 
 	if (aDirtyCount > 0)

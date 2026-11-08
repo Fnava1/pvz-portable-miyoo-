@@ -2000,3 +2000,35 @@ bool MemoryImage::Palletize()
 
 	return true;
 }
+
+void MemoryImage::TileBits8x8()
+{
+	if (mTiled8x8 || !mBits || (mWidth % 8 != 0) || (mHeight % 8 != 0) || mWidth <= 0 || mHeight <= 0)
+		return;
+
+	int aBitsCount = mWidth * mHeight;
+	auto tiledBits = std::make_unique<uint32_t[]>(aBitsCount + 1);
+	int tilesX = mWidth / 8;
+	int tilesY = mHeight / 8;
+
+	int dstIdx = 0;
+	for (int ty = 0; ty < tilesY; ++ty)
+	{
+		for (int tx = 0; tx < tilesX; ++tx)
+		{
+			for (int py = 0; py < 8; ++py)
+			{
+				for (int px = 0; px < 8; ++px)
+				{
+					int srcX = tx * 8 + px;
+					int srcY = ty * 8 + py;
+					tiledBits[dstIdx++] = mBits[srcY * mWidth + srcX];
+				}
+			}
+		}
+	}
+	tiledBits[aBitsCount] = Sexy::MEMORYCHECK_ID;
+	mBits = std::move(tiledBits);
+	mTiled8x8 = true;
+	BitsChanged();
+}

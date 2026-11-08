@@ -248,4 +248,18 @@ void ReanimAtlas::ReanimAtlasCreate(ReanimatorDefinition* theReanimDef)
 		aMemoryGraphis.DrawImage(aImage->mOriginalImage, aImage->mX, aImage->mY);
 	}
 	FixPixelsOnAlphaEdgeForBlending(mMemoryImage.get());  // set transparent pixels to the average color of their neighbors
+
+	static bool sTiledAtlasInit = false;
+	static bool sTiledAtlas = false;
+	if (!sTiledAtlasInit)
+	{
+		const char* envTiled = getenv("PVZ_TILED_ATLAS");
+		if (envTiled && (strcmp(envTiled, "1") == 0 || strcmp(envTiled, "true") == 0 || strcmp(envTiled, "on") == 0))
+			sTiledAtlas = true;
+		sTiledAtlasInit = true;
+	}
+	if (sTiledAtlas && mMemoryImage)
+	{
+		mMemoryImage->TileBits8x8();
+	}
 }

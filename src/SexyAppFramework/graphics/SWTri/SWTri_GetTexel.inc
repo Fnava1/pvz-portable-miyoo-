@@ -27,14 +27,25 @@
 	unsigned int tex;
 	#if !defined(LINEAR_BLEND)
 	{
-		unsigned int v_int = v >> 16;
-		if (__builtin_expect(v_int != current_v_int, 0))
+		if (__builtin_expect(!is_tiled, 1))
 		{
-			current_v_int = v_int;
-			v_row_offset = v_int * tex_pitch;
+			unsigned int v_int = v >> 16;
+			if (__builtin_expect(v_int != current_v_int, 0))
+			{
+				current_v_int = v_int;
+				v_row_offset = v_int * tex_pitch;
+			}
+			unsigned int t_pos = v_row_offset + ((u) >> 16);
+			tex = t_pos < tex_endpos ? pTexture[t_pos] : 0;
 		}
-		unsigned int t_pos = v_row_offset + ((u) >> 16);
-		tex = t_pos < tex_endpos ? pTexture[t_pos] : 0;
+		else
+		{
+			unsigned int u_int = (u) >> 16;
+			unsigned int v_int = (v) >> 16;
+			unsigned int tiles_across = tex_pitch >> 3;
+			unsigned int t_pos = (((v_int >> 3) * tiles_across + (u_int >> 3)) << 6) | ((v_int & 7) << 3) | (u_int & 7);
+			tex = t_pos < tex_endpos ? pTexture[t_pos] : 0;
+		}
 	}
 	#else
 	{

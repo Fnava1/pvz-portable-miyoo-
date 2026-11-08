@@ -302,7 +302,8 @@ void SWHelper::SWDrawShape(XYZStruct *theVerts, int theNumVerts, MemoryImage *th
 
 	if (thePitch > 0)
 	{
-		float max_x = (float)((thePitch / 4) - 1);
+		int bytesPerPixel = (thePixelFormat == 0x565 || thePixelFormat == 0x555) ? 2 : 4;
+		float max_x = (float)((thePitch / bytesPerPixel) - 1);
 		if (tclx1 > max_x)
 			tclx1 = max_x;
 	}
@@ -491,6 +492,7 @@ void SWHelper::SWDrawShape(XYZStruct *theVerts, int theNumVerts, MemoryImage *th
 				textureInfo.pTexture = reinterpret_cast<unsigned int *>(theImage->GetBits());
 				textureInfo.pitch = theImage->mWidth;
 				textureInfo.endpos = theImage->mWidth*theImage->mHeight;
+				textureInfo.is_tiled = theImage ? theImage->mTiled8x8 : false;
 			}
 
 			if (vertexColor)
@@ -547,7 +549,8 @@ void SWHelper::SWDrawTriangleBatchDirect(
 
 	if (thePitch > 0)
 	{
-		float max_x = (float)((thePitch / 4) - 1);
+		int bytesPerPixel = (thePixelFormat == 0x565 || thePixelFormat == 0x555) ? 2 : 4;
+		float max_x = (float)((thePitch / bytesPerPixel) - 1);
 		if (tclx1 > max_x)
 			tclx1 = max_x;
 	}
@@ -577,6 +580,7 @@ void SWHelper::SWDrawTriangleBatchDirect(
 		textureInfo.pTexture = reinterpret_cast<unsigned int *>(theImage->GetBits());
 		textureInfo.pitch = theImage->mWidth;
 		textureInfo.endpos = theImage->mWidth * theImage->mHeight;
+		textureInfo.is_tiled = theImage ? theImage->mTiled8x8 : false;
 		aTexWidthFixed = static_cast<float>(theImage->mWidth) * 65536.0f;
 		aTexHeightFixed = static_cast<float>(theImage->mHeight) * 65536.0f;
 	}

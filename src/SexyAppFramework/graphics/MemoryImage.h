@@ -66,6 +66,7 @@ public:
 	std::unique_ptr<uchar[]>		mRLAdditiveData;
 
 	bool					mBitsChanged;
+	bool					mTiled8x8 = false;
 	SexyAppBase*			mApp;
 
 private:
@@ -134,6 +135,7 @@ public:
 	virtual void			SetVolatile(bool isVolatile);
 
 	virtual bool			Palletize();
+	void					TileBits8x8();
 };
 
 }

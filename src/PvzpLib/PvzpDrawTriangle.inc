@@ -95,6 +95,7 @@ void	funcname(SWHelper::SWVertex* pVerts, void* pFrameBuffer, const unsigned int
 	const int pitch = bytepitch / sizeof(PTYPE);
 	const int tex_pitch = textureInfo->pitch;
 	const unsigned int tex_endpos = textureInfo->endpos;
+	[[maybe_unused]] const bool is_tiled = textureInfo ? textureInfo->is_tiled : false;
 
 #define  swap(a,b,type) {type tmp = a; a = b; b = tmp;}
 

@@ -31,6 +31,7 @@
 #include "graphics/GLImage.h"
 #include "graphics/Graphics.h"
 #include "graphics/MemoryImage.h"
+#include "graphics/NeonBlit.hpp"
 #include "SexyAppBase.h"
 #include "graphics/CursorPixels.h"
 #include <cstdlib>
@@ -1233,6 +1234,13 @@ GLImage* GLInterface::GetScreenImage() { return mScreenImage.get(); }
 void GLInterface::UpdateViewport()
 {
 #if !PVZ_ENABLE_GLES
+	const char* env640 = getenv("PVZ_NATIVE_640");
+	if (env640 && (strcmp(env640, "1") == 0 || strcmp(env640, "true") == 0 || strcmp(env640, "on") == 0))
+	{
+		mIsNative640 = true;
+		mWidth = 640;
+		mHeight = 480;
+	}
 	int winW = mWidth;
 	int winH = mHeight;
 	if (mApp && mApp->mWindow)
@@ -1272,6 +1280,13 @@ void GLInterface::UpdateViewport()
 int GLInterface::Init(bool IsWindowed)
 {
 #if !PVZ_ENABLE_GLES
+	const char* env640 = getenv("PVZ_NATIVE_640");
+	if (env640 && (strcmp(env640, "1") == 0 || strcmp(env640, "true") == 0 || strcmp(env640, "on") == 0))
+	{
+		mIsNative640 = true;
+		mWidth = 640;
+		mHeight = 480;
+	}
 	int winW = mWidth;
 	int winH = mHeight;
 	if (mApp && mApp->mWindow)
@@ -1299,7 +1314,14 @@ int GLInterface::Init(bool IsWindowed)
 		mSdlRenderer = (void*)ren;
 		if (ren)
 		{
-			SDL_Texture* tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, winW, winH);
+			const char* env16 = getenv("PVZ_16BIT");
+			if (env16 && (strcmp(env16, "1") == 0 || strcmp(env16, "true") == 0 || strcmp(env16, "on") == 0))
+				mIs16BitMode = true;
+			else
+				mIs16BitMode = false;
+
+			uint32_t texFormat = mIs16BitMode ? SDL_PIXELFORMAT_RGB565 : SDL_PIXELFORMAT_ARGB8888;
+			SDL_Texture* tex = SDL_CreateTexture(ren, texFormat, SDL_TEXTUREACCESS_STREAMING, winW, winH);
 			if (tex)
 			{
 				SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_NONE);
@@ -1648,16 +1670,34 @@ void GLInterface::Flush()
 
 			if (texW == mWidth && texH == mHeight)
 			{
-				if (texPitch == (int)(mWidth * sizeof(uint32_t)))
+				if (mIs16BitMode)
 				{
-					memcpy(texPixels, srcBits, mWidth * mHeight * sizeof(uint32_t));
+					if (texPitch == (int)(mWidth * sizeof(uint16_t)))
+					{
+						PvZ::Graphics::NeonBlit_RGB565_From_ARGB((uint16_t*)texPixels, srcBits, mWidth * mHeight);
+					}
+					else
+					{
+						for (int y = 0; y < mHeight; ++y)
+						{
+							PvZ::Graphics::NeonBlit_RGB565_From_ARGB((uint16_t*)dstRow, srcBits + (y * mWidth), mWidth);
+							dstRow += texPitch;
+						}
+					}
 				}
 				else
 				{
-					for (int y = 0; y < mHeight; ++y)
+					if (texPitch == (int)(mWidth * sizeof(uint32_t)))
 					{
-						memcpy(dstRow, srcBits + (y * mWidth), mWidth * sizeof(uint32_t));
-						dstRow += texPitch;
+						memcpy(texPixels, srcBits, mWidth * mHeight * sizeof(uint32_t));
+					}
+					else
+					{
+						for (int y = 0; y < mHeight; ++y)
+						{
+							memcpy(dstRow, srcBits + (y * mWidth), mWidth * sizeof(uint32_t));
+							dstRow += texPitch;
+						}
 					}
 				}
 			}
@@ -1687,65 +1727,149 @@ void GLInterface::Flush()
 				if (sSmoothScale)
 				{
 					// Option A: Fused 1-pass edge-smoothing downscaler (800x600 -> 640x480)
-					// Rows 0, 1, 2: direct 1-pass horizontal NEON downscale straight to texture
-					// Row 3: fast average with skipped row 4 to eliminate vertical aliasing
-					for (int block = 0; block < 120; ++block)
+					if (mIs16BitMode)
 					{
-						int sy = block * 5;
-						if (block + 1 < 120)
+						uint32_t rowTemp[640];
+						for (int block = 0; block < 120; ++block)
 						{
-							__builtin_prefetch(srcBits + (sy + 5) * 800, 0, 0);
-							__builtin_prefetch(dstRow + 4 * texPitch, 1, 0);
+							int sy = block * 5;
+							if (block + 1 < 120)
+							{
+								__builtin_prefetch(srcBits + (sy + 5) * 800, 0, 0);
+								__builtin_prefetch(dstRow + 4 * texPitch, 1, 0);
+							}
+
+							DownscaleRow800To640(srcBits + (sy + 0) * 800, rowTemp);
+							PvZ::Graphics::NeonBlit_RGB565_From_ARGB((uint16_t*)(dstRow + 0 * texPitch), rowTemp, 640);
+
+							DownscaleRow800To640(srcBits + (sy + 1) * 800, rowTemp);
+							PvZ::Graphics::NeonBlit_RGB565_From_ARGB((uint16_t*)(dstRow + 1 * texPitch), rowTemp, 640);
+
+							DownscaleRow800To640(srcBits + (sy + 2) * 800, rowTemp);
+							PvZ::Graphics::NeonBlit_RGB565_From_ARGB((uint16_t*)(dstRow + 2 * texPitch), rowTemp, 640);
+
+							AverageAndDownscaleRow800To640(srcBits + (sy + 3) * 800, srcBits + (sy + 4) * 800, rowTemp);
+							PvZ::Graphics::NeonBlit_RGB565_From_ARGB((uint16_t*)(dstRow + 3 * texPitch), rowTemp, 640);
+
+							dstRow += 4 * texPitch;
 						}
+					}
+					else
+					{
+						for (int block = 0; block < 120; ++block)
+						{
+							int sy = block * 5;
+							if (block + 1 < 120)
+							{
+								__builtin_prefetch(srcBits + (sy + 5) * 800, 0, 0);
+								__builtin_prefetch(dstRow + 4 * texPitch, 1, 0);
+							}
 
-						DownscaleRow800To640(srcBits + (sy + 0) * 800, (uint32_t*)(dstRow + 0 * texPitch));
-						DownscaleRow800To640(srcBits + (sy + 1) * 800, (uint32_t*)(dstRow + 1 * texPitch));
-						DownscaleRow800To640(srcBits + (sy + 2) * 800, (uint32_t*)(dstRow + 2 * texPitch));
+							DownscaleRow800To640(srcBits + (sy + 0) * 800, (uint32_t*)(dstRow + 0 * texPitch));
+							DownscaleRow800To640(srcBits + (sy + 1) * 800, (uint32_t*)(dstRow + 1 * texPitch));
+							DownscaleRow800To640(srcBits + (sy + 2) * 800, (uint32_t*)(dstRow + 2 * texPitch));
 
-						AverageAndDownscaleRow800To640(srcBits + (sy + 3) * 800, srcBits + (sy + 4) * 800, (uint32_t*)(dstRow + 3 * texPitch));
+							AverageAndDownscaleRow800To640(srcBits + (sy + 3) * 800, srcBits + (sy + 4) * 800, (uint32_t*)(dstRow + 3 * texPitch));
 
-						dstRow += 4 * texPitch;
+							dstRow += 4 * texPitch;
+						}
 					}
 				}
 				else
 				{
-					for (int dy = 0; dy < 480; ++dy)
+					if (mIs16BitMode)
 					{
-						int sy = (dy * 5) / 4;
-						const uint32_t* srcRow = srcBits + (sy * 800);
-						uint32_t* dst = (uint32_t*)dstRow;
-
-						for (int dx = 0; dx < 640; dx += 4)
+						for (int dy = 0; dy < 480; ++dy)
 						{
-							dst[dx + 0] = srcRow[sScaleX[dx + 0]];
-							dst[dx + 1] = srcRow[sScaleX[dx + 1]];
-							dst[dx + 2] = srcRow[sScaleX[dx + 2]];
-							dst[dx + 3] = srcRow[sScaleX[dx + 3]];
+							int sy = (dy * 5) / 4;
+							const uint32_t* srcRow = srcBits + (sy * 800);
+							uint16_t* dst16 = (uint16_t*)dstRow;
+
+							for (int dx = 0; dx < 640; dx += 4)
+							{
+								for (int k = 0; k < 4; ++k)
+								{
+									uint32_t px = srcRow[sScaleX[dx + k]];
+									uint8_t r = static_cast<uint8_t>((px >> 16) & 0xFF);
+									uint8_t g = static_cast<uint8_t>((px >> 8) & 0xFF);
+									uint8_t b = static_cast<uint8_t>(px & 0xFF);
+									dst16[dx + k] = static_cast<uint16_t>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+								}
+							}
+							dstRow += texPitch;
 						}
-						dstRow += texPitch;
+					}
+					else
+					{
+						for (int dy = 0; dy < 480; ++dy)
+						{
+							int sy = (dy * 5) / 4;
+							const uint32_t* srcRow = srcBits + (sy * 800);
+							uint32_t* dst = (uint32_t*)dstRow;
+
+							for (int dx = 0; dx < 640; dx += 4)
+							{
+								dst[dx + 0] = srcRow[sScaleX[dx + 0]];
+								dst[dx + 1] = srcRow[sScaleX[dx + 1]];
+								dst[dx + 2] = srcRow[sScaleX[dx + 2]];
+								dst[dx + 3] = srcRow[sScaleX[dx + 3]];
+							}
+							dstRow += texPitch;
+						}
 					}
 				}
 			}
 			else if (texW > 0 && texH > 0)
 			{
-				for (int dy = 0; dy < texH; ++dy)
+				if (mIs16BitMode)
 				{
-					int sy = (dy * mHeight) / texH;
-					const uint32_t* srcRow = srcBits + (sy * mWidth);
-					uint32_t* dst = (uint32_t*)dstRow;
-					for (int dx = 0; dx < texW; ++dx)
+					for (int dy = 0; dy < texH; ++dy)
 					{
-						int sx = (dx * mWidth) / texW;
-						dst[dx] = srcRow[sx];
+						int sy = (dy * mHeight) / texH;
+						const uint32_t* srcRow = srcBits + (sy * mWidth);
+						uint16_t* dst16 = (uint16_t*)dstRow;
+						for (int dx = 0; dx < texW; ++dx)
+						{
+							int sx = (dx * mWidth) / texW;
+							uint32_t px = srcRow[sx];
+							uint8_t r = static_cast<uint8_t>((px >> 16) & 0xFF);
+							uint8_t g = static_cast<uint8_t>((px >> 8) & 0xFF);
+							uint8_t b = static_cast<uint8_t>(px & 0xFF);
+							dst16[dx] = static_cast<uint16_t>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+						}
+						dstRow += texPitch;
 					}
-					dstRow += texPitch;
+				}
+				else
+				{
+					for (int dy = 0; dy < texH; ++dy)
+					{
+						int sy = (dy * mHeight) / texH;
+						const uint32_t* srcRow = srcBits + (sy * mWidth);
+						uint32_t* dst = (uint32_t*)dstRow;
+						for (int dx = 0; dx < texW; ++dx)
+						{
+							int sx = (dx * mWidth) / texW;
+							dst[dx] = srcRow[sx];
+						}
+						dstRow += texPitch;
+					}
 				}
 			}
 			SDL_UnlockTexture(tex);
 		}
 		else if (texW == mWidth && texH == mHeight)
 		{
-			SDL_UpdateTexture(tex, nullptr, mScreenImage->GetBits(), mWidth * sizeof(uint32_t));
+			if (mIs16BitMode)
+			{
+				std::vector<uint16_t> buf16(mWidth * mHeight);
+				PvZ::Graphics::NeonBlit_RGB565_From_ARGB(buf16.data(), mScreenImage->GetBits(), mWidth * mHeight);
+				SDL_UpdateTexture(tex, nullptr, buf16.data(), mWidth * sizeof(uint16_t));
+			}
+			else
+			{
+				SDL_UpdateTexture(tex, nullptr, mScreenImage->GetBits(), mWidth * sizeof(uint32_t));
+			}
 		}
 		// If streaming texture is opaque (BLENDMODE_NONE) and covers the full presentation rect (e.g. 640x480 on Miyoo),
 		// SDL_RenderClear is redundant and wastes a full 1.23 MB DRAM memset per frame (~74 MB/s bandwidth).
