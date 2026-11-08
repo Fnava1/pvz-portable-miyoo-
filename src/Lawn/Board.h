@@ -301,6 +301,8 @@ public:
 	Plant*							mFlowerPotGrid[MAX_GRID_SIZE_X][MAX_GRID_SIZE_Y];
 	Plant*							mTorchwoodGrid[MAX_GRID_SIZE_X][MAX_GRID_SIZE_Y];
 	std::vector<Zombie*>			mRowZombies[MAX_GRID_SIZE_Y];
+	std::unique_ptr<MemoryImage>	mStaticBackdrop;
+	bool							mStaticBackdropValid;
 	int32_t							mMaxSunPlants;
 	int64_t							mStartDrawTime;
 	int64_t							mIntervalDrawTime;
@@ -460,6 +462,11 @@ public:
 	void							DrawTopRightUI(Graphics* g);
 	void							DrawFog(Graphics* g);
 	void							UpdateFog();
+	void							InvalidateStaticBackdrop();
+	void							UpdateStaticBackdrop();
+	void							BakePlantShadow(Plant* thePlant);
+	void							ClearPlantShadow(Plant* thePlant);
+	Image*							GetBackgroundImage();
 	int					LeftFogColumn();
 	static bool			IsZombieTypePoolOnly(ZombieType theZombieType);
 	void							DropLootPiece(int thePosX, int thePosY, int theDropFactor);

@@ -155,6 +155,7 @@ void					PvzpDrawString(Graphics* g, std::string_view theText, int thePosX, int 
 void					PvzpDrawStringMatrix(Graphics* g, const _Font* theFont, const SexyMatrix3& theMatrix, std::string_view theString, const Color& theColor);
 void					PvzpDrawImageScaledF(Graphics* g, Image* theImage, float thePosX, float thePosY, float theScaleX, float theScaleY);
 void					PvzpDrawImageCenterScaledF(Graphics* g, Image* theImage, float thePosX, float thePosY, float theScaleX, float theScaleY);
+void					PvzpDrawFastShadow(Graphics* g, Image* theImage, float thePosX, float thePosY, float theScaleX, float theScaleY);
 void					PvzpDrawImageCelF(Graphics* g, Image* theImageStrip, float thePosX, float thePosY, int theCelCol, int theCelRow);
 void					PvzpDrawImageCelScaled(Graphics* g, Image* theImageStrip, int thePosX, int thePosY, int theCelCol, int theCelRow, float theScaleX, float theScaleY);
 void					PvzpDrawImageCelScaledF(Graphics* g, Image* theImageStrip, float thePosX, float thePosY, int theCelCol, int theCelRow, float theScaleX, float theScaleY);

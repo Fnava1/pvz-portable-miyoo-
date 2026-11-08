@@ -892,6 +892,76 @@ void PvzpDrawImageCenterScaledF(Graphics* g, Image* theImage, float thePosX, flo
 	PvzpBltMatrix(g, theImage, aTransform, g->mClipRect, aColor, g->mDrawMode, aSrcRect);
 }
 
+void PvzpDrawFastShadow(Graphics* g, Image* theImage, float thePosX, float thePosY, float theScaleX, float theScaleY)
+{
+	if (!theImage || theScaleX <= 0.0f || theScaleY <= 0.0f || !g->mDestImage)
+		return;
+
+	int aCelWidth = theImage->mWidth;
+	int aCelHeight = theImage->mHeight;
+	int aDestW = FloatRoundToInt(theScaleX * aCelWidth);
+	int aDestH = FloatRoundToInt(theScaleY * aCelHeight);
+	int aDestX = FloatRoundToInt(thePosX + aCelWidth * 0.5f - aDestW * 0.5f) + g->mTransX;
+	int aDestY = FloatRoundToInt(thePosY + aCelHeight * 0.5f - aDestH * 0.5f) + g->mTransY;
+
+	Rect aDestRect(aDestX, aDestY, aDestW, aDestH);
+	Rect aClip = aDestRect.Intersection(g->mClipRect);
+	if (g->mDestImage)
+	{
+		aClip = aClip.Intersection(Rect(0, 0, g->mDestImage->mWidth, g->mDestImage->mHeight));
+	}
+	if (aClip.mWidth <= 0 || aClip.mHeight <= 0)
+		return;
+
+	MemoryImage* aDstImage = dynamic_cast<MemoryImage*>(g->mDestImage);
+	MemoryImage* aSrcImage = dynamic_cast<MemoryImage*>(theImage);
+	if (!aDstImage || !aSrcImage)
+	{
+		PvzpDrawImageCenterScaledF(g, theImage, thePosX, thePosY, theScaleX, theScaleY);
+		return;
+	}
+
+	uint32_t* pDstBits = aDstImage->GetBits();
+	uint32_t* pSrcBits = aSrcImage->GetBits();
+	if (!pDstBits || !pSrcBits)
+	{
+		PvzpDrawImageCenterScaledF(g, theImage, thePosX, thePosY, theScaleX, theScaleY);
+		return;
+	}
+
+	int dstPitch = g->mDestImage->mWidth;
+	int srcPitch = theImage->mWidth;
+	int srcHeight = theImage->mHeight;
+
+	for (int y = aClip.mY; y < aClip.mY + aClip.mHeight; ++y)
+	{
+		int sy = ((y - aDestRect.mY) * srcHeight) / aDestH;
+		if (sy < 0) sy = 0;
+		else if (sy >= srcHeight) sy = srcHeight - 1;
+
+		uint32_t* dstRow = pDstBits + y * dstPitch;
+		const uint32_t* srcRow = pSrcBits + sy * srcPitch;
+
+		for (int x = aClip.mX; x < aClip.mX + aClip.mWidth; ++x)
+		{
+			int sx = ((x - aDestRect.mX) * aCelWidth) / aDestW;
+			if (sx < 0) sx = 0;
+			else if (sx >= aCelWidth) sx = aCelWidth - 1;
+
+			uint32_t a = srcRow[sx] >> 24;
+			if (a <= 8)
+				continue;
+
+			uint32_t inv_a = 256 - a;
+			uint32_t p = dstRow[x];
+			uint32_t rb = (((p & 0x00FF00FF) * inv_a) >> 8) & 0x00FF00FF;
+			uint32_t g_val = (((p & 0x0000FF00) * inv_a) >> 8) & 0x0000FF00;
+			dstRow[x] = 0xFF000000 | rb | g_val;
+		}
+	}
+	aDstImage->BitsChanged();
+}
+
 uint32_t AverageNearByPixels(MemoryImage* theImage, uint32_t* thePixel, int x, int y)
 {
 	int aRed = 0;

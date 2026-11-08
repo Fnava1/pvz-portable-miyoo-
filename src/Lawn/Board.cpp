@@ -181,6 +181,7 @@ Board::Board(LawnApp* theApp)
 	mTorchwoodRowMask = 0;
 	mFlowerPotCount = 0;
 	mPumpkinCount = 0;
+	mStaticBackdropValid = false;
 	memset(mPumpkinGrid, 0, sizeof(mPumpkinGrid));
 	memset(mFlowerPotGrid, 0, sizeof(mFlowerPotGrid));
 	memset(mTorchwoodGrid, 0, sizeof(mTorchwoodGrid));
@@ -5409,6 +5410,7 @@ void Board::UpdateRowPlantMask()
 	mTorchwoodRowMask = 0;
 	mFlowerPotCount = 0;
 	mPumpkinCount = 0;
+	mStaticBackdropValid = false;
 	memset(mPumpkinGrid, 0, sizeof(mPumpkinGrid));
 	memset(mFlowerPotGrid, 0, sizeof(mFlowerPotGrid));
 	memset(mTorchwoodGrid, 0, sizeof(mTorchwoodGrid));
@@ -6149,6 +6151,11 @@ void Board::UpdateGame()
 	if (mApp->mGameScene != GameScenes::SCENE_PLAYING && !mCutScene->ShouldRunUpsellBoard())
 		return;
 
+	if (mX == 0 && !mStaticBackdropValid)
+	{
+		UpdateStaticBackdrop();
+	}
+
 	mMainCounter++;
 	UpdateSunSpawning();
 	UpdateZombieSpawning();
@@ -6418,6 +6425,95 @@ void Board::DrawIce(Graphics* g, int theGridY)
 	g->SetColorizeImages(false);
 }
 
+Image* Board::GetBackgroundImage()
+{
+	switch (mBackground)
+	{
+	case BackgroundType::BACKGROUND_1_DAY:				return Sexy::IMAGE_BACKGROUND1;
+	case BackgroundType::BACKGROUND_2_NIGHT:			return Sexy::IMAGE_BACKGROUND2;
+	case BackgroundType::BACKGROUND_3_POOL:				return Sexy::IMAGE_BACKGROUND3;
+	case BackgroundType::BACKGROUND_4_FOG:				return Sexy::IMAGE_BACKGROUND4;
+	case BackgroundType::BACKGROUND_5_ROOF:				return Sexy::IMAGE_BACKGROUND5;
+	case BackgroundType::BACKGROUND_6_BOSS:				return Sexy::IMAGE_BACKGROUND6BOSS;
+	case BackgroundType::BACKGROUND_MUSHROOM_GARDEN:	return Sexy::IMAGE_BACKGROUND_MUSHROOMGARDEN;
+	case BackgroundType::BACKGROUND_GREENHOUSE:			return Sexy::IMAGE_BACKGROUND_GREENHOUSE;
+	case BackgroundType::BACKGROUND_ZOMBIQUARIUM:		return Sexy::IMAGE_AQUARIUM1;
+	default:											return nullptr;
+	}
+}
+
+void Board::InvalidateStaticBackdrop()
+{
+	mStaticBackdropValid = false;
+}
+
+void Board::BakePlantShadow(Plant* thePlant)
+{
+	if (!mStaticBackdrop || !mStaticBackdropValid || !thePlant || thePlant->mDead)
+		return;
+	if (Plant::IsFlying(thePlant->mSeedType) || thePlant->mOnBungeeState != PlantOnBungeeState::NOT_ON_BUNGEE)
+		return;
+
+	Graphics bgG(mStaticBackdrop.get());
+	float aOffsetY = PlantDrawHeightOffset(this, thePlant, thePlant->mSeedType, thePlant->mPlantCol, thePlant->mRow);
+	thePlant->DrawShadow(&bgG, thePlant->mX, thePlant->mY + aOffsetY);
+}
+
+void Board::ClearPlantShadow(Plant* thePlant)
+{
+	if (!mStaticBackdrop || !mStaticBackdropValid || !thePlant)
+		return;
+
+	Image* aBgImage = GetBackgroundImage();
+	if (!aBgImage)
+		return;
+
+	int cellX = GridToPixelX(thePlant->mPlantCol, thePlant->mRow);
+	int cellY = GridToPixelY(thePlant->mPlantCol, thePlant->mRow);
+	Rect aTileRect(cellX - 40, cellY - 40, 160, 160);
+	aTileRect = aTileRect.Intersection(Rect(0, 0, BOARD_WIDTH, BOARD_HEIGHT));
+	if (aTileRect.mWidth <= 0 || aTileRect.mHeight <= 0)
+		return;
+
+	Rect aSrcRect(aTileRect.mX + BOARD_OFFSET, aTileRect.mY, aTileRect.mWidth, aTileRect.mHeight);
+	Graphics bgG(mStaticBackdrop.get());
+	bgG.DrawImage(aBgImage, aTileRect.mX, aTileRect.mY, aSrcRect);
+
+	for (Plant* aRemaining : mPlants)
+	{
+		if (aRemaining->mDead || aRemaining == thePlant)
+			continue;
+		if (aRemaining->mPlantCol == thePlant->mPlantCol && aRemaining->mRow == thePlant->mRow)
+		{
+			BakePlantShadow(aRemaining);
+		}
+	}
+}
+
+void Board::UpdateStaticBackdrop()
+{
+	Image* aBgImage = GetBackgroundImage();
+	if (!aBgImage)
+		return;
+
+	if (!mStaticBackdrop || mStaticBackdrop->mWidth != BOARD_WIDTH || mStaticBackdrop->mHeight != BOARD_HEIGHT)
+	{
+		mStaticBackdrop = std::make_unique<MemoryImage>();
+		mStaticBackdrop->Create(BOARD_WIDTH, BOARD_HEIGHT);
+	}
+
+	Graphics bgG(mStaticBackdrop.get());
+	bgG.DrawImage(aBgImage, -BOARD_OFFSET, 0);
+
+	mStaticBackdropValid = true;
+	for (Plant* aPlant : mPlants)
+	{
+		if (aPlant->mDead)
+			continue;
+		BakePlantShadow(aPlant);
+	}
+}
+
 void Board::DrawBackdrop(Graphics* g)
 {
 	Image* aBgImage = nullptr;
@@ -6467,7 +6563,14 @@ void Board::DrawBackdrop(Graphics* g)
 		}
 		else
 		{
-			g->DrawImage(aBgImage, -BOARD_OFFSET, 0);
+			if (mStaticBackdrop && mStaticBackdropValid && mX == 0)
+			{
+				g->DrawImage(mStaticBackdrop.get(), 0, 0);
+			}
+			else
+			{
+				g->DrawImage(aBgImage, -BOARD_OFFSET, 0);
+			}
 		}
 	}
 

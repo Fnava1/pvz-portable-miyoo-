@@ -504,6 +504,11 @@ void Plant::PlantInitialize(int theGridX, int theGridY, SeedType theSeedType, Se
 				anUnderReanim->mAnimRate = 0.0f;
 		}
 	}
+
+	if (mBoard && mBoard->mStaticBackdropValid)
+	{
+		mBoard->BakePlantShadow(this);
+	}
 }
 
 int Plant::CalcRenderOrder()
@@ -3967,11 +3972,11 @@ void Plant::DrawShadow(Sexy::Graphics* g, float theOffsetX, float theOffsetY)
 
 	if (aShadowType == 0)
 	{
-		PvzpDrawImageCelCenterScaledF(g, IMAGE_PLANTSHADOW, theOffsetX + aShadowOffsetX, theOffsetY + aShadowOffsetY, 0, aScale, aScale);
+		PvzpDrawFastShadow(g, IMAGE_PLANTSHADOW, theOffsetX + aShadowOffsetX, theOffsetY + aShadowOffsetY, aScale, aScale);
 	}
 	else
 	{
-		PvzpDrawImageCelCenterScaledF(g, IMAGE_PLANTSHADOW2, theOffsetX + aShadowOffsetX, theOffsetY + aShadowOffsetY, 0, aScale, aScale);
+		PvzpDrawFastShadow(g, IMAGE_PLANTSHADOW2, theOffsetX + aShadowOffsetX, theOffsetY + aShadowOffsetY, aScale, aScale);
 	}
 }
 
@@ -4044,7 +4049,13 @@ void Plant::Draw(Graphics* g)
 
 		if (aPumpkin == nullptr || aPumpkin == this)
 		{
-			DrawShadow(g, aOffsetX, aOffsetY);
+			if (!mBoard || !mBoard->mStaticBackdropValid || Plant::IsFlying(mSeedType) ||
+			    mOnBungeeState != PlantOnBungeeState::NOT_ON_BUNGEE ||
+			    mState == PlantState::STATE_SQUASH_RISING || mState == PlantState::STATE_SQUASH_FALLING ||
+			    (mSeedType == SeedType::SEED_SUNSHROOM && mState == PlantState::STATE_SUNSHROOM_GROWING))
+			{
+				DrawShadow(g, aOffsetX, aOffsetY);
+			}
 		}
 
 		if (Plant::IsFlying(mSeedType))
@@ -5039,6 +5050,11 @@ void Plant::Die()
 
 	mDead = true;
 	RemoveEffects();
+
+	if (mBoard && mBoard->mStaticBackdropValid)
+	{
+		mBoard->ClearPlantShadow(this);
+	}
 
 	if (mSeedType == SeedType::SEED_FLOWERPOT)
 	{
