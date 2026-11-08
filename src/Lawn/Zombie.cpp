@@ -5417,8 +5417,29 @@ void Zombie::UpdateReanim()
 		aBodyReanim->mOverlayMatrix = aOverlayMatrix;
 	}
 
-	aBodyReanim->Update();
-	aBodyReanim->PropogateColorToAttachments();
+	bool skipHordeBoneUpdate = false;
+	if (!mIsHordeVanguard && mZombiePhase == ZombiePhase::PHASE_ZOMBIE_NORMAL &&
+	    mZombieType != ZombieType::ZOMBIE_BOSS && mZombieType != ZombieType::ZOMBIE_GARGANTUAR &&
+	    mZombieType != ZombieType::ZOMBIE_REDEYE_GARGANTUAR && mZombieType != ZombieType::ZOMBIE_BUNGEE &&
+	    mZombieType != ZombieType::ZOMBIE_POGO && mZombieType != ZombieType::ZOMBIE_POLEVAULTER &&
+	    mZombieType != ZombieType::ZOMBIE_BALLOON && mZombieType != ZombieType::ZOMBIE_CATAPULT &&
+	    mZombieType != ZombieType::ZOMBIE_ZAMBONI && mBoard)
+	{
+		if (((mBoard->mBoardUpdateCounter + static_cast<unsigned int>(mBoard->ZombieGetID(this))) & 1) != 0)
+		{
+			skipHordeBoneUpdate = true;
+		}
+	}
+
+	if (skipHordeBoneUpdate)
+	{
+		aBodyReanim->UpdateAnimationTimeOnly();
+	}
+	else
+	{
+		aBodyReanim->Update();
+		aBodyReanim->PropogateColorToAttachments();
+	}
 }
 
 void Zombie::DrawBobsledReanim(Graphics* g, const ZombieDrawPosition& theDrawPos, bool theBeforeZombie)

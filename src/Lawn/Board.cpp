@@ -5409,6 +5409,48 @@ void Board::UpdateRowZombieMask()
 			mRowZombies[aZombie->mRow].push_back(aZombie);
 		}
 	}
+
+	bool hordeMode = (mZombies.mSize > 25);
+	for (int r = 0; r < MAX_GRID_SIZE_Y; ++r)
+	{
+		size_t count = mRowZombies[r].size();
+		if (!hordeMode || count <= 3)
+		{
+			for (Zombie* aZombie : mRowZombies[r])
+			{
+				aZombie->mIsHordeVanguard = true;
+			}
+		}
+		else
+		{
+			Zombie* first = nullptr;
+			Zombie* second = nullptr;
+			for (Zombie* aZombie : mRowZombies[r])
+			{
+				if (!first || aZombie->mPosX < first->mPosX)
+				{
+					second = first;
+					first = aZombie;
+				}
+				else if (!second || aZombie->mPosX < second->mPosX)
+				{
+					second = aZombie;
+				}
+			}
+
+			for (Zombie* aZombie : mRowZombies[r])
+			{
+				if (aZombie == first || aZombie == second || aZombie->mJustGotShotCounter > 0 || aZombie->mIsEating)
+				{
+					aZombie->mIsHordeVanguard = true;
+				}
+				else
+				{
+					aZombie->mIsHordeVanguard = false;
+				}
+			}
+		}
+	}
 }
 
 void Board::UpdateRowPlantMask()
