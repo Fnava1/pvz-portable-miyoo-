@@ -6454,18 +6454,41 @@ bool Zombie::CanTargetPlant(Plant* thePlant, ZombieAttackType theAttackType)
 
 Plant* Zombie::FindPlantTarget(ZombieAttackType theAttackType)
 {
-	Rect aAttackRect = GetZombieAttackRect();
+	if (!mBoard)
+		return nullptr;
 
-	for (Plant* aPlant : mBoard->mPlants)
+	if (mRow >= 0 && mRow < MAX_GRID_SIZE_Y)
 	{
-		if (aPlant->mDead)
-			continue;
-		if (aPlant->mRow == mRow)
+		if ((mBoard->mRowHasPlantsMask & (1U << mRow)) == 0)
+			return nullptr;
+
+		Rect aAttackRect = GetZombieAttackRect();
+		for (Plant* aPlant : mBoard->mRowPlants[mRow])
 		{
+			if (aPlant->mDead)
+				continue;
+
 			Rect aPlantRect = aPlant->GetPlantRect();
 			if (GetRectOverlap(aAttackRect, aPlantRect) >= 20 && CanTargetPlant(aPlant, theAttackType))
 			{
 				return aPlant;
+			}
+		}
+	}
+	else
+	{
+		Rect aAttackRect = GetZombieAttackRect();
+		for (Plant* aPlant : mBoard->mPlants)
+		{
+			if (aPlant->mDead)
+				continue;
+			if (aPlant->mRow == mRow)
+			{
+				Rect aPlantRect = aPlant->GetPlantRect();
+				if (GetRectOverlap(aAttackRect, aPlantRect) >= 20 && CanTargetPlant(aPlant, theAttackType))
+				{
+					return aPlant;
+				}
 			}
 		}
 	}
@@ -6475,7 +6498,7 @@ Plant* Zombie::FindPlantTarget(ZombieAttackType theAttackType)
 
 Zombie* Zombie::FindZombieTarget()
 {
-	if (!mBoard->mHasMindControlledZombies && !mMindControlled)
+	if (!mBoard || (!mBoard->mHasMindControlledZombies && !mMindControlled))
 		return nullptr;
 
 	if (mZombiePhase == ZombiePhase::PHASE_DIGGER_TUNNELING)
@@ -6483,10 +6506,10 @@ Zombie* Zombie::FindZombieTarget()
 
 	Rect aAttackRect = GetZombieAttackRect();
 
-	for (Zombie* aZombie : mBoard->mZombies)
+	auto checkZombie = [&](Zombie* aZombie) -> Zombie*
 	{
 		if (aZombie->mDead)
-			continue;
+			return nullptr;
 		if (mMindControlled != aZombie->mMindControlled &&
 			!aZombie->IsFlying() &&
 			aZombie->mZombiePhase != ZombiePhase::PHASE_DIGGER_TUNNELING &&
@@ -6504,6 +6527,27 @@ Zombie* Zombie::FindZombieTarget()
 				return aZombie;
 			}
 		}
+		return nullptr;
+	};
+
+	if (mRow >= 0 && mRow < MAX_GRID_SIZE_Y)
+	{
+		if ((mBoard->mRowZombieMask & (1U << mRow)) == 0)
+			return nullptr;
+
+		for (Zombie* aZombie : mBoard->mRowZombies[mRow])
+		{
+			Zombie* res = checkZombie(aZombie);
+			if (res) return res;
+		}
+	}
+	else
+	{
+		for (Zombie* aZombie : mBoard->mZombies)
+		{
+			Zombie* res = checkZombie(aZombie);
+			if (res) return res;
+		}
 	}
 
 	return nullptr;
@@ -6511,15 +6555,18 @@ Zombie* Zombie::FindZombieTarget()
 
 void Zombie::SquishAllInSquare(int theX, int theY, ZombieAttackType theAttackType)
 {
-	for (Plant* aPlant : mBoard->mPlants)
+	if (!mBoard)
+		return;
+
+	auto checkPlant = [&](Plant* aPlant)
 	{
 		if (aPlant->mDead)
-			continue;
-		if (aPlant->mRow == theY && aPlant->mPlantCol == theX)
+			return;
+		if (aPlant->mPlantCol == theX)
 		{
 			if (theAttackType == ZombieAttackType::ATTACKTYPE_DRIVE_OVER && aPlant->IsSpiky())
 			{
-				continue;
+				return;
 			}
 
 			if (aPlant->mSeedType != SeedType::SEED_SPIKEROCK)
@@ -6527,6 +6574,22 @@ void Zombie::SquishAllInSquare(int theX, int theY, ZombieAttackType theAttackTyp
 				mBoard->mPlantsEaten++;
 				aPlant->Squish();
 			}
+		}
+	};
+
+	if (theY >= 0 && theY < MAX_GRID_SIZE_Y)
+	{
+		for (Plant* aPlant : mBoard->mRowPlants[theY])
+		{
+			checkPlant(aPlant);
+		}
+	}
+	else
+	{
+		for (Plant* aPlant : mBoard->mPlants)
+		{
+			if (aPlant->mRow == theY)
+				checkPlant(aPlant);
 		}
 	}
 }

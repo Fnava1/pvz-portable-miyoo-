@@ -179,6 +179,7 @@ Board::Board(LawnApp* theApp)
 	mHasBossZombie = false;
 	mHasMindControlledZombies = false;
 	mTorchwoodRowMask = 0;
+	mRowHasPlantsMask = 0;
 	mFlowerPotCount = 0;
 	mPumpkinCount = 0;
 	mStaticBackdropValid = false;
@@ -186,7 +187,10 @@ Board::Board(LawnApp* theApp)
 	memset(mFlowerPotGrid, 0, sizeof(mFlowerPotGrid));
 	memset(mTorchwoodGrid, 0, sizeof(mTorchwoodGrid));
 	for (int i = 0; i < MAX_GRID_SIZE_Y; ++i)
+	{
 		mRowZombies[i].clear();
+		mRowPlants[i].clear();
+	}
 	mFinalBossKilled = false;
 	mMustacheMode = mApp->mMustacheMode;
 	mSuperMowerMode = mApp->mSuperMowerMode;
@@ -5410,12 +5414,15 @@ void Board::UpdateRowZombieMask()
 void Board::UpdateRowPlantMask()
 {
 	mTorchwoodRowMask = 0;
+	mRowHasPlantsMask = 0;
 	mFlowerPotCount = 0;
 	mPumpkinCount = 0;
 	mStaticBackdropValid = false;
 	memset(mPumpkinGrid, 0, sizeof(mPumpkinGrid));
 	memset(mFlowerPotGrid, 0, sizeof(mFlowerPotGrid));
 	memset(mTorchwoodGrid, 0, sizeof(mTorchwoodGrid));
+	for (int r = 0; r < MAX_GRID_SIZE_Y; ++r)
+		mRowPlants[r].clear();
 
 	for (Plant* aPlant : mPlants)
 	{
@@ -5424,6 +5431,12 @@ void Board::UpdateRowPlantMask()
 
 		int aCol = aPlant->mPlantCol;
 		int aRow = aPlant->mRow;
+
+		if (aRow >= 0 && aRow < MAX_GRID_SIZE_Y)
+		{
+			mRowHasPlantsMask |= (1U << aRow);
+			mRowPlants[aRow].push_back(aPlant);
+		}
 
 		if (aPlant->mSeedType == SeedType::SEED_TORCHWOOD)
 		{

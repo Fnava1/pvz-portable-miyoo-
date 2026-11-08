@@ -292,6 +292,7 @@ public:
 	uint32_t						mPlayTimeActiveLevel;
 	uint32_t						mPlayTimeInactiveLevel;
 	uint32_t						mRowZombieMask;
+	uint32_t						mRowHasPlantsMask;
 	bool							mHasBossZombie;
 	bool							mHasMindControlledZombies;
 	uint32_t						mTorchwoodRowMask;
@@ -301,6 +302,7 @@ public:
 	Plant*							mFlowerPotGrid[MAX_GRID_SIZE_X][MAX_GRID_SIZE_Y];
 	Plant*							mTorchwoodGrid[MAX_GRID_SIZE_X][MAX_GRID_SIZE_Y];
 	std::vector<Zombie*>			mRowZombies[MAX_GRID_SIZE_Y];
+	std::vector<Plant*>				mRowPlants[MAX_GRID_SIZE_Y];
 	std::unique_ptr<MemoryImage>	mStaticBackdrop;
 	bool							mStaticBackdropValid;
 	int32_t							mMaxSunPlants;
