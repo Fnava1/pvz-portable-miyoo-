@@ -328,7 +328,7 @@ public:
 public:
 	void							PvzpEmitterInitialize(float theX, float theY, PvzpParticleSystem* theSystem, PvzpEmitterDefinition* theEmitterDef);
 	void							Update();
-	void							Draw(Graphics* g);
+	void							Draw(Graphics* g, PvzpTriangleGroup* theTriangleGroup = nullptr);
 	void							SystemMove(float theX, float theY);
 	static bool						GetRenderParams(PvzpParticle* theParticle, ParticleRenderParams* theParams);
 	void							DrawParticle(Graphics* g, PvzpParticle* theParticle, PvzpTriangleGroup* theTriangleGroup);
@@ -368,7 +368,7 @@ public:
 	void							PvzpParticleInitializeFromDef(float theX, float theY, int theRenderOrder, PvzpParticleDefinition* theDefinition, ParticleEffect theEffectType);
 	void							ParticleSystemDie();
 	void							Update();
-	void							Draw(Graphics* g);
+	void							Draw(Graphics* g, PvzpTriangleGroup* theTriangleGroup = nullptr);
 	void							SystemMove(float theX, float theY);
 	void							OverrideColor(const char* theEmitterName, const Color& theColor);
 	void							OverrideExtraAdditiveDraw(const char* theEmitterName, bool theEnableExtraAdditiveDraw);

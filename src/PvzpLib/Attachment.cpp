@@ -479,9 +479,7 @@ void Attachment::Draw(Graphics* g, bool theParentHidden, PvzpTriangleGroup* theT
 			PvzpParticleSystem* aParticleSystem = aParticleSystems.DataArrayTryToGet(aAttachEffect->mEffectID);
 			if (aParticleSystem)
 			{
-				if (theTriangleGroup)
-					theTriangleGroup->DrawGroup(g);
-				aParticleSystem->Draw(g);
+				aParticleSystem->Draw(g, theTriangleGroup);
 			}
 			break;
 		}

@@ -1058,23 +1058,37 @@ void PvzpParticleEmitter::DrawParticle(Graphics* g, PvzpParticle* theParticle, P
 	}
 }
 
-void PvzpParticleSystem::Draw(Graphics* g)
+void PvzpParticleSystem::Draw(Graphics* g, PvzpTriangleGroup* theTriangleGroup)
 {
+	PvzpTriangleGroup aLocalGroup;
+	PvzpTriangleGroup* aGroup = theTriangleGroup ? theTriangleGroup : &aLocalGroup;
+
 	for (PvzpListNode<ParticleEmitterID>* aNode = mEmitterList.mHead; aNode != nullptr; aNode = aNode->mNext)
-		mParticleHolder->mEmitters.DataArrayGet(static_cast<unsigned int>(aNode->mValue))->Draw(g);
+		mParticleHolder->mEmitters.DataArrayGet(static_cast<unsigned int>(aNode->mValue))->Draw(g, aGroup);
+
+	if (!theTriangleGroup)
+	{
+		aLocalGroup.DrawGroup(g);
+	}
 }
 
-void PvzpParticleEmitter::Draw(Graphics* g)
+void PvzpParticleEmitter::Draw(Graphics* g, PvzpTriangleGroup* theTriangleGroup)
 {
 	bool aHardWare = gSexyAppBase->Is3DAccelerated();
 	if ((TestBit(mEmitterDef->mParticleFlags, static_cast<int>(ParticleFlags::PARTICLE_SOFTWARE_ONLY)) && aHardWare) ||
 		(TestBit(mEmitterDef->mParticleFlags, static_cast<int>(ParticleFlags::PARTICLE_HARDWARE_ONLY)) && !aHardWare))
 		return;
 
-	PvzpTriangleGroup aTriangleGroup;
+	PvzpTriangleGroup aLocalGroup;
+	PvzpTriangleGroup* aGroup = theTriangleGroup ? theTriangleGroup : &aLocalGroup;
+
 	for (PvzpListNode<ParticleID>* aNode = mParticleList.mHead; aNode != nullptr; aNode = aNode->mNext)
-		DrawParticle(g, mParticleSystem->mParticleHolder->mParticles.DataArrayGet(static_cast<unsigned int>(aNode->mValue)), &aTriangleGroup);
-	aTriangleGroup.DrawGroup(g);
+		DrawParticle(g, mParticleSystem->mParticleHolder->mParticles.DataArrayGet(static_cast<unsigned int>(aNode->mValue)), aGroup);
+
+	if (!theTriangleGroup)
+	{
+		aLocalGroup.DrawGroup(g);
+	}
 }
 
 void PvzpParticleSystem::SystemMove(float theX, float theY)
