@@ -71,6 +71,10 @@ public:
 class Plant;
 class Reanimation;
 class PvzpParticleSystem;
+namespace Sexy
+{
+	class MemoryImage;
+}
 class Zombie : public GameObject
 {
 public:
@@ -162,11 +166,13 @@ public:
 	int32_t                         mLastSplatTick;
 	int32_t                         mSplatCountInTick;
 	bool                            mIsHordeVanguard;
+	bool                            mBonesCalculatedThisTick = false;
 
 public:
 	Zombie();
 	~Zombie();
 	bool                            CanAttachHitSplat();
+	bool                            CanUseWalkCache() const;
 
 	void                            ZombieInitialize(int theRow, ZombieType theType, bool theVariant, Zombie* theParentZombie, int theFromWave);
 	void                            Animate();
@@ -227,7 +233,7 @@ public:
 	void                            UpdateZombieNewspaper();
 	void                            LandFlyer(unsigned int theDamageFlags);
 	void                            UpdateZombieDigger();
-	bool                            IsWalkingBackwards();
+	bool                            IsWalkingBackwards() const;
 	PvzpParticleSystem*              AddAttachedParticle(int thePosX, int thePosY, ParticleEffect theEffect);
 	void                            PogoBreak(unsigned int theDamageFlags);
 	void                            UpdateZombieFalling();
@@ -240,8 +246,8 @@ public:
 	void                            UpdateYuckyFace();
 	void                            DrawIceTrap(Graphics* g, const ZombieDrawPosition& theDrawPos, bool theFront);
 	void                            HitIceTrap();
-	int                             GetHelmDamageIndex();
-	int                             GetShieldDamageIndex();
+	int                             GetHelmDamageIndex() const;
+	int                             GetShieldDamageIndex() const;
 	void                            DrawReanim(Graphics* g, const ZombieDrawPosition& theDrawPos, int theBaseRenderGroup);
 	void                            UpdatePlaying();
 	bool                            NeedsMoreBackupDancers();
@@ -277,7 +283,7 @@ public:
 	void                            ZombieCatapultFire(Plant* thePlant);
 	void                            UpdateClimbingLadder();
 	void                            UpdateZombieGargantuar();
-	int                             GetBodyDamageIndex();
+	int                             GetBodyDamageIndex() const;
 	void                            ApplyBurn();
 	void                            UpdateBurn();
 	bool                            ZombieNotWalking();
@@ -396,6 +402,10 @@ public:
 	void                            SetupReanimForLostArm(unsigned int theDamageFlags);
 	bool                            IsSquashTarget(Plant* theExcept);
 	static bool			IsZombotany(ZombieType theZombieType);
+
+	static Sexy::MemoryImage*       gPrebakedSpotlights[5];
+	static void                     InitSpotlights();
+	static void                     FreeSpotlights();
 };
 
 class ZombieDefinition

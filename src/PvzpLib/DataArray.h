@@ -213,7 +213,7 @@ public:
 	T* DataArrayGet(unsigned int theId)
 	{
 		PVZP_ASSERT(DataArrayTryToGet(theId) != nullptr, "Failed: DataArrayGet(0x{:x}) for {}", theId, mName);
-		return &mItems[theId & DATA_ARRAY_INDEX_MASK];
+		return DataArrayTryToGet(theId);
 	}
 
 	T& DataArrayGetItemAt(unsigned int theIndex)

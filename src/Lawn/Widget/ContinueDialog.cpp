@@ -158,18 +158,36 @@ void ContinueDialog::RestartLoopingSounds()
 
 void ContinueDialog::ButtonDepress(int theId)
 {
+	if (mApp->GetDialog(mId) == nullptr)
+		return;
+
+	LawnApp* aApp = mApp;
+	int aId = mId;
+
 	if (theId == ContinueDialog::ContinueDialog_Continue)
 	{
+		if (mContinueButton)
+			mContinueButton->mDisabled = true;
+		if (mNewGameButton)
+			mNewGameButton->mDisabled = true;
+
 		RestartLoopingSounds();
-		mApp->KillDialog(mId);
+		if (aApp->mBoard)
+		{
+			aApp->mBoard->Pause(false);
+		}
+		aApp->KillDialog(aId);
 	}
 	else if (theId == ContinueDialog::ContinueDialog_NewGame)
 	{
-		std::string aDialogTitle = mApp->IsAdventureMode() ? "[RESTART_LEVEL_HEADER]" : mApp->GetString("NEW_GAME_HEADER", "New Game?");
-		std::string aDialogMessage = mApp->IsAdventureMode() ? "[RESTART_LEVEL_BODY]" : mApp->GetString("NEW_GAME", "Are you sure that you want to start a new game?");
-		std::string aYesLabel = mApp->IsAdventureMode() ? "[RESTART_BUTTON]" : "[NEW_GAME_BUTTON]";
+		if (aApp->GetDialog(Dialogs::DIALOG_RESTARTCONFIRM))
+			return;
 
-		LawnDialog* aDialog = (LawnDialog*)mApp->DoDialog(
+		std::string aDialogTitle = aApp->IsAdventureMode() ? "[RESTART_LEVEL_HEADER]" : aApp->GetString("NEW_GAME_HEADER", "New Game?");
+		std::string aDialogMessage = aApp->IsAdventureMode() ? "[RESTART_LEVEL_BODY]" : aApp->GetString("NEW_GAME", "Are you sure that you want to start a new game?");
+		std::string aYesLabel = aApp->IsAdventureMode() ? "[RESTART_BUTTON]" : "[NEW_GAME_BUTTON]";
+
+		LawnDialog* aDialog = (LawnDialog*)aApp->DoDialog(
 			Dialogs::DIALOG_RESTARTCONFIRM,
 			true,
 			aDialogTitle,
@@ -184,26 +202,31 @@ void ContinueDialog::ButtonDepress(int theId)
 	}
 	else
 	{
-		mApp->KillDialog(mId);
-		mApp->mBoardResult = BoardResult::BOARDRESULT_QUIT;
-		if (mApp->IsAdventureMode())
+		if (mContinueButton)
+			mContinueButton->mDisabled = true;
+		if (mNewGameButton)
+			mNewGameButton->mDisabled = true;
+
+		aApp->mBoardResult = BoardResult::BOARDRESULT_QUIT;
+		aApp->KillDialog(aId);
+		if (aApp->IsAdventureMode())
 		{
-			mApp->ShowGameSelector();
+			aApp->ShowGameSelector();
 		}
-		else if (mApp->IsSurvivalMode())
+		else if (aApp->IsSurvivalMode())
 		{
-			mApp->KillBoard();
-			mApp->ShowChallengeScreen(ChallengePage::CHALLENGE_PAGE_SURVIVAL);
+			aApp->KillBoard();
+			aApp->ShowChallengeScreen(ChallengePage::CHALLENGE_PAGE_SURVIVAL);
 		}
-		else if (mApp->IsPuzzleMode())
+		else if (aApp->IsPuzzleMode())
 		{
-			mApp->KillBoard();
-			mApp->ShowChallengeScreen(ChallengePage::CHALLENGE_PAGE_PUZZLE);
+			aApp->KillBoard();
+			aApp->ShowChallengeScreen(ChallengePage::CHALLENGE_PAGE_PUZZLE);
 		}
 		else
 		{
-			mApp->KillBoard();
-			mApp->ShowChallengeScreen(ChallengePage::CHALLENGE_PAGE_CHALLENGE);
+			aApp->KillBoard();
+			aApp->ShowChallengeScreen(ChallengePage::CHALLENGE_PAGE_CHALLENGE);
 		}
 	}
 }

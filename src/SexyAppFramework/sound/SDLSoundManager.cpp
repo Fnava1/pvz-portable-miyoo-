@@ -332,6 +332,19 @@ intptr_t SDLSoundManager::LoadSound(const std::string& theFilename)
 	return -1;
 }
 
+void SDLSoundManager::PreloadSound(intptr_t theSfxID)
+{
+#ifdef LOW_MEMORY
+	if (theSfxID >= 0 && theSfxID < MAX_SOURCE_SOUNDS)
+	{
+		if (mSourceSounds[theSfxID] == nullptr && !mSourceFileNames[theSfxID].empty())
+		{
+			DecodeSound(theSfxID, mSourceFileNames[theSfxID]);
+		}
+	}
+#endif
+}
+
 void SDLSoundManager::ReleaseSound(intptr_t theSfxID)
 {
 	if ((theSfxID < 0) || (theSfxID >= MAX_SOURCE_SOUNDS))

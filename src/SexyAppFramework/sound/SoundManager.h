@@ -45,6 +45,7 @@ public:
 
 	virtual bool			LoadSound(intptr_t theSfxID, const std::string& theFilename) = 0;
 	virtual intptr_t		LoadSound(const std::string& theFilename) = 0;
+	virtual void			PreloadSound([[maybe_unused]] intptr_t theSfxID) {}
 	virtual void			ReleaseSound(intptr_t theSfxID) = 0;
 
 	virtual void			SetVolume(double theVolume) = 0;

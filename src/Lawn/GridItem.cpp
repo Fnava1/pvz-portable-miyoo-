@@ -476,7 +476,10 @@ bool GridItem::IsOpenPortal()
 
 void GridItem::UpdatePortal()
 {
-	Reanimation* aPortalReanim = mApp->ReanimationGet(mGridItemReanimID);
+	Reanimation* aPortalReanim = mApp->ReanimationTryToGet(mGridItemReanimID);
+	if (!aPortalReanim)
+		return;
+
 	if (mGridItemState == GridItemState::GRIDITEM_STATE_PORTAL_CLOSED)
 	{
 		if (aPortalReanim->mLoopCount > 0)

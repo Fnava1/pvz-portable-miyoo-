@@ -375,6 +375,9 @@ CreditScreen::CreditScreen(LawnApp* theApp)
 CreditScreen::~CreditScreen()
 {
 	mApp->SetMusicVolume(mOriginalMusicVolume);
+#ifdef LOW_MEMORY
+	mApp->CleanSharedImages();
+#endif
 }
 
 void CreditScreen::AddedToManager(WidgetManager* theWidgetManager)
@@ -518,7 +521,14 @@ void CreditScreen::PreLoadCredits()
 
 void CreditScreen::GetTiming(CreditsTiming** theBeforeTiming, CreditsTiming** theAfterTiming, float* theFraction)
 {
-	Reanimation* aCreditsReanim = mApp->ReanimationGet(mCreditsReanimID);
+	Reanimation* aCreditsReanim = mApp->ReanimationTryToGet(mCreditsReanimID);
+	if (!aCreditsReanim)
+	{
+		*theBeforeTiming = nullptr;
+		*theAfterTiming = nullptr;
+		*theFraction = 0.0f;
+		return;
+	}
 	float aFrameCount = aCreditsReanim->mDefinition->mTracks.tracks->mTransforms.count * aCreditsReanim->mAnimTime - 1.0f;
 	if (mCreditsPhase == CreditsPhase::CREDITS_MAIN1)
 	{
@@ -679,7 +689,11 @@ void DrawDisco(Graphics* g, float aCenterX, float aCenterY, float theTime)
 
 void CreditScreen::DrawFogEffect(Graphics* g, float theTime)
 {
-	Reanimation* aCreditsReanim = mApp->ReanimationGet(mCreditsReanimID);
+	Reanimation* aCreditsReanim = mApp->ReanimationTryToGet(mCreditsReanimID);
+	if (!aCreditsReanim)
+	{
+		return;
+	}
 	Image* aFogImage = mApp->Is3DAccelerated() ? IMAGE_FOG : IMAGE_FOG_SOFTWARE;
 	int aFadeAmount = theTime * 255.0f;
 
@@ -849,7 +863,15 @@ void CreditScreen::Draw(Graphics* g)
 	g->SetColor(Color::Black);
 	g->FillRect(0, 0, mWidth, mHeight);
 
-	Reanimation* aCreditsReanim = mApp->ReanimationGet(mCreditsReanimID);
+	Reanimation* aCreditsReanim = mApp->ReanimationTryToGet(mCreditsReanimID);
+	if (!aCreditsReanim)
+	{
+		if (mCreditsPhase == CreditsPhase::CREDITS_END)
+		{
+			DrawFinalCredits(g);
+		}
+		return;
+	}
 	int aFrameCount = aCreditsReanim->mDefinition->mTracks.tracks->mTransforms.count - 1;
 	float aFrameFactor = 1.0f / aFrameCount;
 	int aBackground1Index = aCreditsReanim->FindTrackIndex("Background");
@@ -1099,7 +1121,11 @@ void CreditScreen::UpdateBlink()
 	}
 
 	mBlinkCountdown = 700;
-	Reanimation* aCreditsReanim = mApp->ReanimationGet(mCreditsReanimID);
+	Reanimation* aCreditsReanim = mApp->ReanimationTryToGet(mCreditsReanimID);
+	if (!aCreditsReanim)
+	{
+		return;
+	}
 	Reanimation* aSunFlowerReanim = FindSubReanim(aCreditsReanim, ReanimationType::REANIM_SUNFLOWER);
 	if (aSunFlowerReanim)
 	{
@@ -1154,7 +1180,11 @@ void CreditScreen::Update()
 		}
 		else
 		{
-			Reanimation* aCreditsReanim = mApp->ReanimationGet(mCreditsReanimID);
+			Reanimation* aCreditsReanim = mApp->ReanimationTryToGet(mCreditsReanimID);
+			if (!aCreditsReanim)
+			{
+				return;
+			}
 			int aDurationSinceStart = mTimerSinceStart.GetDuration();
 			int aDurationReanimation = (aCreditsReanim->mDefinition->mTracks.tracks->mTransforms.count * aCreditsReanim->mAnimTime / aCreditsReanim->mAnimRate) * 1000.0f;
 			if (mCreditsPhase == CreditsPhase::CREDITS_MAIN2)
@@ -1198,7 +1228,21 @@ void CreditScreen::UpdateMovie()
 {
 	UpdateBlink();
 
-	Reanimation* aCreditsReanim = mApp->ReanimationGet(mCreditsReanimID);
+	Reanimation* aCreditsReanim = mApp->ReanimationTryToGet(mCreditsReanimID);
+	if (!aCreditsReanim)
+	{
+		if (mCreditsPhase == CreditsPhase::CREDITS_END)
+		{
+			mCreditsPhaseCounter++;
+			if (mCreditsPhaseCounter == 50)
+			{
+				mMainMenuButton->SetVisible(true);
+				mReplayButton->SetVisible(true);
+			}
+		}
+		return;
+	}
+
 	float aFrameFactor = 1.0f / (aCreditsReanim->mDefinition->mTracks.tracks->mTransforms.count - 1);
 
 	aCreditsReanim->Update();

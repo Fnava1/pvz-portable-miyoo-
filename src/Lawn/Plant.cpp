@@ -41,6 +41,8 @@
 #include "../PvzpLib/PvzpParticle.h"
 #include "../PvzpLib/EffectSystem.h"
 #include "../PvzpLib/PvzpStringFile.h"
+#include "../PvzpLib/SpriteCachePool.h"
+#include "../PvzpLib/SpriteStreamer.h"
 #include "Widget/AchievementsScreen.h"
 #include <algorithm>
 #include <format>
@@ -505,7 +507,10 @@ void Plant::PlantInitialize(int theGridX, int theGridY, SeedType theSeedType, Se
 		}
 	}
 
-	if (mBoard && mBoard->mStaticBackdropValid && mApp->mGameMode != GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN)
+	if (mBoard && mBoard->mStaticBackdropValid &&
+	    mApp->mGameMode != GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN &&
+	    mApp->mGameMode != GameMode::GAMEMODE_TREE_OF_WISDOM &&
+	    mApp->mGameMode != GameMode::GAMEMODE_CHALLENGE_ZOMBIQUARIUM)
 	{
 		mBoard->BakePlantShadow(this);
 	}
@@ -752,11 +757,13 @@ bool Plant::FindTargetAndFire(int theRow, PlantWeapon thePlantWeapon)
 
 	if (mSeedType == SeedType::SEED_SPLITPEA && thePlantWeapon == PlantWeapon::WEAPON_SECONDARY)
 	{
-		Reanimation* aHeadReanim2 = mApp->ReanimationGet(mHeadReanimID2);
-		aHeadReanim2->StartBlend(20);
-		aHeadReanim2->mLoopType = ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD;
-		aHeadReanim2->mAnimRate = 35.0f;
-		aHeadReanim2->SetFramesForLayer("anim_splitpea_shooting");
+		if (Reanimation* aHeadReanim2 = mApp->ReanimationTryToGet(mHeadReanimID2))
+		{
+			aHeadReanim2->StartBlend(20);
+			aHeadReanim2->mLoopType = ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD;
+			aHeadReanim2->mAnimRate = 35.0f;
+			aHeadReanim2->SetFramesForLayer("anim_splitpea_shooting");
+		}
 		mShootingCounter = 26;
 	}
 	else if (aHeadReanim && aHeadReanim->TrackExists("anim_shooting"))
@@ -837,11 +844,11 @@ void Plant::LaunchThreepeater()
 		(mBoard->RowCanHaveZombies(rowAbove) && FindTargetZombie(rowAbove, PlantWeapon::WEAPON_PRIMARY)) ||
 		(mBoard->RowCanHaveZombies(rowBelow) && FindTargetZombie(rowBelow, PlantWeapon::WEAPON_PRIMARY)))
 	{
-		Reanimation* aHeadReanim1 = mApp->ReanimationGet(mHeadReanimID);
-		Reanimation* aHeadReanim2 = mApp->ReanimationGet(mHeadReanimID2);
-		Reanimation* aHeadReanim3 = mApp->ReanimationGet(mHeadReanimID3);
+		Reanimation* aHeadReanim1 = mApp->ReanimationTryToGet(mHeadReanimID);
+		Reanimation* aHeadReanim2 = mApp->ReanimationTryToGet(mHeadReanimID2);
+		Reanimation* aHeadReanim3 = mApp->ReanimationTryToGet(mHeadReanimID3);
 
-		if (mBoard->RowCanHaveZombies(rowBelow))
+		if (mBoard->RowCanHaveZombies(rowBelow) && aHeadReanim1)
 		{
 			aHeadReanim1->StartBlend(10);
 			aHeadReanim1->mLoopType = ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD;
@@ -849,12 +856,15 @@ void Plant::LaunchThreepeater()
 			aHeadReanim1->SetFramesForLayer("anim_shooting1");
 		}
 
-		aHeadReanim2->StartBlend(10);
-		aHeadReanim2->mLoopType = ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD;
-		aHeadReanim2->mAnimRate = 20.0f;
-		aHeadReanim2->SetFramesForLayer("anim_shooting2");
+		if (aHeadReanim2)
+		{
+			aHeadReanim2->StartBlend(10);
+			aHeadReanim2->mLoopType = ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD;
+			aHeadReanim2->mAnimRate = 20.0f;
+			aHeadReanim2->SetFramesForLayer("anim_shooting2");
+		}
 
-		if (mBoard->RowCanHaveZombies(rowAbove))
+		if (mBoard->RowCanHaveZombies(rowAbove) && aHeadReanim3)
 		{
 			aHeadReanim3->StartBlend(10);
 			aHeadReanim3->mLoopType = ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD;
@@ -2746,7 +2756,7 @@ void Plant::UpdateReanimColor()
 	}
 }
 
-bool Plant::IsOnBoard()
+bool Plant::IsOnBoard() const
 {
 	if (!mIsOnBoard)
 		return false;
@@ -2758,6 +2768,62 @@ bool Plant::IsOnBoard()
 bool Plant::IsInPlay()
 {
 	return IsOnBoard() && mApp->mGameMode != GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN && mApp->mGameMode != GameMode::GAMEMODE_TREE_OF_WISDOM;
+}
+
+bool Plant::CanUseSpriteCache() const
+{
+	if (mApp->Is3DAccelerated() || !IsOnBoard() || mPottedPlantIndex != -1 ||
+		mIsAsleep || mShootingCounter != 0 || mState == PlantState::STATE_DOINGSPECIAL ||
+		mRecentlyEatenCountdown != 0 || mEatenFlashCountdown != 0 ||
+		mWakeUpCounter != 0 || mSquished || mHighlighted ||
+		mOnBungeeState != PlantOnBungeeState::NOT_ON_BUNGEE)
+		return false;
+
+	Reanimation* aBodyReanim = mApp->ReanimationTryToGet(mBodyReanimID);
+	if (!aBodyReanim || aBodyReanim->mFilterEffect != FilterEffect::FILTER_EFFECT_NONE ||
+		aBodyReanim->mEnableExtraAdditiveDraw || aBodyReanim->mColorOverride != Color::White ||
+		!aBodyReanim->IsAnimPlaying("anim_idle"))
+		return false;
+
+	if (!SpriteCachePool::IsPlantReady(mSeedType))
+		return false;
+
+	// Despacho directo por tipo de semilla para cabezas multicapa
+	switch (mSeedType)
+	{
+	case SeedType::SEED_THREEPEATER:
+	{
+		Reanimation* h1 = mApp->ReanimationTryToGet(mHeadReanimID);
+		Reanimation* h2 = mApp->ReanimationTryToGet(mHeadReanimID2);
+		Reanimation* h3 = mApp->ReanimationTryToGet(mHeadReanimID3);
+		if (h1 && (h1->mLoopType != ReanimLoopType::REANIM_LOOP || !h1->IsAnimPlaying("anim_head_idle1"))) return false;
+		if (h2 && (h2->mLoopType != ReanimLoopType::REANIM_LOOP || !h2->IsAnimPlaying("anim_head_idle2"))) return false;
+		if (h3 && (h3->mLoopType != ReanimLoopType::REANIM_LOOP || !h3->IsAnimPlaying("anim_head_idle3"))) return false;
+		return true;
+	}
+	case SeedType::SEED_SPLITPEA:
+	{
+		Reanimation* h1 = mApp->ReanimationTryToGet(mHeadReanimID);
+		Reanimation* h2 = mApp->ReanimationTryToGet(mHeadReanimID2);
+		if (h1 && (h1->mLoopType != ReanimLoopType::REANIM_LOOP || !h1->IsAnimPlaying("anim_head_idle"))) return false;
+		if (h2 && (h2->mLoopType != ReanimLoopType::REANIM_LOOP || !h2->IsAnimPlaying("anim_splitpea_idle"))) return false;
+		return true;
+	}
+	case SeedType::SEED_PEASHOOTER:
+	case SeedType::SEED_REPEATER:
+	case SeedType::SEED_GATLINGPEA:
+	case SeedType::SEED_SNOWPEA:
+	{
+		if (mHeadReanimID != ReanimationID::REANIMATIONID_NULL)
+		{
+			Reanimation* h1 = mApp->ReanimationTryToGet(mHeadReanimID);
+			if (h1 && (h1->mLoopType != ReanimLoopType::REANIM_LOOP || !h1->IsAnimPlaying("anim_head_idle"))) return false;
+		}
+		return true;
+	}
+	default:
+		return true;
+	}
 }
 
 void Plant::UpdateReanim()
@@ -2811,8 +2877,60 @@ void Plant::UpdateReanim()
 		aOffsetY += 80.0f - 80.0f * aScaleFactor;
 	}
 
+	bool isDrawnFromSpriteCache = CanUseSpriteCache();
+
+	if (isDrawnFromSpriteCache)
+	{
+		if (mHeadReanimID != ReanimationID::REANIMATIONID_NULL)
+		{
+			if (Reanimation* h1 = mApp->ReanimationTryToGet(mHeadReanimID))
+				h1->mAnimRate = 0.0f;
+		}
+		if (mHeadReanimID2 != ReanimationID::REANIMATIONID_NULL)
+		{
+			if (Reanimation* h2 = mApp->ReanimationTryToGet(mHeadReanimID2))
+				h2->mAnimRate = 0.0f;
+		}
+		if (mHeadReanimID3 != ReanimationID::REANIMATIONID_NULL)
+		{
+			if (Reanimation* h3 = mApp->ReanimationTryToGet(mHeadReanimID3))
+				h3->mAnimRate = 0.0f;
+		}
+	}
+	else if (mShootingCounter == 0)
+	{
+		if (mHeadReanimID != ReanimationID::REANIMATIONID_NULL)
+		{
+			if (Reanimation* h1 = mApp->ReanimationTryToGet(mHeadReanimID))
+			{
+				if (h1->mAnimRate == 0.0f && (h1->IsAnimPlaying("anim_head_idle") || h1->IsAnimPlaying("anim_head_idle1")))
+					h1->mAnimRate = aBodyReanim->mAnimRate;
+			}
+		}
+		if (mHeadReanimID2 != ReanimationID::REANIMATIONID_NULL)
+		{
+			if (Reanimation* h2 = mApp->ReanimationTryToGet(mHeadReanimID2))
+			{
+				if (h2->mAnimRate == 0.0f && (h2->IsAnimPlaying("anim_head_idle2") || h2->IsAnimPlaying("anim_splitpea_idle")))
+					h2->mAnimRate = aBodyReanim->mAnimRate;
+			}
+		}
+		if (mHeadReanimID3 != ReanimationID::REANIMATIONID_NULL)
+		{
+			if (Reanimation* h3 = mApp->ReanimationTryToGet(mHeadReanimID3))
+			{
+				if (h3->mAnimRate == 0.0f && h3->IsAnimPlaying("anim_head_idle3"))
+					h3->mAnimRate = aBodyReanim->mAnimRate;
+			}
+		}
+	}
+
 	bool skipPlantBoneUpdate = false;
-	if (mBoard && (mBoard->mPlants.mSize > 15 || mBoard->mZombies.mSize > 10) && IsOnBoard() && mPottedPlantIndex == -1 &&
+	if (isDrawnFromSpriteCache)
+	{
+		skipPlantBoneUpdate = true;
+	}
+	else if (mBoard && (mBoard->mPlants.mSize > 15 || mBoard->mZombies.mSize > 10) && IsOnBoard() && mPottedPlantIndex == -1 &&
 	    mState != PlantState::STATE_DOINGSPECIAL && mState != PlantState::STATE_SQUASH_RISING &&
 	    mState != PlantState::STATE_SQUASH_FALLING && mState != PlantState::STATE_CHOMPER_BITING &&
 	    mRecentlyEatenCountdown == 0 && mEatenFlashCountdown == 0 &&
@@ -3304,19 +3422,19 @@ void Plant::UpdateShooting()
 		{
 			int rowAbove = mRow - 1;
 			int rowBelow = mRow + 1;
-			Reanimation* aHeadReanim2 = mApp->ReanimationGet(mHeadReanimID2);
-			Reanimation* aHeadReanim3 = mApp->ReanimationGet(mHeadReanimID3);
-			Reanimation* aHeadReanim1 = mApp->ReanimationGet(mHeadReanimID);
+			Reanimation* aHeadReanim2 = mApp->ReanimationTryToGet(mHeadReanimID2);
+			Reanimation* aHeadReanim3 = mApp->ReanimationTryToGet(mHeadReanimID3);
+			Reanimation* aHeadReanim1 = mApp->ReanimationTryToGet(mHeadReanimID);
 
-			if (aHeadReanim1->mLoopType == ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD)
+			if (aHeadReanim1 && aHeadReanim1->mLoopType == ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD)
 			{
 				Fire(nullptr, rowBelow, PlantWeapon::WEAPON_PRIMARY);
 			}
-			if (aHeadReanim2->mLoopType == ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD)
+			if (aHeadReanim2 && aHeadReanim2->mLoopType == ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD)
 			{
 				Fire(nullptr, mRow, PlantWeapon::WEAPON_PRIMARY);
 			}
-			if (aHeadReanim3->mLoopType == ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD)
+			if (aHeadReanim3 && aHeadReanim3->mLoopType == ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD)
 			{
 				Fire(nullptr, rowAbove, PlantWeapon::WEAPON_PRIMARY);
 			}
@@ -3325,11 +3443,11 @@ void Plant::UpdateShooting()
 		{
 			Reanimation* aHeadBackReanim = mApp->ReanimationTryToGet(mHeadReanimID2);
 			Reanimation* aHeadFrontReanim = mApp->ReanimationTryToGet(mHeadReanimID);
-			if (aHeadFrontReanim->mLoopType == ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD && mLaunchCounter > 25)
+			if (aHeadFrontReanim && aHeadFrontReanim->mLoopType == ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD && mLaunchCounter > 25)
 			{
 				Fire(nullptr, mRow, PlantWeapon::WEAPON_PRIMARY);
 			}
-			if (aHeadBackReanim->mLoopType == ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD)
+			if (aHeadBackReanim && aHeadBackReanim->mLoopType == ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD)
 			{
 				Fire(nullptr, mRow, PlantWeapon::WEAPON_SECONDARY);
 			}
@@ -3368,33 +3486,42 @@ void Plant::UpdateShooting()
 	Reanimation* aHeadReanim = mApp->ReanimationTryToGet(mHeadReanimID);
 	if (mSeedType == SeedType::SEED_THREEPEATER)
 	{
-		Reanimation* aHeadReanim2 = mApp->ReanimationGet(mHeadReanimID2);
-		Reanimation* aHeadReanim3 = mApp->ReanimationGet(mHeadReanimID3);
+		Reanimation* aHeadReanim2 = mApp->ReanimationTryToGet(mHeadReanimID2);
+		Reanimation* aHeadReanim3 = mApp->ReanimationTryToGet(mHeadReanimID3);
 
-		if (aHeadReanim2->mLoopCount > 0)
+		if (aHeadReanim2 && aHeadReanim2->mLoopCount > 0)
 		{
-			if (aHeadReanim->mLoopType == ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD)
+			if (aHeadReanim && aHeadReanim->mLoopType == ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD)
 			{
 				aHeadReanim->StartBlend(20);
 				aHeadReanim->mLoopType = ReanimLoopType::REANIM_LOOP;
 				aHeadReanim->SetFramesForLayer("anim_head_idle1");
-				aHeadReanim->mAnimRate = aBodyReanim->mAnimRate;
-				aHeadReanim->mAnimTime = aBodyReanim->mAnimTime;
+				if (aBodyReanim)
+				{
+					aHeadReanim->mAnimRate = aBodyReanim->mAnimRate;
+					aHeadReanim->mAnimTime = aBodyReanim->mAnimTime;
+				}
 			}
 
 			aHeadReanim2->StartBlend(20);
 			aHeadReanim2->mLoopType = ReanimLoopType::REANIM_LOOP;
 			aHeadReanim2->SetFramesForLayer("anim_head_idle2");
-			aHeadReanim2->mAnimRate = aBodyReanim->mAnimRate;
-			aHeadReanim2->mAnimTime = aBodyReanim->mAnimTime;
+			if (aBodyReanim)
+			{
+				aHeadReanim2->mAnimRate = aBodyReanim->mAnimRate;
+				aHeadReanim2->mAnimTime = aBodyReanim->mAnimTime;
+			}
 
-			if (aHeadReanim3->mLoopType == ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD)
+			if (aHeadReanim3 && aHeadReanim3->mLoopType == ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD)
 			{
 				aHeadReanim3->StartBlend(20);
 				aHeadReanim3->mLoopType = ReanimLoopType::REANIM_LOOP;
 				aHeadReanim3->SetFramesForLayer("anim_head_idle3");
-				aHeadReanim3->mAnimRate = aBodyReanim->mAnimRate;
-				aHeadReanim3->mAnimTime = aBodyReanim->mAnimTime;
+				if (aBodyReanim)
+				{
+					aHeadReanim3->mAnimRate = aBodyReanim->mAnimRate;
+					aHeadReanim3->mAnimTime = aBodyReanim->mAnimTime;
+				}
 			}
 
 			return;
@@ -3402,24 +3529,30 @@ void Plant::UpdateShooting()
 	}
 	else if (mSeedType == SeedType::SEED_SPLITPEA)
 	{
-		Reanimation* aHeadReanim2 = mApp->ReanimationGet(mHeadReanimID2);
+		Reanimation* aHeadReanim2 = mApp->ReanimationTryToGet(mHeadReanimID2);
 
-		if (aHeadReanim->mLoopCount > 0)
+		if (aHeadReanim && aHeadReanim->mLoopCount > 0)
 		{
 			aHeadReanim->StartBlend(20);
 			aHeadReanim->mLoopType = ReanimLoopType::REANIM_LOOP;
 			aHeadReanim->SetFramesForLayer("anim_head_idle");
-			aHeadReanim->mAnimRate = aBodyReanim->mAnimRate;
-			aHeadReanim->mAnimTime = aBodyReanim->mAnimTime;
+			if (aBodyReanim)
+			{
+				aHeadReanim->mAnimRate = aBodyReanim->mAnimRate;
+				aHeadReanim->mAnimTime = aBodyReanim->mAnimTime;
+			}
 		}
 
-		if (aHeadReanim2->mLoopCount > 0)
+		if (aHeadReanim2 && aHeadReanim2->mLoopCount > 0)
 		{
 			aHeadReanim2->StartBlend(20);
 			aHeadReanim2->mLoopType = ReanimLoopType::REANIM_LOOP;
 			aHeadReanim2->SetFramesForLayer("anim_splitpea_idle");
-			aHeadReanim2->mAnimRate = aBodyReanim->mAnimRate;
-			aHeadReanim2->mAnimTime = aBodyReanim->mAnimTime;
+			if (aBodyReanim)
+			{
+				aHeadReanim2->mAnimRate = aBodyReanim->mAnimRate;
+				aHeadReanim2->mAnimTime = aBodyReanim->mAnimTime;
+			}
 		}
 
 		return;
@@ -4078,11 +4211,18 @@ void Plant::Draw(Graphics* g)
 
 		if (aDrawPumpkinBack)
 		{
-			Reanimation* aPumpkinReanim = mApp->ReanimationGet(aPumpkin->mBodyReanimID);
-			Graphics aPumpkinGraphics(*g);
-			aPumpkinGraphics.mTransX += aPumpkin->mX - mX;
-			aPumpkinGraphics.mTransY += aPumpkin->mY - mY;
-			aPumpkinReanim->DrawRenderGroup(&aPumpkinGraphics, 1);
+			bool aPumpkinHasLadder = (aPumpkin && mBoard && mBoard->GetLadderAt(aPumpkin->mPlantCol, aPumpkin->mRow) != nullptr);
+			if (!mApp->Is3DAccelerated() && !aPumpkinHasLadder && mApp->mReanimatorCache)
+			{
+				mApp->mReanimatorCache->DrawCachedPumpkinBack(g, aOffsetX + (aPumpkin->mX - mX), aOffsetY + (aPumpkin->mY - mY));
+			}
+			else if (Reanimation* aPumpkinReanim = mApp->ReanimationTryToGet(aPumpkin->mBodyReanimID))
+			{
+				Graphics aPumpkinGraphics(*g);
+				aPumpkinGraphics.mTransX += aPumpkin->mX - mX;
+				aPumpkinGraphics.mTransY += aPumpkin->mY - mY;
+				aPumpkinReanim->DrawRenderGroup(&aPumpkinGraphics, 1);
+			}
 		}
 
 		aOffsetX += mShakeOffsetX;
@@ -4096,7 +4236,35 @@ void Plant::Draw(Graphics* g)
 			Reanimation* aBodyReanim = mApp->ReanimationTryToGet(mBodyReanimID);
 			if (aBodyReanim)
 			{
-				if (!mApp->Is3DAccelerated() && (mSeedType == SeedType::SEED_FLOWERPOT || mSeedType == SeedType::SEED_LILYPAD) && IsOnBoard() &&
+				bool canUseIdleCache = !g->GetColorizeImages() && CanUseSpriteCache();
+				if (!canUseIdleCache && !SpriteCachePool::IsPlantReady(mSeedType) && SpriteCache_GetPlantEntityInfo(mSeedType) != nullptr)
+				{
+					SpriteStreamer::RequestPlant(mSeedType);
+				}
+
+				if (canUseIdleCache)
+				{
+					if (SpriteCache_GetPlantEntityInfo(mSeedType) != nullptr)
+					{
+						if (!SpriteCachePool::DrawPlant(g, aOffsetX, aOffsetY, mSeedType, aBodyReanim->mAnimTime))
+						{
+							aBodyReanim->Draw(g);
+						}
+					}
+					else if (!SpriteCachePool::DrawPlant(g, aOffsetX, aOffsetY, mSeedType, aBodyReanim->mAnimTime))
+					{
+						mApp->mReanimatorCache->DrawCachedPlantIdle(g, aOffsetX, aOffsetY, mSeedType, aBodyReanim->mAnimTime);
+					}
+				}
+				else if (!mApp->Is3DAccelerated() && mSeedType == SeedType::SEED_PUMPKINSHELL &&
+					(!mBoard || mBoard->GetLadderAt(mPlantCol, mRow) == nullptr) && mApp->mReanimatorCache)
+				{
+					int damageState = 0;
+					if (mPlantHealth < mPlantMaxHealth / 3) damageState = 2;
+					else if (mPlantHealth < mPlantMaxHealth * 2 / 3) damageState = 1;
+					mApp->mReanimatorCache->DrawCachedPumpkinFront(g, aOffsetX, aOffsetY, damageState);
+				}
+				else if (!mApp->Is3DAccelerated() && (mSeedType == SeedType::SEED_FLOWERPOT || mSeedType == SeedType::SEED_LILYPAD) && IsOnBoard() &&
 					aBodyReanim->mAnimRate == 0.0f && aBodyReanim->IsAnimPlaying("anim_idle"))
 				{
 					mApp->mReanimatorCache->DrawCachedPlant(g, aOffsetX, aOffsetY, mSeedType, DrawVariation::VARIATION_NORMAL);
@@ -5060,7 +5228,10 @@ void Plant::Die()
 	mDead = true;
 	RemoveEffects();
 
-	if (mBoard && mBoard->mStaticBackdropValid && mApp->mGameMode != GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN)
+	if (mBoard && mBoard->mStaticBackdropValid &&
+	    mApp->mGameMode != GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN &&
+	    mApp->mGameMode != GameMode::GAMEMODE_TREE_OF_WISDOM &&
+	    mApp->mGameMode != GameMode::GAMEMODE_CHALLENGE_ZOMBIQUARIUM)
 	{
 		mBoard->ClearPlantShadow(this);
 	}
@@ -5356,6 +5527,18 @@ void Plant::PreloadPlantResources(SeedType theSeedType)
 	else if (theSeedType == SeedType::SEED_DOOMSHROOM)
 	{
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);
+	}
+	else if (theSeedType == SeedType::SEED_COBCANNON)
+	{
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_IMP, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_GARGANTUAR, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_PUFF, true);
+	}
+	else if (theSeedType == SeedType::SEED_POTATOMINE)
+	{
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_PUFF, true);
 	}
 	else if (theSeedType == SeedType::SEED_TORCHWOOD)
 	{

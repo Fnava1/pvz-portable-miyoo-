@@ -90,6 +90,7 @@ public:
 	bool				FindImagePath(Image* theImage, std::string* thePath);
 	bool 				FindFontPath(_Font* theFont, std::string* thePath);
 	void				AddImageToMap(SharedImageRef* theImage, const std::string& thePath);
+	bool				RemoveDynamicImage(Image* theImage);
 	bool				PvzpLoadNextResource();
 	bool				PvzpLoadResources(const std::string& theGroup);
 };
@@ -97,6 +98,7 @@ public:
 bool			PvzpLoadResources(const std::string& theGroup);
 bool			PvzpLoadNextResource();
 void					PvzpAddImageToMap(SharedImageRef* theImage, const std::string& thePath);
+bool					PvzpRemoveDynamicImage(Image* theImage);
 bool					PvzpFindImagePath(Image* theImage, std::string* thePath);
 bool					PvzpFindFontPath(_Font* theFont, std::string* thePath);
 

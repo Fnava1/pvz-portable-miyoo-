@@ -210,7 +210,17 @@ ChallengeScreen::ChallengeScreen(LawnApp* theApp, ChallengePage thePage)
 	}
 }
 
-ChallengeScreen::~ChallengeScreen() = default;
+ChallengeScreen::~ChallengeScreen()
+{
+	if (mApp && mApp->mResourceManager)
+	{
+		mApp->mResourceManager->DeleteResources("DelayLoad_ChallengeScreen");
+	}
+	if (mApp)
+	{
+		mApp->CleanSharedImages();
+	}
+}
 
 const ChallengeDefinition& GetChallengeDefinition(int theChallengeMode)
 {

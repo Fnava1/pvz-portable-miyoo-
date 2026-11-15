@@ -215,6 +215,7 @@ public:
 	bool                IsFoleyPlaying(FoleyType theFoleyType);
 	void                GamePause(bool theEnteringPause);
 	void                PlayFoleyPitch(FoleyType theFoleyType, float thePitch);
+	void                PreloadFoley(FoleyType theFoleyType);
 	void                CancelPausedFoley();
 	void     ApplyMusicVolume(FoleyInstance* theFoleyInstance);
 	void                RehookupSoundWithMusicVolume();

@@ -109,6 +109,14 @@ AlmanacDialog::AlmanacDialog(LawnApp* theApp) : LawnDialog(theApp, DIALOG_ALMANA
 AlmanacDialog::~AlmanacDialog()
 {
 	ClearPlantsAndZombies();
+	if (mApp && mApp->mResourceManager)
+	{
+		mApp->mResourceManager->DeleteResources("DelayLoad_Almanac");
+	}
+	if (mApp)
+	{
+		mApp->CleanSharedImages();
+	}
 }
 
 void AlmanacDialog::ClearPlantsAndZombies()

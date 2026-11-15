@@ -289,6 +289,7 @@ void Music::PlayMusic(MusicTune theMusicTune, int theOffset, int theDrumsOffset)
 	if (mMusicDisabled)
 		return;
 
+	mPaused = false;
 	mCurMusicTune = theMusicTune;
 	mCurMusicFileMain = MusicFile::MUSIC_FILE_NONE;
 	mCurMusicFileDrums = MusicFile::MUSIC_FILE_NONE;

@@ -17,10 +17,13 @@
 #endif
 
 #include <SDL.h>
+#include "SexyAppFramework/Common.h"
 
 #ifndef PVZ_UNIT_TEST
 #include "LawnApp.h"
 #include "Lawn/Board.h"
+#include "Lawn/ZenGarden.h"
+#include "Lawn/Challenge.h"
 #include "Resources.h"
 #include "PvzpLib/PvzpStringFile.h"
 
@@ -123,6 +126,8 @@ static void CrashSignalHandler(int sig, siginfo_t* info, void* context) {
     // Always restore framebuffer panning first to eliminate black screen
     ResetFramebuffer();
 
+    Sexy::DumpLogRingBufferToCrashFile("/tmp/pvz_crash.log");
+
     const char msg[] = "\n========================================\nFATAL CRASH DETECTED BY SIGNAL HANDLER\n";
     (void)write(STDERR_FILENO, msg, sizeof(msg) - 1);
 
@@ -136,6 +141,15 @@ static void CrashSignalHandler(int sig, siginfo_t* info, void* context) {
     (void)write(STDERR_FILENO, endmsg, sizeof(endmsg) - 1);
 
 #ifndef _WIN32
+    int fd = open("crash.log", O_WRONLY | O_CREAT | O_APPEND, 0666);
+    if (fd >= 0) {
+        (void)write(fd, msg, sizeof(msg) - 1);
+        if (len > 0) {
+            (void)write(fd, buf, static_cast<size_t>(len));
+        }
+        (void)write(fd, endmsg, sizeof(endmsg) - 1);
+        close(fd);
+    }
     sync();
 #endif
     _exit(1);
@@ -388,6 +402,8 @@ int main(int argc, char* argv[]) {
     }
 
     SetupWorkingDirectory();
+    setvbuf(stdout, nullptr, _IOLBF, 0);
+    setvbuf(stderr, nullptr, _IONBF, 0);
 #ifndef _WIN32
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
@@ -396,6 +412,7 @@ int main(int argc, char* argv[]) {
 #endif
     SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
     InstallSignalHandlers();
+    Sexy::InitLogRingBuffer();
 
     PvzpStringListSetColors(gLawnStringFormats, gLawnStringFormatCount);
     gExtractResourcesByName = Sexy::ExtractResourcesByName;
@@ -403,6 +420,7 @@ int main(int argc, char* argv[]) {
     gLawnApp = new LawnApp();
     gLawnApp->SetArgs(argc, argv);
     gLawnApp->Init();
+
     InstallSignalHandlers();
     StartHardwareWatchdog();
     gLawnApp->Start();

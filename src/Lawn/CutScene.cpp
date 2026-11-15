@@ -22,6 +22,7 @@
 #include "Board.h"
 #include "Plant.h"
 #include "Zombie.h"
+#include "ZenGarden.h"
 #include "GridItem.h"
 #include "Cutscene.h"
 #include "Challenge.h"
@@ -46,6 +47,8 @@
 #include "../PvzpLib/EffectSystem.h"
 #include "../PvzpLib/PvzpStringFile.h"
 #include "misc/PerfTimer.h"
+#include "../PvzpLib/SpriteCachePool.h"
+#include "../PvzpLib/SpriteStreamer.h"
 #include "widget/WidgetManager.h"
 #include <algorithm>
 #include <format>
@@ -110,6 +113,7 @@ CutScene::CutScene()
 	mLawnMowerTime = 0;
 	mCrazyDaveDialogStart = -1;
 	mSeedChoosing = false;
+	mSeedChooserStarted = false;
 	mZombiesWonReanimID = REANIMATIONID_NULL;
 	mPreloaded = false;
 	mPlacedZombies = false;
@@ -341,6 +345,7 @@ void CutScene::PreloadResources()
 	mPreloaded = true;
 
 	mLoadedResourceNames.clear();
+	mApp->PreloadCommonSounds();
 
 	PerfTimer aTimer;
 	aTimer.Start();
@@ -366,34 +371,40 @@ void CutScene::PreloadResources()
 		}
 	}
 
-	// Universal preloading for surprise ambushes, drops, and common reanimations across all game modes & minigames
-	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_BUNGEE, true);
-	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_IMP, true);
-	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_BACKUP_DANCER, true);
-	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_BOBSLED, true);
-	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_SURPRISE, true);
-	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);
-	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_IMP, true);
-	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_DIGGER, true);
-	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_ZAMBONI, true);
-	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_CATAPULT, true);
-	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_GARGANTUAR, true);
-	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_PUFF, true);
-	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_FLAG, true);
-	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_LAWN_MOWERED_ZOMBIE, true);
-	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_FINAL_WAVE, true);
-	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIES_WON, true);
+	if (mApp->mGameMode != GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN && mApp->mGameMode != GameMode::GAMEMODE_TREE_OF_WISDOM)
+	{
+		// Universal preloading for surprise ambushes, drops, and common reanimations across combat game modes & minigames
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_BUNGEE, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_IMP, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_BACKUP_DANCER, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_BOBSLED, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_SURPRISE, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_IMP, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_DIGGER, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_ZAMBONI, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_CATAPULT, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_GARGANTUAR, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_PUFF, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_FLAG, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_LAWN_MOWERED_ZOMBIE, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_FINAL_WAVE, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIES_WON, true);
+	}
 
 	if (mApp->IsFinalBossLevel())
 	{
 		Zombie::PreloadZombieResources(ZombieType::ZOMBIE_BOSS);
 	}
 
-	for (SeedType aSeedType = SeedType::SEED_PEASHOOTER; aSeedType < SeedType::NUM_SEED_TYPES; aSeedType = static_cast<SeedType>(static_cast<int>(aSeedType) + 1))
+	if (!IsSurvivalRepick() && mApp->mGameMode != GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN && mApp->mGameMode != GameMode::GAMEMODE_TREE_OF_WISDOM)
 	{
-		if (mApp->HasSeedType(aSeedType))
+		for (SeedType aSeedType = SeedType::SEED_PEASHOOTER; aSeedType < SeedType::NUM_SEED_TYPES; aSeedType = static_cast<SeedType>(static_cast<int>(aSeedType) + 1))
 		{
-			Plant::PreloadPlantResources(aSeedType);
+			if (mApp->HasSeedType(aSeedType))
+			{
+				Plant::PreloadPlantResources(aSeedType);
+			}
 		}
 	}
 
@@ -434,6 +445,24 @@ void CutScene::PreloadResources()
 	{
 		Plant::PreloadPlantResources(SeedType::SEED_SPROUT);
 		Plant::PreloadPlantResources(SeedType::SEED_MARIGOLD);
+		Plant::PreloadPlantResources(SeedType::SEED_FLOWERPOT);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZENGARDEN_WATERINGCAN, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZENGARDEN_FERTILIZER, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZENGARDEN_BUGSPRAY, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZENGARDEN_PHONOGRAPH, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_STINKY, true);
+
+		if (mApp->mPlayerInfo && mApp->mZenGarden)
+		{
+			for (int i = 0; i < mApp->mPlayerInfo->mNumPottedPlants; i++)
+			{
+				PottedPlant* p = &mApp->mPlayerInfo->mPottedPlant[i];
+				if (p->mSeedType >= SeedType::SEED_PEASHOOTER && p->mSeedType < SeedType::NUM_SEED_TYPES && p->mWhichZenGarden == mApp->mZenGarden->mGardenType)
+				{
+					Plant::PreloadPlantResources(p->mSeedType);
+				}
+			}
+		}
 	}
 
 	if (mBoard->StageHasRoof())
@@ -491,7 +520,9 @@ void CutScene::PreloadResources()
 	}
 	if (mApp->mGameMode == GameMode::GAMEMODE_TREE_OF_WISDOM)
 	{
-		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZENGARDEN_FERTILIZER, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_TREEOFWISDOM, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_TREEOFWISDOM_CLOUDS, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_TREEOFWISDOM_TREEFOOD, true);
 	}
 	if (mApp->mGameMode == GameMode::GAMEMODE_UPSELL)
 	{
@@ -754,7 +785,17 @@ void CutScene::StartLevelIntro()
 	mPlacedZombies = false;
 	mPreloaded = false;
 	mPlacedLawnItems = false;
+	mSeedChoosing = false;
+	mSeedChooserStarted = false;
 	mApp->mWidgetManager->SetFocus(mBoard);
+
+	if (IsSurvivalRepick())
+	{
+		SpriteStreamer::CancelZombies();
+		SpriteCachePool::ClearZombieSlots();
+		// Skip initial stationary camera delay during survival repick so the board pans right promptly
+		mCutsceneTime = TimePanRightStart - 100;
+	}
 
 	int aLevel = mBoard->mLevel;
 	if (mApp->IsFirstTimeAdventureMode() && (aLevel == 1 || aLevel == 2 || aLevel == 4))
@@ -903,7 +944,10 @@ void CutScene::StartLevelIntro()
 		if (mApp->mPlayerInfo->mPurchases[StoreItem::STORE_ITEM_TREE_FOOD] < PURCHASE_COUNT_OFFSET)
 		{
 			mCrazyDaveDialogStart = 3200;
-			mBoard->mStoreButton->mBtnNoDraw = true;
+			if (mBoard->mStoreButton)
+			{
+				mBoard->mStoreButton->mBtnNoDraw = true;
+			}
 		}
 	}
 	if (mCrazyDaveDialogStart != -1)
@@ -940,6 +984,7 @@ void CutScene::StartLevelIntro()
 	if (IsNonScrollingCutscene() && mCrazyDaveTime == 0)
 	{
 		CancelIntro();
+		mApp->StartPlaying();
 		return;
 	}
 
@@ -1490,8 +1535,9 @@ void CutScene::Update()
 	if (!aCutsceneTimeStop)
 	{
 		mCutsceneTime += 10;
-		if (mCutsceneTime == TimeSeedChoserSlideOnEnd + mCrazyDaveTime && mBoard->ChooseSeedsOnCurrentLevel())
+		if (!mSeedChooserStarted && mCutsceneTime >= TimeSeedChoserSlideOnEnd + mCrazyDaveTime && mBoard->ChooseSeedsOnCurrentLevel())
 		{
+			mSeedChooserStarted = true;
 			StartSeedChooser();
 		}
 	}
@@ -1552,15 +1598,18 @@ void CutScene::UpdateZombiesWon()
 
 	if (mCutsceneTime == LostTimeBrainGraphicShake)
 	{
-		mApp->ReanimationGet(mZombiesWonReanimID)->SetShakeOverride("ZombiesWon", 1.0f);
+		if (Reanimation* aWonReanim = mApp->ReanimationTryToGet(mZombiesWonReanimID))
+			aWonReanim->SetShakeOverride("ZombiesWon", 1.0f);
 	}
 	if (mCutsceneTime == LostTimeBrainGraphicCancelShake)
 	{
-		mApp->ReanimationGet(mZombiesWonReanimID)->SetShakeOverride("ZombiesWon", 0.0f);
+		if (Reanimation* aWonReanim = mApp->ReanimationTryToGet(mZombiesWonReanimID))
+			aWonReanim->SetShakeOverride("ZombiesWon", 0.0f);
 	}
 	if (mCutsceneTime == LostTimeBrainGraphicEnd)
 	{
-		mApp->ReanimationGet(mZombiesWonReanimID)->SetFramesForLayer("anim_screen");
+		if (Reanimation* aWonReanim = mApp->ReanimationTryToGet(mZombiesWonReanimID))
+			aWonReanim->SetFramesForLayer("anim_screen");
 	}
 
 	if (mCutsceneTime == LostTimeEnd)
@@ -1779,11 +1828,17 @@ void CutScene::KeyDown(KeyCode theKey)
 	}
 	else
 	{
+		if (theKey == KeyCode::KEYCODE_ESCAPE)
+		{
+			mApp->DoNewOptions(false);
+			return;
+		}
+
 		if ((theKey == KeyCode::KEYCODE_SPACE || theKey == KeyCode::KEYCODE_RETURN) && IsShowingCrazyDave())
 		{
 			AdvanceCrazyDaveDialog(false);
 		}
-		else if (mApp->mCheatKeys && (theKey == KeyCode::KEYCODE_SPACE || theKey == KeyCode::KEYCODE_RETURN || theKey == KeyCode::KEYCODE_ESCAPE))
+		else if (mApp->mCheatKeys && (theKey == KeyCode::KEYCODE_SPACE || theKey == KeyCode::KEYCODE_RETURN))
 		{
 			CancelIntro();
 		}

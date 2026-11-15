@@ -109,6 +109,9 @@ public:
 	PlayerInfo*						mPlayerInfo;
 	std::unique_ptr<LevelStats>		mLastLevelStats;
 	std::atomic<bool>					mCloseRequest;
+	std::atomic<bool>					mIsBakingSpriteCache{false};
+	std::atomic<int>					mBakingCurrentIndex{0};
+	std::atomic<int>					mBakingTotalEntities{0};
 	uint32_t						mAppCounter;
 	std::unique_ptr<Music>			mMusic;
 	ReanimationID					mCrazyDaveReanimID;
@@ -249,12 +252,14 @@ public:
 	void							PlayFoley(FoleyType theFoleyType);
 	void							PlayFoleyPitch(FoleyType theFoleyType, float thePitch);
 	void							PlaySample(intptr_t theSoundNum) override;
+	void							PreloadCommonSounds();
 	void							FastLoad(GameMode theGameMode);
 	static std::string				GetStageString(int theLevel);
 	void					KillChallengeScreen();
 	void							ShowChallengeScreen(ChallengePage thePage);
 	const ChallengeDefinition&			GetCurrentChallengeDef();
 	void							CheckForGameEnd();
+	void							CheckAndGenerateSpriteCache();
 	void							CloseRequestAsync() override;
 	bool					IsChallengeWithoutSeedBank();
 	AlmanacDialog*					DoAlmanacDialog(SeedType theSeedType = SeedType::SEED_NONE, ZombieType theZombieType = ZombieType::ZOMBIE_INVALID);

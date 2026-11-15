@@ -31,6 +31,7 @@
 #include "Lawn/Zombie.h"
 #include "Lawn/Cutscene.h"
 #include "GameConstants.h"
+#include "sound/SoundManager.h"
 #include "ProjectVersion.h"
 #include "Lawn/Challenge.h"
 #include "Lawn/ZenGarden.h"
@@ -66,6 +67,9 @@
 #include "Lawn/Widget/NewOptionsDialog.h"
 #include "Lawn/Widget/ZombatarTOS.h"
 #include "Lawn/Widget/SeedChooserScreen.h"
+#include "PvzpLib/SpriteCacheBaker.h"
+#include "PvzpLib/SpriteCachePool.h"
+#include "PvzpLib/SpriteStreamer.h"
 #include "widget/WidgetManager.h"
 #include "misc/ResourceManager.h"
 #include <algorithm>
@@ -219,6 +223,8 @@ LawnApp::~LawnApp()
 	mEffectSystem.reset();
 	mReanimatorCache.reset();
 
+	Zombie::FreeSpotlights();
+
 	FilterEffectDisposeForApp();
 	PvzpParticleFreeDefinitions();
 	ReanimatorFreeDefinitions();
@@ -231,6 +237,10 @@ LawnApp::~LawnApp()
 
 void LawnApp::Shutdown()
 {
+	Zombie::FreeSpotlights();
+	SpriteStreamer::CancelAll();
+	SpriteCachePool::FreePool();
+
 	if (!mLoadingThreadCompleted)
 	{
 		mLoadingFailed = true;
@@ -278,6 +288,9 @@ void LawnApp::KillBoard()
 		mWidgetManager->RemoveWidget(mBoard);
 		SafeDeleteWidget(mBoard);
 		mBoard = nullptr;
+#ifdef LOW_MEMORY
+		CleanSharedImages();
+#endif
 	}
 
 	SetCursor(CURSOR_POINTER);
@@ -359,10 +372,13 @@ void LawnApp::PreNewGame(GameMode theGameMode, bool theLookForSavedGame)
 	if (theLookForSavedGame && TryLoadGame())
 		return;
 
-	std::string aFileName = GetSavedGameName(mGameMode, mPlayerInfo->mId);
-	EraseFile(aFileName);
-	std::string aLegacyFileName = GetLegacySavedGameName(mGameMode, mPlayerInfo->mId);
-	EraseFile(aLegacyFileName);
+	if (mPlayerInfo)
+	{
+		std::string aFileName = GetSavedGameName(mGameMode, mPlayerInfo->mId);
+		EraseFile(aFileName);
+		std::string aLegacyFileName = GetLegacySavedGameName(mGameMode, mPlayerInfo->mId);
+		EraseFile(aLegacyFileName);
+	}
 	NewGame();
 }
 
@@ -370,6 +386,21 @@ void LawnApp::MakeNewBoard()
 {
 	KillBoard();
 	KillSeedChooserScreen();
+
+	if (mResourceManager)
+	{
+		mResourceManager->DeleteResources("DelayLoad_Store");
+		mResourceManager->DeleteResources("DelayLoad_Almanac");
+		mResourceManager->DeleteResources("DelayLoad_ChallengeScreen");
+		mResourceManager->DeleteResources("DelayLoad_AwardScreen");
+		mResourceManager->DeleteResources("DelayLoad_Credits");
+	}
+	if (mCrazyDaveReanimID == ReanimationID::REANIMATIONID_NULL)
+	{
+		ReanimationFreeDefinition(&gReanimatorDefArray[static_cast<int>(ReanimationType::REANIM_CRAZY_DAVE)]);
+	}
+	CleanSharedImages();
+
 	if (mWidgetManager && mWidgetManager->mImage)
 	{
 		mWidgetManager->mImage->Clear();
@@ -697,6 +728,10 @@ AlmanacDialog* LawnApp::DoAlmanacDialog(SeedType theSeedType, ZombieType theZomb
 
 void LawnApp::DoContinueDialog()
 {
+	if (mBoard)
+	{
+		mBoard->Pause(true);
+	}
 	ContinueDialog* aDialog = new ContinueDialog(this);
 	CenterDialog(aDialog, aDialog->mWidth, aDialog->mHeight);
 	AddDialog(Dialogs::DIALOG_CONTINUE, aDialog);
@@ -1236,7 +1271,7 @@ void LawnApp::Init()
 
 	Sexy::MkDir(Sexy::GetAppDataPath("userdata"));
 #ifdef PVZ_DEBUG
-	Sexy::RegisterLogFileSink(Sexy::GetAppDataPath("userdata/") + "log.txt");
+	Sexy::RegisterLogFileSink("log.txt");
 	PvzpLogLn("Started {}", static_cast<uint64_t>(std::time(nullptr)));
 #endif
 	PvzpLogLn("session id: {}", static_cast<long long>(mSessionID));
@@ -1915,6 +1950,7 @@ void LawnApp::LoadingThreadProc()
 	PvzpFoleyInitialize(gLawnFoleyParamArray, LENGTH(gLawnFoleyParamArray));
 	PvzpLoadResources("DelayLoad_Almanac");
 	mReanimatorCache->PrecacheAll();
+	CheckAndGenerateSpriteCache();
 
 	PvzpLogLn("loading '{}' {} ms", "stuff", static_cast<int>(aTimer.GetDuration()));
 	aTimer.Start();
@@ -1938,6 +1974,22 @@ void LawnApp::LoadingThreadProc()
 	LoadGroup("LoadingSounds", 54);
 }
 
+void LawnApp::CheckAndGenerateSpriteCache()
+{
+	if (!SpriteCacheBaker::IsCacheValid())
+	{
+		PvzpLogLn("SpriteCache: Cache missing or outdated. Generating 24-frame sprites to SD card...");
+		PerfTimer timer;
+		timer.Start();
+		bool ok = SpriteCacheBaker::BakeAll(this);
+		PvzpLogLn("SpriteCache: Baking {} in {} ms", ok ? "completed successfully" : "FAILED", (int)timer.GetDuration());
+	}
+	else
+	{
+		PvzpLogLn("SpriteCache: Cache files verified on disk (.version = {})", SPC_VERSION);
+	}
+}
+
 void LawnApp::FastLoad(GameMode theGameMode)
 {
 	if (!mShutdown)
@@ -1951,6 +2003,7 @@ void LawnApp::FastLoad(GameMode theGameMode)
 
 void LawnApp::LoadingThreadCompleted()
 {
+	Zombie::InitSpotlights();
 }
 
 void LawnApp::LoadingCompleted()
@@ -2921,11 +2974,17 @@ void LawnApp::CrazyDaveTalkMessage(const std::string& theMessage)
 			aCrazyDaveReanim->PlayReanim("anim_talk_handing", ReanimLoopType::REANIM_LOOP, 50, 12.0f);
 
 			Reanimation* aFertilizerReanim = AddReanimation(0.0f, 0.0f, 0, ReanimationType::REANIM_ZENGARDEN_FERTILIZER);
-			aFertilizerReanim->PlayReanim("bag", ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD, 0, 24.0f);
-			aFertilizerReanim->mAnimRate = 0.0f;
+			if (aFertilizerReanim)
+			{
+				aFertilizerReanim->PlayReanim("bag", ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD, 0, 24.0f);
+				aFertilizerReanim->mAnimRate = 0.0f;
+			}
 
 			ReanimatorTrackInstance* aHandTrackInstance = aCrazyDaveReanim->GetTrackInstanceByName("Dave_handinghand");
-			AttachReanim(aHandTrackInstance->mAttachmentID, aFertilizerReanim, 102.0f, 412.0f);
+			if (aHandTrackInstance && aFertilizerReanim)
+			{
+				AttachReanim(aHandTrackInstance->mAttachmentID, aFertilizerReanim, 102.0f, 412.0f);
+			}
 			aCrazyDaveReanim->Update();
 
 			if (doSound)
@@ -2940,11 +2999,17 @@ void LawnApp::CrazyDaveTalkMessage(const std::string& theMessage)
 			aCrazyDaveReanim->PlayReanim("anim_talk_handing", ReanimLoopType::REANIM_LOOP, 50, 12.0f);
 
 			Reanimation* aTreeFoodReanim = AddReanimation(0.0f, 0.0f, 0, ReanimationType::REANIM_TREEOFWISDOM_TREEFOOD);
-			aTreeFoodReanim->PlayReanim("bag", ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD, 0, 24.0f);
-			aTreeFoodReanim->mAnimRate = 0.0f;
+			if (aTreeFoodReanim)
+			{
+				aTreeFoodReanim->PlayReanim("bag", ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD, 0, 24.0f);
+				aTreeFoodReanim->mAnimRate = 0.0f;
+			}
 
 			ReanimatorTrackInstance* aHandTrackInstance = aCrazyDaveReanim->GetTrackInstanceByName("Dave_handinghand");
-			AttachReanim(aHandTrackInstance->mAttachmentID, aTreeFoodReanim, 102.0f, 412.0f);
+			if (aHandTrackInstance && aTreeFoodReanim)
+			{
+				AttachReanim(aHandTrackInstance->mAttachmentID, aTreeFoodReanim, 102.0f, 412.0f);
+			}
 			aCrazyDaveReanim->Update();
 
 			if (doSound)
@@ -2959,12 +3024,18 @@ void LawnApp::CrazyDaveTalkMessage(const std::string& theMessage)
 			aCrazyDaveReanim->PlayReanim("anim_talk_handing", ReanimLoopType::REANIM_LOOP, 50, 12.0f);
 
 			Reanimation* aMoneyBagReanim = AddReanimation(0.0f, 0.0f, 0, ReanimationType::REANIM_ZENGARDEN_FERTILIZER);
-			aMoneyBagReanim->PlayReanim("bag", ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD, 0, 24.0f);
-			aMoneyBagReanim->mAnimRate = 0.0f;
-			aMoneyBagReanim->SetImageOverride("bag", IMAGE_MONEYBAG);
+			if (aMoneyBagReanim)
+			{
+				aMoneyBagReanim->PlayReanim("bag", ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD, 0, 24.0f);
+				aMoneyBagReanim->mAnimRate = 0.0f;
+				aMoneyBagReanim->SetImageOverride("bag", IMAGE_MONEYBAG);
+			}
 
 			ReanimatorTrackInstance* aHandTrackInstance = aCrazyDaveReanim->GetTrackInstanceByName("Dave_handinghand");
-			AttachReanim(aHandTrackInstance->mAttachmentID, aMoneyBagReanim, 90.0f, 405.0f);
+			if (aHandTrackInstance && aMoneyBagReanim)
+			{
+				AttachReanim(aHandTrackInstance->mAttachmentID, aMoneyBagReanim, 90.0f, 405.0f);
+			}
 			aCrazyDaveReanim->Update();
 			if (doSound)
 			{
@@ -3142,7 +3213,8 @@ void LawnApp::DrawCrazyDave(Graphics* g)
 			aPosX += 130;
 			aPosY += 70;
 		}
-		g->DrawImage(aBubbleImage, aPosX, aPosY);
+		if (aBubbleImage)
+			g->DrawImage(aBubbleImage, aPosX, aPosY);
 
 		std::string aBubbleText = mCrazyDaveMessageText;
 		Rect aRect(aPosX + 25, aPosY + 6, 233, 144);
@@ -3446,6 +3518,42 @@ void LawnApp::PlaySample(intptr_t theSoundNum)
 	{
 		SexyAppBase::PlaySample(theSoundNum);
 	}
+}
+
+void LawnApp::PreloadCommonSounds()
+{
+	if (!mSoundManager || !mSoundSystem)
+		return;
+
+	// High-frequency Foley SFX
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_CHOMP);
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_CHOMP_SOFT);
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_SPLAT);
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_THROW);
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_DROP);
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_GROAN);
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_ZOMBIESPLASH);
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_EXPLOSION);
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_LIMBS_POP);
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_ZOMBIE_FALLING);
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_BOWLINGIMPACT);
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_COIN);
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_DOLPHIN_APPEARS);
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_DOLPHIN_BEFORE_JUMPING);
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_GARGANTUDEATH);
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_IMP);
+
+	// Common combat and gameplay samples
+	mSoundManager->PreloadSound(Sexy::SOUND_GULP);
+	mSoundManager->PreloadSound(Sexy::SOUND_PAUSE);
+	mSoundManager->PreloadSound(Sexy::SOUND_BUTTONCLICK);
+	mSoundManager->PreloadSound(Sexy::SOUND_DOOMSHROOM);
+	mSoundManager->PreloadSound(Sexy::SOUND_EXPLOSION);
+	mSoundManager->PreloadSound(Sexy::SOUND_CHOMP);
+	mSoundManager->PreloadSound(Sexy::SOUND_CHOMP2);
+	mSoundManager->PreloadSound(Sexy::SOUND_CHOMPSOFT);
+	mSoundManager->PreloadSound(Sexy::SOUND_PLANT_WATER);
+	mSoundManager->PreloadSound(Sexy::SOUND_ZOMBIE_ENTERING_WATER);
 }
 
 void LawnApp::SwitchScreenMode(bool wantWindowed, bool is3d, bool force)

@@ -355,6 +355,17 @@ void TitleScreen::Update()
 	mCurBarWidth += mBarVel;
 	if (!mLoadingThreadComplete)
 	{
+		if (mApp->mIsBakingSpriteCache.load())
+		{
+			int cur = mApp->mBakingCurrentIndex.load();
+			int tot = mApp->mBakingTotalEntities.load();
+			mStartButton->mLabel = std::format("Optimizando sprites ({}/{})...", cur, tot);
+		}
+		else
+		{
+			mStartButton->mLabel = PvzpStringTranslate("[LOADING]");
+		}
+
 		if (mCurBarWidth > mTotalBarWidth * 0.99f)
 		{
 			mCurBarWidth = mTotalBarWidth * 0.99f;

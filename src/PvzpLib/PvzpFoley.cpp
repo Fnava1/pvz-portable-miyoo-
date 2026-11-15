@@ -307,6 +307,20 @@ void PvzpFoley::PlayFoley(FoleyType theFoleyType)
 	PlayFoleyPitch(theFoleyType, aPitch);
 }
 
+void PvzpFoley::PreloadFoley(FoleyType theFoleyType)
+{
+	if (theFoleyType < 0 || theFoleyType >= FoleyType::NUM_FOLEY || !gSexyAppBase || !gSexyAppBase->mSoundManager)
+		return;
+	const FoleyParams* aFoleyParams = LookupFoley(theFoleyType);
+	for (int i = 0; i < 10; i++)
+	{
+		if (aFoleyParams->mSfxID[i] != nullptr && *aFoleyParams->mSfxID[i] >= 0)
+		{
+			gSexyAppBase->mSoundManager->PreloadSound(*aFoleyParams->mSfxID[i]);
+		}
+	}
+}
+
 void PvzpFoley::StopFoley(FoleyType theFoleyType)
 {
 	SoundSystemReleaseFinishedInstances(this);

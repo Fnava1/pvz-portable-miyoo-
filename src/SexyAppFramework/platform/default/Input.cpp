@@ -600,8 +600,8 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 #endif
 
 #if !PVZ_ENABLE_GLES
-	// Long-press Menu detection: holding Menu for >= 750ms triggers clean return to OnionOS
-	if (sMenuDown && (SDL_GetTicks() - sMenuDownTime >= 750))
+	// Long-press Menu detection: holding Menu for >= 1500ms triggers clean return to OnionOS
+	if (sMenuDown && (SDL_GetTicks() - sMenuDownTime >= 1500))
 	{
 		sMenuDown = false;
 		CloseRequestAsync();
@@ -822,7 +822,7 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 					break;
 				}
 
-				// Physical Menu button: record press time for hold detection, or forward to keyup for short press.
+				// Physical Menu button: trigger Escape immediately on press down for instant responsiveness.
 				// On Miyoo Mini Plus / OnionOS, physical Menu emits SDLK_ESCAPE, SDLK_HOME, SDLK_RALT, or SDLK_MENU.
 				if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_HOME ||
 					event.key.keysym.sym == SDLK_RALT || event.key.keysym.sym == SDLK_MENU)
@@ -831,6 +831,8 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 					{
 						sMenuDown = true;
 						sMenuDownTime = SDL_GetTicks();
+						mWidgetManager->KeyDown(KeyCode::KEYCODE_ESCAPE);
+						mWidgetManager->KeyUp(KeyCode::KEYCODE_ESCAPE);
 					}
 					break;
 				}
@@ -955,21 +957,11 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 				if (event.key.keysym.sym == SDLK_RETURN || event.key.keysym.sym == SDLK_KP_ENTER)
 					sStartDown = false;
 
-				// Physical MENU button: short press (< 750ms) opens options menu / cancel; long press (>= 750ms) exits cleanly
+				// Physical MENU button: reset hold state on release
 				if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_HOME ||
 					event.key.keysym.sym == SDLK_RALT || event.key.keysym.sym == SDLK_MENU)
 				{
-					if (sMenuDown)
-					{
-						uint32_t aHoldTime = SDL_GetTicks() - sMenuDownTime;
-						sMenuDown = false;
-						if (aHoldTime < 750)
-						{
-							// Short press (< 750ms): synthesize Escape (options menu / back / cancel)
-							mWidgetManager->KeyDown(KeyCode::KEYCODE_ESCAPE);
-							mWidgetManager->KeyUp(KeyCode::KEYCODE_ESCAPE);
-						}
-					}
+					sMenuDown = false;
 					break;
 				}
 

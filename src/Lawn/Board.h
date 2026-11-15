@@ -40,6 +40,10 @@
 
 using namespace Sexy;
 
+#ifndef PARTICLE_POWDER_SMOKE
+#define PARTICLE_POWDER_SMOKE PARTICLE_MOWER_CLOUD
+#endif
+
 constexpr const int MAX_GRID_SIZE_X = 9;
 constexpr const int MAX_GRID_SIZE_Y = 6;
 constexpr const int MAX_ZOMBIES_IN_WAVE = 50;
@@ -303,6 +307,8 @@ public:
 	Plant*							mTorchwoodGrid[MAX_GRID_SIZE_X][MAX_GRID_SIZE_Y];
 	std::vector<Zombie*>			mRowZombies[MAX_GRID_SIZE_Y];
 	std::vector<Plant*>				mRowPlants[MAX_GRID_SIZE_Y];
+	uint32_t						mActiveVanguardCount = 0;
+	int								mActiveCharredCount = 0;
 	std::unique_ptr<MemoryImage>	mStaticBackdrop;
 	bool							mStaticBackdropValid;
 	int32_t							mMaxSunPlants;
@@ -343,8 +349,10 @@ public:
 	void					SaveGame(const std::string& theFileName);
 	bool							LoadGame(const std::string& theFileName);
 	void							InitLevel();
+	void							InitForNewLevel();
 	void							DisplayAdvice(std::string_view theAdvice, MessageStyle theMessageStyle, AdviceType theHelpIndex);
 	void							StartLevel();
+	void							PreloadSpriteCache();
 	Plant*							AddPlant(int theGridX, int theGridY, SeedType theSeedType, SeedType theImitaterType = SeedType::SEED_NONE);
 	Projectile*						AddProjectile(int theX, int theY, int theRenderOrder, int theRow, ProjectileType theProjectileType);
 	Coin*							AddCoin(int theX, int theY, CoinType theCoinType, CoinMotion theCoinMotion);

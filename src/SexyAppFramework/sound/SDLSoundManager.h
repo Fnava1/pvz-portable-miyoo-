@@ -67,6 +67,7 @@ public:
 
 	bool					LoadSound(intptr_t theSfxID, const std::string& theFilename) override;
 	intptr_t				LoadSound(const std::string& theFilename) override;
+	void					PreloadSound(intptr_t theSfxID) override;
 	void					ReleaseSound(intptr_t theSfxID) override;
 
 	void					SetVolume(double theVolume) override;

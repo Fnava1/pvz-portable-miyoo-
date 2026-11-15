@@ -142,11 +142,15 @@ namespace Sexy
 const ulong SEXY_RAND_MAX = 0x7FFFFFFF;
 
 extern bool			gDebug;
+extern bool			gEnableFileLogging;
 
 enum class SexyLogPriority { Info, Error };
 
 void				DispatchLogLn(SexyLogPriority thePriority, std::string_view theText);
 void				RegisterLogFileSink(std::string_view thePath);
+void				InitLogRingBuffer();
+void				ClearLogRingBuffer();
+void				DumpLogRingBufferToCrashFile(const char* theFilePath = nullptr);
 
 template<typename... Args>
 void				LogInfoLn(std::format_string<Args...> theFmt, Args&&... theArgs)

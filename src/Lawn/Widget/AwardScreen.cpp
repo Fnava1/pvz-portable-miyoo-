@@ -253,7 +253,12 @@ AwardScreen::AwardScreen(LawnApp* theApp, AwardType theAwardType, bool theShowin
 		mApp->mMusic->MakeSureMusicIsPlaying(MUSIC_TUNE_ZEN_GARDEN);
 }
 
-AwardScreen::~AwardScreen() = default;
+AwardScreen::~AwardScreen()
+{
+#ifdef LOW_MEMORY
+	mApp->CleanSharedImages();
+#endif
+}
 
 bool AwardScreen::IsPaperNote()
 {

@@ -28,6 +28,7 @@
 #include "LawnCommon.h"
 #include "System/Music.h"
 #include "System/SaveGame.h"
+#include "System/ReanimationLawn.h"
 #include "Widget/LawnDialog.h"
 #include "System/PlayerInfo.h"
 #include "System/PoolEffect.h"
@@ -47,6 +48,7 @@
 #include "../PvzpLib/EffectSystem.h"
 #include "../PvzpLib/PvzpStringFile.h"
 #include "graphics/ImageFont.h"
+#include "graphics/MemoryImage.h"
 #include "sound/SoundManager.h"
 #include "widget/ButtonWidget.h"
 #include "widget/WidgetManager.h"
@@ -55,6 +57,8 @@
 //#define SEXY_PERF_ENABLED
 #include "misc/PerfTimer.h"
 #include "Widget/AchievementsScreen.h"
+#include "PvzpLib/SpriteCachePool.h"
+#include "PvzpLib/SpriteStreamer.h"
 
 constexpr const int ZOMBIE_COUNTDOWN_FIRST_WAVE = 1800;
 constexpr const int ZOMBIE_COUNTDOWN = 2500;
@@ -98,6 +102,8 @@ Board::Board(LawnApp* theApp)
 	mGridCursorCol = 4;
 	mGridCursorRow = 2;
 	mGridCursorActive = false;
+	mActiveVanguardCount = 0;
+	mActiveCharredCount = 0;
 	for (int i = 0; i < MAX_GRID_SIZE_X; i++)
 	{
 		for (int j = 0; j < MAX_GRID_SIZE_Y; j++)
@@ -227,7 +233,8 @@ Board::Board(LawnApp* theApp)
 		mStoreButton->mOverImage = IMAGE_ZENSHOPBUTTON_HIGHLIGHT;
 		mStoreButton->mDownImage = IMAGE_ZENSHOPBUTTON_HIGHLIGHT;
 		mStoreButton->mParentWidget = this;
-		mStoreButton->Resize(678, 33, IMAGE_ZENSHOPBUTTON->mWidth, 40);
+		int aWidth = IMAGE_ZENSHOPBUTTON != nullptr ? IMAGE_ZENSHOPBUTTON->mWidth : 120;
+		mStoreButton->Resize(678, 33, aWidth, 40);
 	}
 	else
 	{
@@ -258,6 +265,13 @@ Board::Board(LawnApp* theApp)
 Board::~Board()
 {
 	SexyAppBase::sShowVirtualCursor = true;
+#ifdef LOW_MEMORY
+	if (!mLoadedResourceNames.empty() && mApp && mApp->mResourceManager)
+	{
+		mApp->mResourceManager->ReleaseTrackedResources(mLoadedResourceNames);
+		mLoadedResourceNames.clear();
+	}
+#endif
 }
 
 void BoardInitForPlayer()
@@ -267,10 +281,64 @@ void BoardInitForPlayer()
 
 void Board::DisposeBoard()
 {
+	SpriteStreamer::CancelAll();
+	SpriteCachePool::FreeLevelArena();
+
+	if (mApp->mReanimatorCache)
+		mApp->mReanimatorCache->ClearLevelTransientCaches();
+
 	if (mApp->mGameMode == GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN)
+	{
 		mApp->mZenGarden->LeaveGarden();
-	if (mApp->mGameMode == GameMode::GAMEMODE_TREE_OF_WISDOM)
+#ifdef LOW_MEMORY
+		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_ZENGARDEN_WATERINGCAN]);
+		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_ZENGARDEN_FERTILIZER]);
+		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_ZENGARDEN_BUGSPRAY]);
+		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_ZENGARDEN_PHONOGRAPH]);
+		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_STINKY]);
+		mApp->mResourceManager->ReleaseTrackedResources(mApp->mZenGarden->mLoadedResourceNames);
+		mApp->mZenGarden->mLoadedResourceNames.clear();
+		mApp->mResourceManager->DeleteResources("DelayLoad_GreenHouseGarden");
+		mApp->mResourceManager->DeleteResources("DelayLoad_GreenHouseOverlay");
+		mApp->mResourceManager->DeleteResources("DelayLoad_MushroomGarden");
+		mApp->mResourceManager->DeleteResources("DelayLoad_Zombiquarium");
+#endif
+	}
+	else if (mBackground == BackgroundType::BACKGROUND_TREEOFWISDOM)
+	{
 		mChallenge->TreeOfWisdomLeave();
+#ifdef LOW_MEMORY
+		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_TREEOFWISDOM]);
+		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_TREEOFWISDOM_CLOUDS]);
+		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_TREEOFWISDOM_TREEFOOD]);
+#endif
+	}
+	else if (mBackground == BackgroundType::BACKGROUND_ZOMBIQUARIUM)
+	{
+#ifdef LOW_MEMORY
+		mApp->mResourceManager->DeleteResources("DelayLoad_Zombiquarium");
+#endif
+	}
+#ifdef LOW_MEMORY
+	else if (mBackground == BackgroundType::BACKGROUND_6_BOSS || mHasBossZombie)
+	{
+		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_BOSS]);
+		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_BOSS_DRIVER]);
+		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_BOSS_FIREBALL]);
+		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_BOSS_ICEBALL]);
+		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_ZOMBIE_CHARRED_ZAMBONI]);
+		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_ZOMBIE_CHARRED_CATAPULT]);
+	}
+
+	if (StageHasRoof())
+	{
+		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_ROOF_CLEANER]);
+	}
+
+	mApp->mResourceManager->ReleaseTrackedResources(mLoadedResourceNames);
+	mLoadedResourceNames.clear();
+	mApp->CleanSharedImages();
+#endif
 
 	mApp->mSoundSystem->StopFoley(FoleyType::FOLEY_RAIN);
 	mApp->mZenGarden->mBoard = nullptr;
@@ -351,7 +419,8 @@ void Board::TryToSaveGame()
 		MkDir(GetAppDataPath("userdata"));
 		mApp->mMusic->GameMusicPause(true);
 		LawnSaveGame(this, aFileName);
-		mApp->ClearUpdateBacklog();
+		mApp->mMusic->GameMusicPause(false);
+		mApp->ClearUpdateBacklog(true);
 		SurvivalSaveScore();
 	}
 }
@@ -388,6 +457,42 @@ bool Board::LoadGame(const std::string& theFileName)
 {
 	if (!LawnLoadGame(this, theFileName))
 		return false;
+
+	for (Zombie* aZombie : mZombies)
+	{
+		if (!aZombie->mDead)
+		{
+			Zombie::PreloadZombieResources(aZombie->mZombieType);
+		}
+	}
+
+	for (Plant* aPlant : mPlants)
+	{
+		if (!aPlant->mDead)
+		{
+			Plant::PreloadPlantResources(aPlant->mSeedType);
+			if (aPlant->mImitaterType != SeedType::SEED_NONE)
+			{
+				Plant::PreloadPlantResources(aPlant->mImitaterType);
+			}
+		}
+	}
+
+	if (mSeedBank)
+	{
+		for (int i = 0; i < mSeedBank->mNumPackets; ++i)
+		{
+			SeedPacket* aPacket = &mSeedBank->mSeedPackets[i];
+			if (aPacket->mPacketType != SeedType::SEED_NONE)
+			{
+				Plant::PreloadPlantResources(aPacket->mPacketType);
+				if (aPacket->mImitaterType != SeedType::SEED_NONE)
+				{
+					Plant::PreloadPlantResources(aPacket->mImitaterType);
+				}
+			}
+		}
+	}
 
 	LoadBackgroundImages();
 	mApp->ClearUpdateBacklog();
@@ -846,6 +951,8 @@ void Board::LoadBackgroundImages()
 
 	case BackgroundType::BACKGROUND_TREEOFWISDOM:
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_TREEOFWISDOM, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_TREEOFWISDOM_CLOUDS, true);
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_TREEOFWISDOM_TREEFOOD, true);
 		break;
 
 	case BackgroundType::BACKGROUND_ZOMBIQUARIUM:
@@ -1275,11 +1382,19 @@ void Board::FreezeEffectsForCutscene(bool theFreeze)
 void Board::InitSurvivalStage()
 {
 	RefreshSeedPacketFromCursor();
+	StopAllZombieSounds();
+	if (mApp->mSoundManager)
+		mApp->mSoundManager->StopAllSounds();
 	mApp->mSoundSystem->GamePause(true);
 	FreezeEffectsForCutscene(true);
+	mPaused = false;
 	mLevelComplete = false;
+	if (mApp->mReanimatorCache)
+		mApp->mReanimatorCache->ClearLevelTransientCaches();
+	SpriteCachePool::ClearZombieSlots();
 	InitZombieWaves();
 	mApp->mGameScene = GameScenes::SCENE_LEVEL_INTRO;
+	mSeedBank->Move(SEED_BANK_OFFSET_X, 0);
 	mApp->ShowSeedChooserScreen();
 	mCutScene->StartLevelIntro();
 	mSeedBank->UpdateWidth();
@@ -1346,10 +1461,23 @@ void Board::GetZenButtonRect(GameObjectType theObjectType, Rect& theRect)
 	//return theRect;
 }
 
+void Board::InitForNewLevel()
+{
+	mActiveCharredCount = 0;
+}
+
 void Board::InitLevel()
 {
+	if (!mApp->IsSurvivalMode() || mChallenge->mSurvivalStage == 0)
+	{
+		SpriteStreamer::CancelAll();
+		SpriteCachePool::InitLevelArena();
+	}
+
 	mMainCounter = 0;
 	mBoardUpdateCounter = 0;
+	mActiveVanguardCount = 0;
+	mActiveCharredCount = 0;
 	mEnableGraveStones = false;
 	mSodPosition = 0;
 	mPrevBoardResult = mApp->mBoardResult;
@@ -1660,6 +1788,7 @@ bool Board::ChooseSeedsOnCurrentLevel()
 
 void Board::StartLevel()
 {
+	PreloadSpriteCache();
 	mCoinBankFadeCount = 0;
 	mApp->mLastLevelStats->Reset();
 	mChallenge->StartLevel();
@@ -1687,6 +1816,30 @@ void Board::StartLevel()
 		return;
 
 	mApp->mMusic->StartGameMusic();
+}
+
+void Board::PreloadSpriteCache()
+{
+	mApp->PreloadCommonSounds();
+	if (mSeedBank)
+	{
+		for (int i = 0; i < mSeedBank->mNumPackets; i++)
+		{
+			SeedType st = mSeedBank->mSeedPackets[i].mPacketType;
+			if (st >= 0 && st < SeedType::NUM_SEED_TYPES)
+			{
+				SpriteStreamer::RequestPlant(st);
+			}
+		}
+	}
+
+	for (int z = 0; z < ZombieType::NUM_ZOMBIE_TYPES; z++)
+	{
+		if (mZombieAllowed[z])
+		{
+			SpriteStreamer::RequestZombie((ZombieType)z);
+		}
+	}
 }
 
 LawnMower* Board::GetBottomLawnMower()
@@ -2447,6 +2600,10 @@ Plant* Board::NewPlant(int theGridX, int theGridY, SeedType theSeedType, SeedTyp
 	Plant* aPlant = mPlants.DataArrayAlloc();
 	aPlant->mIsOnBoard = true;
 	aPlant->PlantInitialize(theGridX, theGridY, theSeedType, theImitaterType);
+	if (mStaticBackdropValid)
+	{
+		BakePlantShadow(aPlant);
+	}
 	return aPlant;
 }
 
@@ -2584,7 +2741,10 @@ void Board::GetPlantsOnLawn(int theGridX, int theGridY, PlantsOnLawn* thePlantOn
 	if (mApp->IsWallnutBowlingLevel() && !mCutScene->IsInShovelTutorial())
 		return;
 
-	for (Plant* aPlant : mPlants)
+	if ((mRowHasPlantsMask & (1U << theGridY)) == 0)
+		return;
+
+	for (Plant* aPlant : mRowPlants[theGridY])
 	{
 		if (aPlant->mDead)
 			continue;
@@ -5410,6 +5570,7 @@ void Board::UpdateRowZombieMask()
 		}
 	}
 
+	mActiveVanguardCount = 0;
 	bool hordeMode = (mZombies.mSize > 25);
 	for (int r = 0; r < MAX_GRID_SIZE_Y; ++r)
 	{
@@ -5419,6 +5580,7 @@ void Board::UpdateRowZombieMask()
 			for (Zombie* aZombie : mRowZombies[r])
 			{
 				aZombie->mIsHordeVanguard = true;
+				mActiveVanguardCount++;
 			}
 		}
 		else
@@ -5438,15 +5600,20 @@ void Board::UpdateRowZombieMask()
 				}
 			}
 
+			const int MAX_EATING_VANGUARDS_PER_ROW = 2;
+			int eatingVanguardCount = 0;
 			for (Zombie* aZombie : mRowZombies[r])
 			{
-				if (aZombie == first || aZombie == second || aZombie->mJustGotShotCounter > 0 || aZombie->mIsEating)
+				bool isVanguard = (aZombie == first || aZombie == second);
+				if (!isVanguard && aZombie->mIsEating && eatingVanguardCount < MAX_EATING_VANGUARDS_PER_ROW)
 				{
-					aZombie->mIsHordeVanguard = true;
+					isVanguard = true;
+					eatingVanguardCount++;
 				}
-				else
+				aZombie->mIsHordeVanguard = isVanguard;
+				if (isVanguard)
 				{
-					aZombie->mIsHordeVanguard = false;
+					mActiveVanguardCount++;
 				}
 			}
 		}
@@ -5459,7 +5626,6 @@ void Board::UpdateRowPlantMask()
 	mRowHasPlantsMask = 0;
 	mFlowerPotCount = 0;
 	mPumpkinCount = 0;
-	mStaticBackdropValid = false;
 	memset(mPumpkinGrid, 0, sizeof(mPumpkinGrid));
 	memset(mFlowerPotGrid, 0, sizeof(mFlowerPotGrid));
 	memset(mTorchwoodGrid, 0, sizeof(mTorchwoodGrid));
@@ -6258,6 +6424,8 @@ void Board::Update()
 {
 	PvzpHesitationBracket aHesitation("Board::Update");
 
+	SpriteStreamer::Update();
+
 	Widget::Update();
 	MarkDirty();
 
@@ -6552,7 +6720,7 @@ void Board::ClearPlantShadow(Plant* thePlant)
 
 void Board::UpdateStaticBackdrop()
 {
-	Image* aBgImage = GetBackgroundImage();
+	MemoryImage* aBgImage = dynamic_cast<MemoryImage*>(GetBackgroundImage());
 	if (!aBgImage)
 		return;
 
@@ -6571,6 +6739,12 @@ void Board::UpdateStaticBackdrop()
 		if (aPlant->mDead)
 			continue;
 		BakePlantShadow(aPlant);
+	}
+
+	if (aBgImage != nullptr)
+	{
+		aBgImage->PurgeBits();
+		PvzpLogLn("[MemoryOptimization] Purged bits of source background image. Reclaimed 1.92 MB.");
 	}
 }
 
@@ -6623,7 +6797,7 @@ void Board::DrawBackdrop(Graphics* g)
 		}
 		else
 		{
-			if (mStaticBackdrop && mStaticBackdropValid && mX == 0)
+			if (mStaticBackdrop && mStaticBackdropValid && (mApp->mGameScene == GameScenes::SCENE_PLAYING || mX == 0))
 			{
 				g->DrawImage(mStaticBackdrop.get(), 0, 0);
 			}
@@ -6670,7 +6844,7 @@ void Board::AddBossRenderItem(RenderItem* theRenderList, int& theCurRenderItem, 
 	else if (theBossZombie->mZombiePhase == ZombiePhase::PHASE_BOSS_STOMPING)
 	{
 		Reanimation* aBossReanim = mApp->ReanimationTryToGet(theBossZombie->mBodyReanimID);
-		if (aBossReanim->mAnimTime > 0.25f && aBossReanim->mAnimTime < 0.75f)
+		if (aBossReanim && aBossReanim->mAnimTime > 0.25f && aBossReanim->mAnimTime < 0.75f)
 		{
 			if (theBossZombie->mTargetRow == 1)
 			{
@@ -7750,6 +7924,7 @@ void Board::DrawDebugText(Graphics* g)
 	}
 
 	case DebugTextMode::DEBUG_TEXT_MEMORY:
+	{
 		aText += std::format("MEMORY DEBUG\n");
 		aText += std::format("attachments {}\n", mApp->mEffectSystem->mAttachmentHolder->mAttachments.mSize);
 		aText += std::format("emitters {}\n", mApp->mEffectSystem->mParticleHolder->mEmitters.mSize);
@@ -7763,7 +7938,35 @@ void Board::DrawDebugText(Graphics* g)
 		aText += std::format("coins {}\n", mCoins.mSize);
 		aText += std::format("lawn mowers {}\n", mLawnMowers.mSize);
 		aText += std::format("grid items {}\n", mGridItems.mSize);
+
+		size_t aAllocBytes = SpriteCachePool::GetTotalAllocatedBytes();
+		double aAllocMB = static_cast<double>(aAllocBytes) / (1024.0 * 1024.0);
+		double aTotalMB = static_cast<double>(SpriteCachePool::POOL_MAX_BUDGET) / (1024.0 * 1024.0);
+		double aAllocPercent = aTotalMB > 0.0 ? (aAllocMB / aTotalMB) * 100.0 : 0.0;
+
+		int aActivePlants = 0;
+		int aActiveZombies = 0;
+		SpriteCachePool::GetActiveSlotCounts(aActivePlants, aActiveZombies);
+
+		uint32_t aHits = SpriteCachePool::GetCacheHitCount();
+		uint32_t aFallbacks = SpriteCachePool::GetReanimFallbackCount();
+		uint32_t aTotalDraws = aHits + aFallbacks;
+		double aHitRate = aTotalDraws > 0 ? (static_cast<double>(aHits) / aTotalDraws) * 100.0 : 0.0;
+		double aFallbackRate = aTotalDraws > 0 ? (static_cast<double>(aFallbacks) / aTotalDraws) * 100.0 : 0.0;
+
+		aText += std::format("SpriteCache: {:.1f} / {:.1f} MB ({:.1f}%) | Plants: {}/{}, Zombies: {}/{}\n",
+			aAllocMB, aTotalMB, aAllocPercent, aActivePlants, SPC_MAX_PLANT_SLOTS, aActiveZombies, 8);
+		aText += std::format("Cache Hits: {:.1f}% | Reanim Fallbacks: {:.1f}%\n",
+			aHitRate, aFallbackRate);
+		aText += std::format("Vanguards: {}/{}\n", mActiveVanguardCount, mZombies.mSize);
+
+		const auto& aTelem = SpriteCachePool::GetTelemetry();
+		uint32_t aHitsTotal = aTelem.mHitsNormal + aTelem.mHitsChilled;
+		uint32_t aMissesTotal = aTelem.mMissesDamaged + aTelem.mMissesAccessories + aTelem.mMissesEating;
+		aText += std::format("SpriteCache Hits: {} (Chilled: {}) | Misses: {} (Damaged: {}, Eating: {})\n",
+			aHitsTotal, aTelem.mHitsChilled, aMissesTotal, aTelem.mMissesDamaged, aTelem.mMissesEating);
 		break;
+	}
 
 	case DebugTextMode::DEBUG_TEXT_COLLISION:
 		aText += std::format("COLLISION DEBUG\n");
@@ -8409,8 +8612,7 @@ void Board::KeyDown(KeyCode theKey)
 	DoTypingCheck(theKey);
 
 	if (mApp->mGameScene == GameScenes::SCENE_LEVEL_INTRO &&
-		mApp->mGameMode != GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN &&
-		mApp->mGameMode != GameMode::GAMEMODE_TREE_OF_WISDOM)
+		mApp->mGameMode != GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN)
 	{
 		mCutScene->KeyDown(theKey);
 	}

@@ -1826,6 +1826,9 @@ GridItem* ZenGarden::GetStinky()
 
 void ZenGarden::GotoNextGarden()
 {
+	if (mBoard == nullptr)
+		return;
+
 	LeaveGarden();
 	mBoard->ClearAdvice(AdviceType::ADVICE_NONE);
 	mApp->CrazyDaveDie();
@@ -1884,6 +1887,23 @@ void ZenGarden::GotoNextGarden()
 	{
 		mApp->mResourceManager->ReleaseTrackedResources(mLoadedResourceNames);
 		mLoadedResourceNames.clear();
+		if (mBoard)
+		{
+			mApp->mResourceManager->ReleaseTrackedResources(mBoard->mLoadedResourceNames);
+			mBoard->mLoadedResourceNames.clear();
+		}
+		mApp->mResourceManager->DeleteResources("DelayLoad_GreenHouseGarden");
+		mApp->mResourceManager->DeleteResources("DelayLoad_GreenHouseOverlay");
+		mApp->mResourceManager->DeleteResources("DelayLoad_MushroomGarden");
+		mApp->mResourceManager->DeleteResources("DelayLoad_Zombiquarium");
+#ifdef LOW_MEMORY
+		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_ZENGARDEN_WATERINGCAN]);
+		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_ZENGARDEN_FERTILIZER]);
+		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_ZENGARDEN_BUGSPRAY]);
+		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_ZENGARDEN_PHONOGRAPH]);
+		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_STINKY]);
+#endif
+		mApp->CleanSharedImages();
 		mApp->mGameMode = GameMode::GAMEMODE_TREE_OF_WISDOM;
 		mApp->mDeferredNewGame = true;
 		return;
@@ -1891,6 +1911,16 @@ void ZenGarden::GotoNextGarden()
 
 	mApp->mResourceManager->ReleaseTrackedResources(mLoadedResourceNames);
 	mLoadedResourceNames.clear();
+	if (mBoard)
+	{
+		mApp->mResourceManager->ReleaseTrackedResources(mBoard->mLoadedResourceNames);
+		mBoard->mLoadedResourceNames.clear();
+	}
+	mApp->mResourceManager->DeleteResources("DelayLoad_GreenHouseGarden");
+	mApp->mResourceManager->DeleteResources("DelayLoad_GreenHouseOverlay");
+	mApp->mResourceManager->DeleteResources("DelayLoad_MushroomGarden");
+	mApp->mResourceManager->DeleteResources("DelayLoad_Zombiquarium");
+	mApp->CleanSharedImages();
 
 	if (mBoard->mBackground == BackgroundType::BACKGROUND_MUSHROOM_GARDEN)
 	{
@@ -2430,6 +2460,9 @@ SeedType ZenGarden::PickRandomSeedType()
 
 void ZenGarden::LeaveGarden()
 {
+	if (mBoard == nullptr)
+		return;
+
 	{
 		for (GridItem* aGridItem : mBoard->mGridItems)
 		{

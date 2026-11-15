@@ -109,13 +109,15 @@ StoreScreen::StoreScreen(LawnApp* theApp) : Dialog(nullptr, nullptr, DIALOG_STOR
 	mBackButton->mDoFinger = true;
 	mBackButton->SetLabel("[STORE_MAIN_MENU_BUTTON]");
 	Image* aMenuImage = Sexy::IMAGE_STORE_MAINMENUBUTTON;
+	int aMenuW = aMenuImage ? aMenuImage->mWidth : 160;
+	int aMenuH = aMenuImage ? aMenuImage->mHeight : 30;
 	mBackButton->mButtonImage = aMenuImage;
 	mBackButton->mOverImage = Sexy::IMAGE_STORE_MAINMENUBUTTONHIGHLIGHT;
 	mBackButton->mDownImage = Sexy::IMAGE_STORE_MAINMENUBUTTONDOWN;
 	mBackButton->SetFont(Sexy::FONT_HOUSEOFTERROR20);
 	mBackButton->SetLabelColor(Color(98, 153, 235));
 	mBackButton->SetLabelHiliteColor(Color(167, 192, 235));
-	mBackButton->Resize(366, 512, aMenuImage->mWidth, aMenuImage->mHeight);
+	mBackButton->Resize(366, 512, aMenuW, aMenuH);
 	mBackButton->mTextOffsetX = -7;
 	mBackButton->mTextOffsetY = 1;
 	mBackButton->mTextDownOffsetX = 2;
@@ -125,23 +127,27 @@ StoreScreen::StoreScreen(LawnApp* theApp) : Dialog(nullptr, nullptr, DIALOG_STOR
 	mPrevButton->mDoFinger = true;
 	mPrevButton->SetLabel("");
 	Image* aPrevImage = Sexy::IMAGE_STORE_PREVBUTTON;
+	int aPrevW = aPrevImage ? aPrevImage->mWidth : 40;
+	int aPrevH = aPrevImage ? aPrevImage->mHeight : 40;
 	mPrevButton->mButtonImage = aPrevImage;
 	mPrevButton->mOverImage = Sexy::IMAGE_STORE_PREVBUTTONHIGHLIGHT;
 	mPrevButton->mDownImage = Sexy::IMAGE_STORE_PREVBUTTONHIGHLIGHT;
 	mPrevButton->SetLabelColor(Color(255, 240, 0));
 	mPrevButton->SetLabelHiliteColor(Color(200, 200, 255));
-	mPrevButton->Resize(252, 402, aPrevImage->mWidth, aPrevImage->mHeight);
+	mPrevButton->Resize(252, 402, aPrevW, aPrevH);
 
 	mNextButton = std::make_unique<NewLawnButton>(nullptr, StoreScreen::StoreScreen_Next, this);
 	mNextButton->mDoFinger = true;
 	mNextButton->SetLabel("");
 	Image* aNextImage = Sexy::IMAGE_STORE_NEXTBUTTON;
+	int aNextW = aNextImage ? aNextImage->mWidth : 40;
+	int aNextH = aNextImage ? aNextImage->mHeight : 40;
 	mNextButton->mButtonImage = aNextImage;
 	mNextButton->mOverImage = Sexy::IMAGE_STORE_NEXTBUTTONHIGHLIGHT;
 	mNextButton->mDownImage = Sexy::IMAGE_STORE_NEXTBUTTONHIGHLIGHT;
 	mNextButton->SetLabelColor(Color(255, 240, 0));
 	mNextButton->SetLabelHiliteColor(Color(200, 200, 255));
-	mNextButton->Resize(596, 402, aNextImage->mWidth, aNextImage->mHeight);
+	mNextButton->Resize(596, 402, aNextW, aNextH);
 
 	mOverlayWidget = std::make_unique<StoreScreenOverlay>(this);
 	mOverlayWidget->Resize(0, 0, BOARD_WIDTH, BOARD_HEIGHT);
@@ -158,9 +164,24 @@ StoreScreen::StoreScreen(LawnApp* theApp) : Dialog(nullptr, nullptr, DIALOG_STOR
 	mGoToTreeNow = false;
 	mPurchasedFullVersion = false;
 	mTrialLockedWhenStoreOpened = mApp->IsTrialStageLocked();
+	StorePreload();
 }
 
-StoreScreen::~StoreScreen() = default;
+StoreScreen::~StoreScreen()
+{
+	if (mApp && mApp->mResourceManager)
+	{
+		mApp->mResourceManager->DeleteResources("DelayLoad_Store");
+	}
+	if (mApp && mApp->mCrazyDaveReanimID == ReanimationID::REANIMATIONID_NULL)
+	{
+		ReanimationFreeDefinition(&gReanimatorDefArray[static_cast<int>(ReanimationType::REANIM_CRAZY_DAVE)]);
+	}
+	if (mApp)
+	{
+		mApp->CleanSharedImages();
+	}
+}
 
 StoreItem StoreScreen::GetStoreItemType(int theSpotIndex)
 {
@@ -460,32 +481,40 @@ void StoreScreen::Draw(Graphics* g)
 	int aStoreSignPosY = PvzpAnimateCurve(50, 110, mStoreTime, -150, 0, CURVE_EASE_IN_OUT);
 	if (mApp->IsNight())
 	{
-		g->DrawImage(Sexy::IMAGE_STORE_BACKGROUNDNIGHT, 0, 0);
+		if (Sexy::IMAGE_STORE_BACKGROUNDNIGHT)
+			g->DrawImage(Sexy::IMAGE_STORE_BACKGROUNDNIGHT, 0, 0);
 	}
 	else
 	{
-		g->DrawImage(Sexy::IMAGE_STORE_BACKGROUND, 0, 0);
+		if (Sexy::IMAGE_STORE_BACKGROUND)
+			g->DrawImage(Sexy::IMAGE_STORE_BACKGROUND, 0, 0);
 	}
 
 	if (!mHatchTimer && mHatchOpen)
 	{
-		g->DrawImage(Sexy::IMAGE_STORE_CAR, mShakeX + 196, mShakeY + 138);
-		g->DrawImage(Sexy::IMAGE_STORE_HATCHBACKOPEN, mShakeX + 299, mShakeY);
-		if (mApp->IsNight())
+		if (Sexy::IMAGE_STORE_CAR)
+			g->DrawImage(Sexy::IMAGE_STORE_CAR, mShakeX + 196, mShakeY + 138);
+		if (Sexy::IMAGE_STORE_HATCHBACKOPEN)
+			g->DrawImage(Sexy::IMAGE_STORE_HATCHBACKOPEN, mShakeX + 299, mShakeY);
+		if (mApp->IsNight() && Sexy::IMAGE_STORE_CAR_NIGHT)
 		{
 			g->DrawImage(Sexy::IMAGE_STORE_CAR_NIGHT, mShakeX + 688, mShakeY + 193);
 		}
 	}
 	else
 	{
-		g->DrawImage(Sexy::IMAGE_STORE_CARCLOSED, mShakeX + 196, mShakeY + 138);
+		if (Sexy::IMAGE_STORE_CARCLOSED)
+			g->DrawImage(Sexy::IMAGE_STORE_CARCLOSED, mShakeX + 196, mShakeY + 138);
 		if (mApp->IsNight())
 		{
-			g->DrawImage(Sexy::IMAGE_STORE_CAR_NIGHT, mShakeX + 688, mShakeY + 193);
-			g->DrawImage(Sexy::IMAGE_STORE_CARCLOSED_NIGHT, mShakeX + 337, mShakeY + 187);
+			if (Sexy::IMAGE_STORE_CAR_NIGHT)
+				g->DrawImage(Sexy::IMAGE_STORE_CAR_NIGHT, mShakeX + 688, mShakeY + 193);
+			if (Sexy::IMAGE_STORE_CARCLOSED_NIGHT)
+				g->DrawImage(Sexy::IMAGE_STORE_CARCLOSED_NIGHT, mShakeX + 337, mShakeY + 187);
 		}
 	}
-	g->DrawImage(Sexy::IMAGE_STORE_SIGN, 285, aStoreSignPosY);
+	if (Sexy::IMAGE_STORE_SIGN)
+		g->DrawImage(Sexy::IMAGE_STORE_SIGN, 285, aStoreSignPosY);
 
 	Graphics gCrazyDave = Graphics(*g);
 	gCrazyDave.mTransX -= 42.0f;

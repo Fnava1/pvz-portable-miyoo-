@@ -380,17 +380,31 @@ inline bool DefReadFromCacheArray(void*& theReadPtr, DefinitionArrayDef* theArra
 {
 	int aDefSize;
 	SMemR(theReadPtr, &aDefSize, sizeof(int));  // read the cached definition struct size
-	if (aDefSize != theDefMap->mDefSize)
+	bool aTrack12Compat = (theDefMap == &gReanimatorTrackDefMap && aDefSize == 12);
+	if (aDefSize != theDefMap->mDefSize && !aTrack12Compat)
 	{
-		PvzpLogLn("cache has old def: array size");
+		PvzpLogLn("cache has old def: array size (got {}, expected {})", aDefSize, theDefMap->mDefSize);
 		return false;
 	}
 	if (theArray->mArrayCount == 0)
 		return true;
 
-	int aArraySize = aDefSize * theArray->mArrayCount;
-	theArray->mArrayData = DefinitionAlloc(aArraySize);
-	SMemR(theReadPtr, theArray->mArrayData, aArraySize);  // bulk-read the raw data; pointers are fixed below via theDefMap
+	theArray->mArrayData = DefinitionAlloc(theDefMap->mDefSize * theArray->mArrayCount);
+	if (aTrack12Compat)
+	{
+		for (int i = 0; i < theArray->mArrayCount; i++)
+		{
+			ReanimatorTrack* aTrack = (ReanimatorTrack*)((intptr_t)theArray->mArrayData + theDefMap->mDefSize * i);
+			new (aTrack) ReanimatorTrack();
+			SMemR(theReadPtr, aTrack, 12);
+		}
+	}
+	else
+	{
+		int aArraySize = aDefSize * theArray->mArrayCount;
+		SMemR(theReadPtr, theArray->mArrayData, aArraySize);  // bulk-read the raw data; pointers are fixed below via theDefMap
+	}
+
 	for (int i = 0; i < theArray->mArrayCount; i++)
 		if (!DefMapReadFromCache(theReadPtr, theDefMap, (void*)((intptr_t)theArray->mArrayData + theDefMap->mDefSize * i)))  // the last argument is pData[i]
 			return false;
@@ -435,7 +449,13 @@ inline bool DefReadFromCacheImage(void*& theReadPtr, Image** theImage)
 	SMemR(theReadPtr, aImageName.data(), aLen);
 
 	*theImage = nullptr;
-	return aImageName[0] == '\0' || DefinitionLoadImage(theImage, aImageName);
+	if (aImageName.empty())
+		return true;
+	if (DefinitionLoadImage(theImage, aImageName))
+		return true;
+	PvzpLogLn("Warning: Missing image '{}' in cache", aImageName);
+	*theImage = nullptr;
+	return true;
 }
 
 inline bool DefReadFromCacheFont(void*& theReadPtr, _Font** theFont)
@@ -446,7 +466,13 @@ inline bool DefReadFromCacheFont(void*& theReadPtr, _Font** theFont)
 	SMemR(theReadPtr, aFontName.data(), aLen);
 
 	*theFont = nullptr;
-	return aFontName[0] == '\0' || DefinitionLoadFont(theFont, aFontName);
+	if (aFontName.empty())
+		return true;
+	if (DefinitionLoadFont(theFont, aFontName))
+		return true;
+	PvzpLogLn("Warning: Missing font '{}' in cache", aFontName);
+	*theFont = nullptr;
+	return true;
 }
 
 bool DefMapReadFromCache(void*& theReadPtr, const DefMap* theDefMap, void* theDefinition)
@@ -551,9 +577,13 @@ void* DefinitionUncompressCompiledBuffer(void* theCompressedBuffer, size_t theCo
 	Bytef* aSrc = (Bytef*)((intptr_t)theCompressedBuffer + sizeof(CompressedDefinitionHeader));  // the compressed data starts right after the header
 	// BuGFIXX!!
 	ulong aUncompressedSizeResult = aHeader->mUncompressedSize;  // out-param receiving the actual uncompressed size
-	[[maybe_unused]] int aResult = uncompress(aUncompressedBuffer, &aUncompressedSizeResult, aSrc, theCompressedBufferSize - sizeof(CompressedDefinitionHeader));  // Compiler can't work out that this is used in the Debug build
-	PVZP_ASSERT(aResult == Z_OK);
-	PVZP_ASSERT(aUncompressedSizeResult == aHeader->mUncompressedSize);
+	int aResult = uncompress(aUncompressedBuffer, &aUncompressedSizeResult, aSrc, theCompressedBufferSize - sizeof(CompressedDefinitionHeader));
+	if (aResult != Z_OK || aUncompressedSizeResult != aHeader->mUncompressedSize)
+	{
+		PvzpLogLn("Failed to decompress compiled file: {}", theCompiledFilePath);
+		delete[] aUncompressedBuffer;
+		return nullptr;
+	}
 	theUncompressedSize = aHeader->mUncompressedSize;
 	return aUncompressedBuffer;
 }
@@ -581,6 +611,7 @@ bool DefinitionReadCompiledFile(const std::string& theCompiledFilePath, const De
 	PerfTimer aTimer;
 	aTimer.Start();
 
+	std::vector<char> aCompressedBuffer;
 	std::string aFullCompiledPath = DefinitionGetCompiledCacheFullPath(theCompiledFilePath);
 	std::ifstream aFileStream(Sexy::PathFromU8(aFullCompiledPath), std::ios::binary);
 	if (!aFileStream)
@@ -588,19 +619,41 @@ bool DefinitionReadCompiledFile(const std::string& theCompiledFilePath, const De
 		aFileStream.open(Sexy::PathFromU8(theCompiledFilePath), std::ios::binary);
 	}
 
-	if (!aFileStream) return false;
-
-	aFileStream.seekg(0, std::ios::end);
-	size_t aCompressedSize = (size_t)aFileStream.tellg();
-	aFileStream.seekg(0, std::ios::beg);
-	std::vector<char> aCompressedBuffer(aCompressedSize);
-	aFileStream.read(aCompressedBuffer.data(), (std::streamsize)aCompressedSize);
-	bool aReadCompressedFailed = !aFileStream || (size_t)aFileStream.gcount() != aCompressedSize;
-	if (aReadCompressedFailed) {
-		PvzpLogLn("Failed to read compiled file: {}", theCompiledFilePath);
-		return false;
+	if (aFileStream)
+	{
+		aFileStream.seekg(0, std::ios::end);
+		size_t aCompressedSize = (size_t)aFileStream.tellg();
+		aFileStream.seekg(0, std::ios::beg);
+		aCompressedBuffer.resize(aCompressedSize);
+		aFileStream.read(aCompressedBuffer.data(), (std::streamsize)aCompressedSize);
+		bool aReadCompressedFailed = !aFileStream || (size_t)aFileStream.gcount() != aCompressedSize;
+		if (aReadCompressedFailed) {
+			PvzpLogLn("Failed to read compiled file: {}", theCompiledFilePath);
+			return false;
+		}
+	}
+	else
+	{
+		// Fallback: load compiled definition directly from PAK archive
+		PFILE* aPakFile = p_fopen(theCompiledFilePath.c_str(), "rb");
+		if (!aPakFile)
+		{
+			return false;
+		}
+		p_fseek(aPakFile, 0, SEEK_END);
+		size_t aCompressedSize = (size_t)p_ftell(aPakFile);
+		p_fseek(aPakFile, 0, SEEK_SET);
+		aCompressedBuffer.resize(aCompressedSize);
+		size_t aReadBytes = p_fread(aCompressedBuffer.data(), 1, aCompressedSize, aPakFile);
+		p_fclose(aPakFile);
+		if (aReadBytes != aCompressedSize)
+		{
+			PvzpLogLn("Failed to read compiled file from PAK: {}", theCompiledFilePath);
+			return false;
+		}
 	}
 
+	size_t aCompressedSize = aCompressedBuffer.size();
 	size_t aUncompressedSize;
 	std::unique_ptr<char[]> aUncompressedBuffer(
 		static_cast<char*>(DefinitionUncompressCompiledBuffer(aCompressedBuffer.data(), aCompressedSize, aUncompressedSize, theCompiledFilePath)));
@@ -617,8 +670,15 @@ bool DefinitionReadCompiledFile(const std::string& theCompiledFilePath, const De
 	void* aBufferPtr = aUncompressedBuffer.get();
 	uint aCashHash;
 	SMemR(aBufferPtr, &aCashHash, sizeof(uint));  // read the stored CRC hash
-	if (aCashHash != aDefHash) {
-		PvzpLogLn("Compiled file schema wrong: {}", theCompiledFilePath);
+	bool aHashMatch = (aCashHash == aDefHash);
+	if (!aHashMatch)
+	{
+		if (theDefMap == &gReanimatorDefMap && aCashHash == 0xb393b4c0) aHashMatch = true;
+		else if (theDefMap == &gParticleDefMap && aCashHash == 0x411f994d) aHashMatch = true;
+		else if (theDefMap == &gTrailDefMap && aCashHash == 0xab8b62b3) aHashMatch = true;
+	}
+	if (!aHashMatch) {
+		PvzpLogLn("Compiled file schema wrong: 0x{:x} != 0x{:x} for {}", aCashHash, aDefHash, theCompiledFilePath);
 		return false;
 	} // a hash mismatch means the cached data is stale
 
@@ -1063,10 +1123,9 @@ bool DefinitionReadImageField(XMLParser* theXmlParser, Image** theImage)
 	if (DefinitionLoadImage(theImage, aStringValue))
 		return true;
 
-	std::string aMessage = std::format("Failed to find image '{}' in {}", aStringValue, theXmlParser->GetFileName());
-	PvzpErrorMessageBox(aMessage, "Missing image");
-
-	return false;
+	PvzpLogLn("Warning: Missing image '{}' in {}", aStringValue, theXmlParser->GetFileName());
+	*theImage = nullptr;
+	return true;
 }
 
 bool DefinitionReadFontField(XMLParser* theXmlParser, _Font** theFont)
@@ -1078,10 +1137,9 @@ bool DefinitionReadFontField(XMLParser* theXmlParser, _Font** theFont)
 	if (DefinitionLoadFont(theFont, aStringValue))
 		return true;
 
-	std::string aMessage = std::format("Failed to find font '{}' in {}", aStringValue, theXmlParser->GetFileName());
-	PvzpErrorMessageBox(aMessage, "Missing font");
-
-	return false;
+	PvzpLogLn("Warning: Missing font '{}' in {}", aStringValue, theXmlParser->GetFileName());
+	*theFont = nullptr;
+	return true;
 }
 
 bool DefinitionReadField(XMLParser* theXmlParser, const DefMap* theDefMap, void* theDefinition, bool* theDone)
@@ -1311,10 +1369,7 @@ bool DefinitionCompileAndLoad(const std::string& theXMLFilePath, const DefMap* t
 	if (aResult)
 		return true;
 
-#ifndef PVZ_DEBUG
-	PvzpErrorMessageBox(std::format("missing resource {}", aCompiledFilePath), "Error");
-	exit(0);
-#endif
+	PvzpLogLn("Warning: missing or unparseable definition resource '{}'", aCompiledFilePath);
 	return false;
 }
 
@@ -1346,6 +1401,7 @@ void DefinitionFreeArrayField(DefinitionArrayDef* theArray, const DefMap* theDef
 		DefinitionFreeMap(theDefMap, (void*)((intptr_t)theArray->mArrayData + theDefMap->mDefSize * i));  // the last argument is pData[i]
 	delete[] (char *)theArray->mArrayData;
 	theArray->mArrayData = nullptr;
+	theArray->mArrayCount = 0;
 }
 
 void DefinitionFreeMap(const DefMap* theDefMap, void* theDefinition)

@@ -661,6 +661,9 @@ void PvzpMarkImageForSanding(Image* theImage)
 
 void PvzpSandImageIfNeeded(Image* theImage)
 {
+	if (!gSexyAppBase || !gSexyAppBase->Is3DAccelerated())
+		return;
+
 	MemoryImage* aImage = (MemoryImage*)theImage;
 	/*if (TestBit(aImage->mRenderFlags, RENDERIMAGEFLAG_SANDING))*/ // UB shift by a billion
 	if (aImage->mRenderFlags & RENDERIMAGEFLAG_SANDING)
@@ -734,6 +737,181 @@ void PvzpBltMatrix(Graphics* g, Image* theImage, const SexyMatrix3& theTransform
 		g->mClipRect = aOldClipRect;
 		gPvzpTriangleDrawAdditive = false;
 		return;
+	}
+
+	if (!gSexyAppBase->Is3DAccelerated() &&
+		FloatApproxEqual(theTransform.m00, 0.0f) && FloatApproxEqual(theTransform.m11, 0.0f) &&
+		FloatApproxEqual(std::abs(theTransform.m01), 1.0f) && FloatApproxEqual(std::abs(theTransform.m10), 1.0f))
+	{
+		MemoryImage* aDstImage = dynamic_cast<MemoryImage*>(g->mDestImage);
+		MemoryImage* aSrcImage = dynamic_cast<MemoryImage*>(theImage);
+		if (aDstImage && aSrcImage && aSrcImage->mColorTable == nullptr)
+		{
+			uint32_t* pDstBits = aDstImage->GetBits();
+			uint32_t* pSrcBits = aSrcImage->GetBits();
+			if (pDstBits && pSrcBits)
+			{
+				int aSrcW = theSrcRect.mWidth;
+				int aSrcH = theSrcRect.mHeight;
+				int aDestW = aSrcH;
+				int aDestH = aSrcW;
+				int aDestX = FloatRoundToInt(theTransform.m02 - aDestW * 0.5f);
+				int aDestY = FloatRoundToInt(theTransform.m12 - aDestH * 0.5f);
+
+				Rect aDestRect(aDestX, aDestY, aDestW, aDestH);
+				Rect aClip = aDestRect.Intersection(theClipRect);
+				aClip = aClip.Intersection(Rect(0, 0, g->mDestImage->mWidth, g->mDestImage->mHeight));
+				if (aClip.mWidth <= 0 || aClip.mHeight <= 0)
+				{
+					gPvzpTriangleDrawAdditive = false;
+					return;
+				}
+
+				int dstPitch = aDstImage->mWidth;
+				int srcPitch = aSrcImage->mWidth;
+				bool hasColor = (theColor != Color::White);
+				uint32_t ca = theColor.mAlpha;
+				uint32_t cr = theColor.mRed;
+				uint32_t cg = theColor.mGreen;
+				uint32_t cb = theColor.mBlue;
+
+				if (theDrawMode == Graphics::DRAWMODE_NORMAL)
+				{
+					if (!hasColor)
+					{
+						for (int y = aClip.mY; y < aClip.mY + aClip.mHeight; ++y)
+						{
+							int dest_rel_y = y - aDestY;
+							int sx = (theTransform.m10 < 0.0f) ? (aSrcW - 1 - dest_rel_y) : dest_rel_y;
+							int srcPixelX = theSrcRect.mX + sx;
+							uint32_t* pDst = pDstBits + y * dstPitch + aClip.mX;
+
+							for (int x = aClip.mX; x < aClip.mX + aClip.mWidth; ++x, ++pDst)
+							{
+								int dest_rel_x = x - aDestX;
+								int sy = (theTransform.m01 > 0.0f) ? dest_rel_x : (aSrcH - 1 - dest_rel_x);
+								int srcPixelY = theSrcRect.mY + sy;
+								uint32_t src = pSrcBits[srcPixelY * srcPitch + srcPixelX];
+								uint32_t a = src >> 24;
+								if (a == 0)
+									continue;
+								if (a == 255)
+								{
+									*pDst = src;
+								}
+								else
+								{
+									uint32_t dest = *pDst;
+									uint32_t aDestAlpha = dest >> 24;
+									uint32_t aNewDestAlpha = aDestAlpha + ((255 - aDestAlpha) * a) / 255;
+									if (aNewDestAlpha > 0)
+									{
+										uint32_t blend_a = 255 * a / aNewDestAlpha;
+										int oma = 256 - blend_a;
+										*pDst = (aNewDestAlpha << 24) |
+											((((dest & 0xFF00FF) * oma >> 8) + ((src & 0xFF00FF) * blend_a >> 8)) & 0xFF00FF) |
+											((((dest & 0x00FF00) * oma >> 8) + ((src & 0x00FF00) * blend_a >> 8)) & 0x00FF00);
+									}
+								}
+							}
+						}
+					}
+					else
+					{
+						for (int y = aClip.mY; y < aClip.mY + aClip.mHeight; ++y)
+						{
+							int dest_rel_y = y - aDestY;
+							int sx = (theTransform.m10 < 0.0f) ? (aSrcW - 1 - dest_rel_y) : dest_rel_y;
+							int srcPixelX = theSrcRect.mX + sx;
+							uint32_t* pDst = pDstBits + y * dstPitch + aClip.mX;
+
+							for (int x = aClip.mX; x < aClip.mX + aClip.mWidth; ++x, ++pDst)
+							{
+								int dest_rel_x = x - aDestX;
+								int sy = (theTransform.m01 > 0.0f) ? dest_rel_x : (aSrcH - 1 - dest_rel_x);
+								int srcPixelY = theSrcRect.mY + sy;
+								uint32_t src = pSrcBits[srcPixelY * srcPitch + srcPixelX];
+								uint32_t srcA = src >> 24;
+								if (srcA == 0)
+									continue;
+								uint32_t a = (srcA * ca) / 255;
+								if (a == 0)
+									continue;
+
+								uint32_t sr = (((src >> 16) & 0xFF) * cr) / 255;
+								uint32_t sg = (((src >> 8) & 0xFF) * cg) / 255;
+								uint32_t sb = ((src & 0xFF) * cb) / 255;
+								uint32_t modSrc = (a << 24) | (sr << 16) | (sg << 8) | sb;
+
+								if (a == 255)
+								{
+									*pDst = modSrc;
+								}
+								else
+								{
+									uint32_t dest = *pDst;
+									uint32_t aDestAlpha = dest >> 24;
+									uint32_t aNewDestAlpha = aDestAlpha + ((255 - aDestAlpha) * a) / 255;
+									if (aNewDestAlpha > 0)
+									{
+										uint32_t blend_a = 255 * a / aNewDestAlpha;
+										int oma = 256 - blend_a;
+										*pDst = (aNewDestAlpha << 24) |
+											((((dest & 0xFF00FF) * oma >> 8) + ((modSrc & 0xFF00FF) * blend_a >> 8)) & 0xFF00FF) |
+											((((dest & 0x00FF00) * oma >> 8) + ((modSrc & 0x00FF00) * blend_a >> 8)) & 0x00FF00);
+									}
+								}
+							}
+						}
+					}
+				}
+				else if (theDrawMode == Graphics::DRAWMODE_ADDITIVE)
+				{
+					for (int y = aClip.mY; y < aClip.mY + aClip.mHeight; ++y)
+					{
+						int dest_rel_y = y - aDestY;
+						int sx = (theTransform.m10 < 0.0f) ? (aSrcW - 1 - dest_rel_y) : dest_rel_y;
+						int srcPixelX = theSrcRect.mX + sx;
+						uint32_t* pDst = pDstBits + y * dstPitch + aClip.mX;
+
+						for (int x = aClip.mX; x < aClip.mX + aClip.mWidth; ++x, ++pDst)
+						{
+							int dest_rel_x = x - aDestX;
+							int sy = (theTransform.m01 > 0.0f) ? dest_rel_x : (aSrcH - 1 - dest_rel_x);
+							int srcPixelY = theSrcRect.mY + sy;
+							uint32_t src = pSrcBits[srcPixelY * srcPitch + srcPixelX];
+							uint32_t srcA = src >> 24;
+							if (srcA == 0)
+								continue;
+
+							uint32_t a = hasColor ? ((srcA * ca) / 255) : srcA;
+							if (a == 0)
+								continue;
+
+							uint32_t sr = hasColor ? ((((src >> 16) & 0xFF) * cr) / 255) : ((src >> 16) & 0xFF);
+							uint32_t sg = hasColor ? ((((src >> 8) & 0xFF) * cg) / 255) : ((src >> 8) & 0xFF);
+							uint32_t sb = hasColor ? (((src & 0xFF) * cb) / 255) : (src & 0xFF);
+
+							uint32_t dest = *pDst;
+							uint32_t dr = (dest >> 16) & 0xFF;
+							uint32_t dg = (dest >> 8) & 0xFF;
+							uint32_t db = dest & 0xFF;
+
+							uint32_t r = std::min(255U, dr + ((sr * a) >> 8));
+							uint32_t g = std::min(255U, dg + ((sg * a) >> 8));
+							uint32_t b = std::min(255U, db + ((sb * a) >> 8));
+
+							*pDst = (dest & 0xFF000000) | (r << 16) | (g << 8) | b;
+						}
+					}
+				}
+
+				theImage->mDrawn = true;
+				aDstImage->BitsChanged();
+				gPvzpTriangleDrawAdditive = false;
+				return;
+			}
+		}
 	}
 
 	if (theClipRect.mX != 0 || theClipRect.mY != 0 || theClipRect.mWidth != BOARD_WIDTH || theClipRect.mHeight != BOARD_HEIGHT)
@@ -1006,6 +1184,9 @@ uint32_t AverageNearByPixels(MemoryImage* theImage, uint32_t* thePixel, int x, i
 
 void FixPixelsOnAlphaEdgeForBlending(Image* theImage)
 {
+	if (!gSexyAppBase || !gSexyAppBase->Is3DAccelerated())
+		return;
+
 	MemoryImage* aImage = (MemoryImage*)theImage;
 
 	aImage->CommitBits();  // populate mHasTrans and mHasAlpha
@@ -1205,6 +1386,13 @@ void PvzpAddImageToMap(SharedImageRef* theImage, const std::string& thePath)
 	static_cast<PvzpResourceManager*>(gSexyAppBase->mResourceManager.get())->AddImageToMap(theImage, thePath);
 }
 
+bool PvzpRemoveDynamicImage(Image* theImage)
+{
+	if (!gSexyAppBase || !gSexyAppBase->mResourceManager)
+		return false;
+	return static_cast<PvzpResourceManager*>(gSexyAppBase->mResourceManager.get())->RemoveDynamicImage(theImage);
+}
+
 void PvzpResourceManager::AddImageToMap(SharedImageRef* theImage, const std::string& thePath)
 {
 	PVZP_ASSERT(mImageMap.find(thePath) == mImageMap.end());
@@ -1213,6 +1401,28 @@ void PvzpResourceManager::AddImageToMap(SharedImageRef* theImage, const std::str
 	aImageRes->mImage = *theImage;
 	aImageRes->mPath = thePath;
 	mImageMap.insert(ResMap::value_type(thePath, std::move(aImageRes)));
+}
+
+bool PvzpResourceManager::RemoveDynamicImage(Image* theImage)
+{
+	bool aRemoved = false;
+	auto anItr = mImageMap.begin();
+	while (anItr != mImageMap.end())
+	{
+		ImageRes* aImageRes = (ImageRes*)anItr->second.get();
+		if ((Image*)aImageRes->mImage == theImage)
+		{
+			if (aImageRes->mResGroup.empty())
+			{
+				aImageRes->DeleteResource();
+				anItr = mImageMap.erase(anItr);
+				aRemoved = true;
+				continue;
+			}
+		}
+		++anItr;
+	}
+	return aRemoved;
 }
 
 bool PvzpLoadNextResource()

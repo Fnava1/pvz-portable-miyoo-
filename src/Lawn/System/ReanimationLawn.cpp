@@ -27,6 +27,13 @@
 #include "graphics/Color.h"
 #include "../../PvzpLib/Reanimator.h"
 #include "graphics/MemoryImage.h"
+#include "../../PvzpLib/EffectSystem.h"
+#include "../../Resources.h"
+#include <algorithm>
+#include <cmath>
+#if defined(__linux__) && !defined(__ANDROID__)
+#include <malloc.h>
+#endif
 
 void ReanimatorCache::UpdateReanimationForVariation(Reanimation* theReanim, DrawVariation theDrawVariation)
 {
@@ -147,6 +154,13 @@ void ReanimatorCache::GetPlantImageSize(SeedType theSeedType, int& theOffsetX, i
 	else if (theSeedType == SeedType::SEED_COBCANNON)
 	{
 		theWidth += 80;
+	}
+	else if (theSeedType == SeedType::SEED_THREEPEATER)
+	{
+		theOffsetX = -35;
+		theOffsetY = -25;
+		theWidth = 150;
+		theHeight = 140;
 	}
 }
 
@@ -340,6 +354,16 @@ ReanimatorCache::~ReanimatorCache()
 void ReanimatorCache::ReanimatorCacheInitialize()
 {
 	mApp = (LawnApp*)gSexyAppBase;
+	PrecachePumpkinSurfaces();
+}
+
+void ReanimatorCache::ClearLevelTransientCaches()
+{
+	for (int i = 0; i < ZombieType::NUM_CACHED_ZOMBIE_TYPES; i++)
+	{
+		mZombieWalkFrames[i].clear();
+		mZombieWalkFrames[i].shrink_to_fit();
+	}
 }
 
 void ReanimatorCache::ReanimatorCacheDispose()
@@ -349,6 +373,25 @@ void ReanimatorCache::ReanimatorCacheDispose()
 		ReanimCacheImageVariation aImageVariation = mImageVariationList.RemoveHead();
 		if (aImageVariation.mImage != nullptr)
 			delete aImageVariation.mImage;
+	}
+	for (int i = 0; i < SeedType::NUM_SEED_TYPES; i++)
+	{
+		mPlantImages[i].reset();
+		mPlantIdleFrames[i].clear();
+	}
+	for (int i = 0; i < LawnMowerType::NUM_MOWER_TYPES; i++)
+	{
+		mLawnMowers[i].reset();
+	}
+	for (int i = 0; i < ZombieType::NUM_CACHED_ZOMBIE_TYPES; i++)
+	{
+		mZombieImages[i].reset();
+		mZombieWalkFrames[i].clear();
+	}
+	mPumpkinBackImage.reset();
+	for (int i = 0; i < 3; i++)
+	{
+		mPumpkinFrontImages[i].reset();
 	}
 }
 
@@ -454,3 +497,375 @@ void ReanimatorCache::DrawCachedZombie(Graphics* g, float thePosX, float thePosY
 
 	PvzpDrawImageScaledF(g, mZombieImages[theZombieType].get(), thePosX, thePosY, g->mScaleX, g->mScaleY);
 }
+
+bool ReanimatorCache::HasCachedIdle(SeedType theSeedType)
+{
+	switch (theSeedType)
+	{
+	case SeedType::SEED_SUNFLOWER:
+	case SeedType::SEED_TWINSUNFLOWER:
+		return true;
+	default:
+		return false;
+	}
+}
+
+void ReanimatorCache::PrecachePlantIdle(SeedType theSeedType)
+{
+	if (theSeedType < 0 || theSeedType >= SeedType::NUM_SEED_TYPES)
+		return;
+
+	const PlantDefinition& aDef = GetPlantDefinition(theSeedType);
+	if (aDef.mReanimationType == ReanimationType::REANIM_NONE)
+		return;
+
+	ReanimatorEnsureDefinitionLoaded(aDef.mReanimationType, true);
+
+	auto& frames = mPlantIdleFrames[theSeedType];
+	frames.clear();
+	frames.reserve(NUM_CACHED_IDLE_FRAMES);
+
+	for (int i = 0; i < NUM_CACHED_IDLE_FRAMES; i++)
+	{
+		float animTime = (float)i / (float)NUM_CACHED_IDLE_FRAMES;
+		frames.push_back(MakeCachedPlantIdleFrame(theSeedType, animTime));
+	}
+}
+
+std::unique_ptr<MemoryImage> ReanimatorCache::MakeCachedPlantIdleFrame(SeedType theSeedType, float theAnimTime)
+{
+	int aOffsetX, aOffsetY, aWidth, aHeight;
+	GetPlantImageSize(theSeedType, aOffsetX, aOffsetY, aWidth, aHeight);
+	auto aMemoryImage = MakeBlankMemoryImage(aWidth, aHeight);
+	Graphics aMemoryGraphics(aMemoryImage.get());
+	aMemoryGraphics.SetLinearBlend(true);
+
+	const PlantDefinition& aPlantDef = GetPlantDefinition(theSeedType);
+	if (aPlantDef.mReanimationType == ReanimationType::REANIM_NONE)
+		return aMemoryImage;
+
+	ReanimatorEnsureDefinitionLoaded(aPlantDef.mReanimationType, true);
+
+	std::vector<ReanimationID> aHeadReanimIDs;
+
+	{
+		Reanimation aBodyReanim;
+		aBodyReanim.ReanimationInitializeType(-aOffsetX, -aOffsetY, aPlantDef.mReanimationType);
+		aBodyReanim.mIsAttachment = true;
+		if (aBodyReanim.TrackExists("anim_idle"))
+		{
+			aBodyReanim.SetFramesForLayer("anim_idle");
+		}
+		aBodyReanim.mLoopType = ReanimLoopType::REANIM_LOOP;
+		aBodyReanim.mAnimRate = 0.0f;
+		aBodyReanim.mAnimTime = theAnimTime;
+
+		if (theSeedType == SeedType::SEED_THREEPEATER)
+		{
+			Reanimation* aHead1 = mApp->AddReanimation(0.0f, 0.0f, 0, ReanimationType::REANIM_THREEPEATER);
+			aHead1->mLoopType = ReanimLoopType::REANIM_LOOP;
+			aHead1->mAnimRate = aBodyReanim.mAnimRate;
+			aHead1->mAnimTime = theAnimTime;
+			aHead1->SetFramesForLayer("anim_head_idle1");
+			aHead1->AttachToAnotherReanimation(&aBodyReanim, "anim_head1");
+			aHead1->Update();
+			aHeadReanimIDs.push_back(mApp->ReanimationGetID(aHead1));
+
+			Reanimation* aHead2 = mApp->AddReanimation(0.0f, 0.0f, 0, ReanimationType::REANIM_THREEPEATER);
+			aHead2->mLoopType = ReanimLoopType::REANIM_LOOP;
+			aHead2->mAnimRate = aBodyReanim.mAnimRate;
+			aHead2->mAnimTime = theAnimTime;
+			aHead2->SetFramesForLayer("anim_head_idle2");
+			aHead2->AttachToAnotherReanimation(&aBodyReanim, "anim_head2");
+			aHead2->Update();
+			aHeadReanimIDs.push_back(mApp->ReanimationGetID(aHead2));
+
+			Reanimation* aHead3 = mApp->AddReanimation(0.0f, 0.0f, 0, ReanimationType::REANIM_THREEPEATER);
+			aHead3->mLoopType = ReanimLoopType::REANIM_LOOP;
+			aHead3->mAnimRate = aBodyReanim.mAnimRate;
+			aHead3->mAnimTime = theAnimTime;
+			aHead3->SetFramesForLayer("anim_head_idle3");
+			aHead3->AttachToAnotherReanimation(&aBodyReanim, "anim_head3");
+			aHead3->Update();
+			aHeadReanimIDs.push_back(mApp->ReanimationGetID(aHead3));
+		}
+		else if (theSeedType == SeedType::SEED_PEASHOOTER ||
+		         theSeedType == SeedType::SEED_REPEATER ||
+		         theSeedType == SeedType::SEED_SNOWPEA ||
+		         theSeedType == SeedType::SEED_GATLINGPEA ||
+		         theSeedType == SeedType::SEED_LEFTPEATER)
+		{
+			Reanimation* aHead = mApp->AddReanimation(0.0f, 0.0f, 0, aPlantDef.mReanimationType);
+			aHead->mLoopType = ReanimLoopType::REANIM_LOOP;
+			aHead->mAnimRate = aBodyReanim.mAnimRate;
+			aHead->mAnimTime = theAnimTime;
+			aHead->SetFramesForLayer("anim_head_idle");
+			const char* aTrackName = aBodyReanim.TrackExists("anim_stem") ? "anim_stem" : "anim_idle";
+			aHead->AttachToAnotherReanimation(&aBodyReanim, aTrackName);
+			aHead->Update();
+			aHeadReanimIDs.push_back(mApp->ReanimationGetID(aHead));
+		}
+		else if (theSeedType == SeedType::SEED_SPLITPEA)
+		{
+			Reanimation* aHead1 = mApp->AddReanimation(0.0f, 0.0f, 0, aPlantDef.mReanimationType);
+			aHead1->mLoopType = ReanimLoopType::REANIM_LOOP;
+			aHead1->mAnimRate = aBodyReanim.mAnimRate;
+			aHead1->mAnimTime = theAnimTime;
+			aHead1->SetFramesForLayer("anim_head_idle");
+			aHead1->AttachToAnotherReanimation(&aBodyReanim, "anim_idle");
+			aHead1->Update();
+			aHeadReanimIDs.push_back(mApp->ReanimationGetID(aHead1));
+
+			Reanimation* aHead2 = mApp->AddReanimation(0.0f, 0.0f, 0, aPlantDef.mReanimationType);
+			aHead2->mLoopType = ReanimLoopType::REANIM_LOOP;
+			aHead2->mAnimRate = aBodyReanim.mAnimRate;
+			aHead2->mAnimTime = theAnimTime;
+			aHead2->SetFramesForLayer("anim_splitpea_idle");
+			aHead2->AttachToAnotherReanimation(&aBodyReanim, "anim_idle");
+			aHead2->Update();
+			aHeadReanimIDs.push_back(mApp->ReanimationGetID(aHead2));
+		}
+
+		aBodyReanim.Update();
+		aBodyReanim.Draw(&aMemoryGraphics);
+
+		for (ReanimationID anId : aHeadReanimIDs)
+		{
+			mApp->RemoveReanimation(anId);
+		}
+	}
+
+	if (mApp->mEffectSystem)
+	{
+		mApp->mEffectSystem->ProcessDeleteQueue();
+	}
+
+	return aMemoryImage;
+}
+
+void ReanimatorCache::DrawCachedPlantIdle(Graphics* g, float thePosX, float thePosY, SeedType theSeedType, float theAnimTime)
+{
+	if (theSeedType < 0 || theSeedType >= SeedType::NUM_SEED_TYPES)
+		return;
+
+	if (mPlantIdleFrames[theSeedType].empty())
+	{
+		PrecachePlantIdle(theSeedType);
+	}
+
+	const auto& frames = mPlantIdleFrames[theSeedType];
+	if (frames.empty())
+		return;
+
+	float normTime = theAnimTime - std::floor(theAnimTime);
+	int frameIndex = std::clamp((int)(normTime * NUM_CACHED_IDLE_FRAMES), 0, NUM_CACHED_IDLE_FRAMES - 1);
+	MemoryImage* aImage = frames[frameIndex].get();
+	if (!aImage)
+		return;
+
+	int aOffsetX, aOffsetY, aWidth, aHeight;
+	GetPlantImageSize(theSeedType, aOffsetX, aOffsetY, aWidth, aHeight);
+	if (!mApp->Is3DAccelerated() && g->mScaleX == 1.0f && g->mScaleY == 1.0f)
+	{
+		g->DrawImage(aImage, thePosX + aOffsetX, thePosY + aOffsetY);
+	}
+	else
+	{
+		PvzpDrawImageScaledF(g, aImage, thePosX + (aOffsetX * g->mScaleX), thePosY + (aOffsetY * g->mScaleY), g->mScaleX, g->mScaleY);
+	}
+}
+
+bool ReanimatorCache::HasCachedZombieWalk(ZombieType theZombieType)
+{
+	switch (theZombieType)
+	{
+	case ZombieType::ZOMBIE_NORMAL:
+	case ZombieType::ZOMBIE_FLAG:
+	case ZombieType::ZOMBIE_TRAFFIC_CONE:
+	case ZombieType::ZOMBIE_PAIL:
+	case ZombieType::ZOMBIE_DOOR:
+		return true;
+	default:
+		return false;
+	}
+}
+
+void ReanimatorCache::PrecacheZombieWalk(ZombieType theZombieType)
+{
+	if (theZombieType < 0 || theZombieType >= ZombieType::NUM_CACHED_ZOMBIE_TYPES)
+		return;
+
+	auto& frames = mZombieWalkFrames[theZombieType];
+	frames.clear();
+	frames.reserve(NUM_CACHED_ZOMBIE_WALK_FRAMES);
+
+	for (int i = 0; i < NUM_CACHED_ZOMBIE_WALK_FRAMES; i++)
+	{
+		float animTime = (float)i / (float)NUM_CACHED_ZOMBIE_WALK_FRAMES;
+		frames.push_back(MakeCachedZombieWalkFrame(theZombieType, animTime));
+	}
+}
+
+std::unique_ptr<MemoryImage> ReanimatorCache::MakeCachedZombieWalkFrame(ZombieType theZombieType, float theAnimTime)
+{
+	int aWidth = 180;
+	int aHeight = 200;
+	float aBaseX = 60.0f;
+	float aBaseY = 60.0f;
+
+	auto aMemoryImage = MakeBlankMemoryImage(aWidth, aHeight);
+	Graphics aMemoryGraphics(aMemoryImage.get());
+	aMemoryGraphics.SetLinearBlend(true);
+
+	ZombieType aUseZombieType = (theZombieType == ZombieType::ZOMBIE_CACHED_POLEVAULTER_WITH_POLE) ? ZombieType::ZOMBIE_POLEVAULTER : theZombieType;
+	if (aUseZombieType < 0 || aUseZombieType >= ZombieType::NUM_ZOMBIE_TYPES)
+		return aMemoryImage;
+
+	const ZombieDefinition& aZombieDef = GetZombieDefinition(aUseZombieType);
+	if (aZombieDef.mReanimationType == ReanimationType::REANIM_NONE)
+		return aMemoryImage;
+
+	ReanimatorEnsureDefinitionLoaded(aZombieDef.mReanimationType, true);
+
+	Reanimation aReanim;
+	aReanim.ReanimationInitializeType(aBaseX, aBaseY, aZombieDef.mReanimationType);
+	if (aReanim.TrackExists("anim_walk"))
+	{
+		aReanim.SetFramesForLayer("anim_walk");
+	}
+	else if (aReanim.TrackExists("anim_idle"))
+	{
+		aReanim.SetFramesForLayer("anim_idle");
+	}
+
+	Zombie::SetupReanimLayers(&aReanim, aUseZombieType);
+
+	if (aUseZombieType == ZombieType::ZOMBIE_DOOR)
+	{
+		aReanim.AssignRenderGroupToTrack("anim_screendoor", RENDER_GROUP_NORMAL);
+	}
+
+	aReanim.mAnimRate = 0.0f;
+	aReanim.mAnimTime = theAnimTime;
+	aReanim.Update();
+	aReanim.Draw(&aMemoryGraphics);
+
+	if (aUseZombieType == ZombieType::ZOMBIE_FLAG)
+	{
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_FLAG, true);
+		Reanimation aReanimFlag;
+		aReanimFlag.ReanimationInitializeType(aBaseX, aBaseY, ReanimationType::REANIM_FLAG);
+		if (aReanimFlag.TrackExists("Zombie_flag"))
+		{
+			aReanimFlag.SetFramesForLayer("Zombie_flag");
+		}
+		aReanimFlag.mAnimRate = 0.0f;
+		aReanimFlag.mAnimTime = theAnimTime;
+		aReanimFlag.Update();
+		aReanimFlag.Draw(&aMemoryGraphics);
+	}
+
+	return aMemoryImage;
+}
+
+void ReanimatorCache::DrawCachedZombieWalk(Graphics* g, const ZombieDrawPosition& theDrawPos, ZombieType theZombieType, float theAnimTime)
+{
+	if (theZombieType < 0 || theZombieType >= ZombieType::NUM_CACHED_ZOMBIE_TYPES)
+		return;
+
+	if (mZombieWalkFrames[theZombieType].empty())
+	{
+		PrecacheZombieWalk(theZombieType);
+	}
+
+	const auto& frames = mZombieWalkFrames[theZombieType];
+	if (frames.empty())
+		return;
+
+	float normTime = theAnimTime - std::floor(theAnimTime);
+	int frameIndex = std::clamp((int)(normTime * NUM_CACHED_ZOMBIE_WALK_FRAMES), 0, NUM_CACHED_ZOMBIE_WALK_FRAMES - 1);
+	MemoryImage* aImage = frames[frameIndex].get();
+	if (!aImage)
+		return;
+
+	float aBaseX = 60.0f;
+	float aBaseY = 60.0f;
+
+	float drawX = theDrawPos.mImageOffsetX + 15.0f - aBaseX;
+	float drawY = theDrawPos.mImageOffsetY + theDrawPos.mBodyY - 8.0f - aBaseY;
+
+	if (!mApp->Is3DAccelerated() && g->mScaleX == 1.0f && g->mScaleY == 1.0f)
+	{
+		g->DrawImage(aImage, (int)drawX, (int)drawY);
+	}
+	else
+	{
+		PvzpDrawImageScaledF(g, aImage, drawX * g->mScaleX, drawY * g->mScaleY, g->mScaleX, g->mScaleY);
+	}
+}
+
+void ReanimatorCache::PrecachePumpkinSurfaces()
+{
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_PUMPKIN, true);
+
+	// Back image (120x120)
+	mPumpkinBackImage = MakeBlankMemoryImage(120, 120);
+	Graphics gBack(mPumpkinBackImage.get());
+	gBack.SetLinearBlend(true);
+	Reanimation aBackReanim;
+	aBackReanim.ReanimationInitializeType(20.0f, 20.0f, ReanimationType::REANIM_PUMPKIN);
+	aBackReanim.AssignRenderGroupToTrack("Pumpkin_back", 1);
+	aBackReanim.DrawRenderGroup(&gBack, 1);
+
+	// Front images (3 states, 120x120)
+	// State 0 (intact)
+	mPumpkinFrontImages[0] = MakeBlankMemoryImage(120, 120);
+	Graphics gFront0(mPumpkinFrontImages[0].get());
+	gFront0.SetLinearBlend(true);
+	Reanimation aFrontReanim0;
+	aFrontReanim0.ReanimationInitializeType(20.0f, 20.0f, ReanimationType::REANIM_PUMPKIN);
+	aFrontReanim0.AssignRenderGroupToTrack("Pumpkin_back", 1);
+	aFrontReanim0.DrawRenderGroup(&gFront0, 0);
+
+	// State 1 (damage1)
+	mPumpkinFrontImages[1] = MakeBlankMemoryImage(120, 120);
+	Graphics gFront1(mPumpkinFrontImages[1].get());
+	gFront1.SetLinearBlend(true);
+	Reanimation aFrontReanim1;
+	aFrontReanim1.ReanimationInitializeType(20.0f, 20.0f, ReanimationType::REANIM_PUMPKIN);
+	aFrontReanim1.AssignRenderGroupToTrack("Pumpkin_back", 1);
+	aFrontReanim1.SetImageOverride("Pumpkin_front", IMAGE_REANIM_PUMPKIN_DAMAGE1);
+	aFrontReanim1.DrawRenderGroup(&gFront1, 0);
+
+	// State 2 (damage3)
+	mPumpkinFrontImages[2] = MakeBlankMemoryImage(120, 120);
+	Graphics gFront2(mPumpkinFrontImages[2].get());
+	gFront2.SetLinearBlend(true);
+	Reanimation aFrontReanim2;
+	aFrontReanim2.ReanimationInitializeType(20.0f, 20.0f, ReanimationType::REANIM_PUMPKIN);
+	aFrontReanim2.AssignRenderGroupToTrack("Pumpkin_back", 1);
+	aFrontReanim2.SetImageOverride("Pumpkin_front", IMAGE_REANIM_PUMPKIN_DAMAGE3);
+	aFrontReanim2.DrawRenderGroup(&gFront2, 0);
+}
+
+void ReanimatorCache::DrawCachedPumpkinBack(Graphics* g, float thePosX, float thePosY)
+{
+	if (mPumpkinBackImage)
+	{
+		g->DrawImage(mPumpkinBackImage.get(), thePosX - 20.0f, thePosY - 20.0f);
+	}
+}
+
+void ReanimatorCache::DrawCachedPumpkinFront(Graphics* g, float thePosX, float thePosY, int theDamageState)
+{
+	if (theDamageState < 0)
+		theDamageState = 0;
+	else if (theDamageState > 2)
+		theDamageState = 2;
+
+	if (mPumpkinFrontImages[theDamageState])
+	{
+		g->DrawImage(mPumpkinFrontImages[theDamageState].get(), thePosX - 20.0f, thePosY - 20.0f);
+	}
+}
+

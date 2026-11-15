@@ -92,7 +92,7 @@ void LawnMower::UpdatePool()
 		isPoolRange = true;
 	}
 
-	Reanimation* aMowerReanim = mApp->ReanimationGet(mReanimID);
+	Reanimation* aMowerReanim = mApp->ReanimationTryToGet(mReanimID);
 	if (isPoolRange && mMowerHeight == MowerHeight::MOWER_HEIGHT_LAND)
 	{
 		Reanimation* aSplashReanim = mApp->AddReanimation(mPosX + 0.0f, mPosY + 25.0f, mRenderOrder + 1, ReanimationType::REANIM_SPLASH);
@@ -108,7 +108,10 @@ void LawnMower::UpdatePool()
 		{
 			mAltitude = 0.0f;
 			mMowerHeight = MowerHeight::MOWER_HEIGHT_IN_POOL;
-			aMowerReanim->PlayReanim("anim_water", ReanimLoopType::REANIM_LOOP, 0, 0.0f);
+			if (aMowerReanim)
+			{
+				aMowerReanim->PlayReanim("anim_water", ReanimLoopType::REANIM_LOOP, 0, 0.0f);
+			}
 		}
 	}
 	else if (mMowerHeight == MowerHeight::MOWER_HEIGHT_IN_POOL)
@@ -121,7 +124,10 @@ void LawnMower::UpdatePool()
 			aSplashReanim->OverrideScale(1.2f, 0.8f);
 			mApp->AddPvzpParticle(mPosX + 0.0f + 50.0f, mPosY + 0.0f + 42.0f, mRenderOrder + 1, ParticleEffect::PARTICLE_PLANTING_POOL);
 			mApp->PlayFoley(FoleyType::FOLEY_PLANT_WATER);
-			aMowerReanim->PlayReanim("anim_land", ReanimLoopType::REANIM_LOOP, 0, 0.0f);
+			if (aMowerReanim)
+			{
+				aMowerReanim->PlayReanim("anim_land", ReanimLoopType::REANIM_LOOP, 0, 0.0f);
+			}
 		}
 	}
 	else if (mMowerHeight == MowerHeight::MOWER_HEIGHT_UP_TO_LAND)
@@ -134,7 +140,7 @@ void LawnMower::UpdatePool()
 		}
 	}
 
-	if (mMowerHeight == MowerHeight::MOWER_HEIGHT_IN_POOL && aMowerReanim->mLoopType == ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD && aMowerReanim->mLoopCount > 0)
+	if (mMowerHeight == MowerHeight::MOWER_HEIGHT_IN_POOL && aMowerReanim && aMowerReanim->mLoopType == ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD && aMowerReanim->mLoopCount > 0)
 	{
 		aMowerReanim->PlayReanim("anim_water", ReanimLoopType::REANIM_LOOP, 10, 35.0f);
 	}
@@ -155,15 +161,20 @@ void LawnMower::MowZombie(Zombie* theZombie)
 	if (mMowerType == LawnMowerType::LAWNMOWER_POOL)
 	{
 		mApp->PlayFoley(FoleyType::FOLEY_SHOOP);
+		Reanimation* aMowerReanim = mApp->ReanimationTryToGet(mReanimID);
 		if (mMowerHeight == MowerHeight::MOWER_HEIGHT_IN_POOL)
 		{
-			Reanimation* aMowerReanim = mApp->ReanimationGet(mReanimID);
-			aMowerReanim->PlayReanim("anim_suck", ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD, 10, 35.0f);
+			if (aMowerReanim)
+			{
+				aMowerReanim->PlayReanim("anim_suck", ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD, 10, 35.0f);
+			}
 		}
 		else
 		{
-			Reanimation* aMowerReanim = mApp->ReanimationGet(mReanimID);
-			aMowerReanim->PlayReanim("anim_landsuck", ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD, 10, 35.0f);
+			if (aMowerReanim)
+			{
+				aMowerReanim->PlayReanim("anim_landsuck", ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD, 10, 35.0f);
+			}
 		}
 
 		theZombie->DieWithLoot();
@@ -281,7 +292,11 @@ void LawnMower::Update()
 		Die();
 	}
 
-	mApp->ReanimationGet(mReanimID)->Update();
+	Reanimation* aMowerReanim = mApp->ReanimationTryToGet(mReanimID);
+	if (aMowerReanim)
+	{
+		aMowerReanim->Update();
+	}
 }
 
 void LawnMower::Draw(Graphics* g)
@@ -365,7 +380,11 @@ void LawnMower::Draw(Graphics* g)
 
 	if (mMowerState == LawnMowerState::MOWER_TRIGGERED || mMowerState == LawnMowerState::MOWER_SQUISHED)
 	{
-		mApp->ReanimationGet(mReanimID)->Draw(&aMowerGraphics);
+		Reanimation* aMowerReanim = mApp->ReanimationTryToGet(mReanimID);
+		if (aMowerReanim)
+		{
+			aMowerReanim->Draw(&aMowerGraphics);
+		}
 	}
 	else
 	{
@@ -398,15 +417,21 @@ void LawnMower::StartMower()
 		return;
 	}
 
-	Reanimation* aMowerReanim = mApp->ReanimationGet(mReanimID);
+	Reanimation* aMowerReanim = mApp->ReanimationTryToGet(mReanimID);
 	if (mMowerType == LawnMowerType::LAWNMOWER_POOL)
 	{
-		aMowerReanim->mAnimRate = 35.0f;
+		if (aMowerReanim)
+		{
+			aMowerReanim->mAnimRate = 35.0f;
+		}
 		mApp->PlayFoley(FoleyType::FOLEY_POOL_CLEANER);
 	}
 	else
 	{
-		aMowerReanim->mAnimRate = 70.0f;
+		if (aMowerReanim)
+		{
+			aMowerReanim->mAnimRate = 70.0f;
+		}
 		mApp->PlayFoley(FoleyType::FOLEY_LAWNMOWER);
 	}
 
@@ -417,9 +442,12 @@ void LawnMower::StartMower()
 
 void LawnMower::SquishMower()
 {
-	Reanimation* aMowerReanim = mApp->ReanimationGet(mReanimID);
-	aMowerReanim->OverrideScale(0.85f, 0.22f);
-	aMowerReanim->SetPosition(-11.0f, 65.0f);
+	Reanimation* aMowerReanim = mApp->ReanimationTryToGet(mReanimID);
+	if (aMowerReanim)
+	{
+		aMowerReanim->OverrideScale(0.85f, 0.22f);
+		aMowerReanim->SetPosition(-11.0f, 65.0f);
+	}
 
 	mMowerState = LawnMowerState::MOWER_SQUISHED;
 	mSquishedCounter = 500;
@@ -435,6 +463,10 @@ void LawnMower::EnableSuperMower([[maybe_unused]] bool theEnable) // Is theEnabl
 {
 	if (mMowerType == LawnMowerType::LAWNMOWER_LAWN)
 	{
-		mApp->ReanimationGet(mReanimID)->SetFramesForLayer("anim_tricked");
+		Reanimation* aMowerReanim = mApp->ReanimationTryToGet(mReanimID);
+		if (aMowerReanim)
+		{
+			aMowerReanim->SetFramesForLayer("anim_tricked");
+		}
 	}
 }

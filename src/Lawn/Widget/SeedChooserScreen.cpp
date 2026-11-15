@@ -175,7 +175,7 @@ SeedChooserScreen::SeedChooserScreen()
 		aChosenSeed.mEndX = aChosenSeed.mX;
 		aChosenSeed.mEndY = aChosenSeed.mY;
 		aChosenSeed.mSeedState = aSeedType == SEED_IMITATER ? SEED_PACKET_HIDDEN : SEED_IN_CHOOSER;
-		aChosenSeed.mSeedIndexInBank = 0;
+		aChosenSeed.mSeedIndexInBank = -1;
 		aChosenSeed.mRefreshCounter = 0;
 		aChosenSeed.mRefreshing = false;
 		aChosenSeed.mImitaterType = SEED_NONE;
@@ -186,11 +186,23 @@ SeedChooserScreen::SeedChooserScreen()
 		for (int anIdx = 0; anIdx < mBoard->mSeedBank->mNumPackets; anIdx++)
 		{
 			SeedPacket* aSeedPacket = &mBoard->mSeedBank->mSeedPackets[anIdx];
-			ChosenSeed& aChosenSeed = mChosenSeeds[aSeedPacket->mPacketType];
-			aChosenSeed.mRefreshing = aSeedPacket->mRefreshing;
-			aChosenSeed.mRefreshCounter = aSeedPacket->mRefreshCounter;
+			if (aSeedPacket->mPacketType >= 0 && aSeedPacket->mPacketType < NUM_SEEDS_IN_CHOOSER)
+			{
+				ChosenSeed& aChosenSeed = mChosenSeeds[aSeedPacket->mPacketType];
+				aChosenSeed.mRefreshing = aSeedPacket->mRefreshing;
+				aChosenSeed.mRefreshCounter = aSeedPacket->mRefreshCounter;
+				aChosenSeed.mSeedState = SEED_IN_BANK;
+				aChosenSeed.mSeedIndexInBank = anIdx;
+				aChosenSeed.mImitaterType = aSeedPacket->mImitaterType;
+				GetSeedPositionInBank(anIdx, aChosenSeed.mX, aChosenSeed.mY);
+				aChosenSeed.mStartX = aChosenSeed.mX;
+				aChosenSeed.mStartY = aChosenSeed.mY;
+				aChosenSeed.mEndX = aChosenSeed.mX;
+				aChosenSeed.mEndY = aChosenSeed.mY;
+				mSeedsInBank++;
+			}
 		}
-		mBoard->mSeedBank->mNumPackets = 0;
+		EnableStartButton(mSeedsInBank == mBoard->mSeedBank->mNumPackets);
 	}
 	if (mApp->mGameMode == GAMEMODE_CHALLENGE_SEEING_STARS)
 	{
@@ -315,7 +327,13 @@ void SeedChooserScreen::GetSeedPositionInBank(int theIndex, int& x, int& y)
 	y = mBoard->mSeedBank->mY - mY + 8;
 }
 
-SeedChooserScreen::~SeedChooserScreen() = default;
+SeedChooserScreen::~SeedChooserScreen()
+{
+	if (mApp)
+	{
+		mApp->CleanSharedImages();
+	}
+}
 
 unsigned int SeedChooserScreen::SeedNotRecommendedToPick(SeedType theSeedType)
 {
@@ -659,7 +677,7 @@ void SeedChooserScreen::OnStartButton()
 			return;
 		}
 	}
-	if (mBoard->StageHasRoof() && !PickedPlantType(SEED_FLOWERPOT) && mApp->HasSeedType(SEED_FLOWERPOT))
+	if (mBoard->StageHasRoof() && !PickedPlantType(SEED_FLOWERPOT) && mApp->HasSeedType(SEED_FLOWERPOT) && !mBoard->mCutScene->IsSurvivalRepick())
 	{
 		if (!DisplayRepickWarningDialog("[SEED_CHOOSER_ROOF_WARNING]"))
 		{
@@ -683,7 +701,7 @@ void SeedChooserScreen::OnStartButton()
 		}
 	}
 
-	if (FlyersAreComming() && !FlyProtectionCurrentlyPlanted() && !PickedPlantType(SEED_CATTAIL) && !PickedPlantType(SEED_CACTUS) && !PickedPlantType(SEED_BLOVER))
+	if (FlyersAreComming() && !FlyProtectionCurrentlyPlanted() && !PickedPlantType(SEED_CATTAIL) && !PickedPlantType(SEED_CACTUS) && !PickedPlantType(SEED_BLOVER) && !mBoard->mCutScene->IsSurvivalRepick())
 	{
 		if (!DisplayRepickWarningDialog("[SEED_CHOOSER_FLYER_WARNING]"))
 		{
@@ -779,6 +797,15 @@ SeedType SeedChooserScreen::SeedHitTest(int x, int y)
 			ChosenSeed& aChosenSeed = mChosenSeeds[aSeedType];
 			if (!mApp->HasSeedType(aSeedType) || aChosenSeed.mSeedState == SEED_PACKET_HIDDEN) continue;
 			if (Rect(aChosenSeed.mX, aChosenSeed.mY, SEED_PACKET_WIDTH, SEED_PACKET_HEIGHT).Contains(x, y)) return aSeedType;
+
+			// Also allow clicking the transparent packet in the chooser catalog to deselect a chosen seed in the bank
+			if (aChosenSeed.mSeedState == SEED_IN_BANK)
+			{
+				int aChooserX, aChooserY;
+				GetSeedPositionInChooser(aSeedType, aChooserX, aChooserY);
+				if (Rect(aChooserX, aChooserY, SEED_PACKET_WIDTH, SEED_PACKET_HEIGHT).Contains(x, y))
+					return aSeedType;
+			}
 		}
 	}
 	return SEED_NONE;
@@ -828,7 +855,7 @@ void SeedChooserScreen::ClickedSeedInBank(ChosenSeed& theChosenSeed)
 	theChosenSeed.mStartY = theChosenSeed.mY;
 	GetSeedPositionInChooser(theChosenSeed.mSeedType, theChosenSeed.mEndX, theChosenSeed.mEndY);
 	theChosenSeed.mSeedState = SEED_FLYING_TO_CHOOSER;
-	theChosenSeed.mSeedIndexInBank = 0;
+	theChosenSeed.mSeedIndexInBank = -1;
 	mSeedsInBank--;
 	mSeedsInFlight++;
 	RemoveToolTip();
@@ -1094,10 +1121,14 @@ bool SeedChooserScreen::PickedPlantType(SeedType theSeedType)
 
 void SeedChooserScreen::CloseSeedChooser()
 {
+	mStartButton->SetDisabled(true);
+	mMouseVisible = false;
 	DBG_ASSERT(mBoard->mSeedBank->mNumPackets == mBoard->GetNumSeedsInBank());
 	for (int anIndex = 0; anIndex < mBoard->mSeedBank->mNumPackets; anIndex++)
 	{
 		SeedType aSeedType = FindSeedInBank(anIndex);
+		if (aSeedType == SEED_NONE)
+			continue;
 		ChosenSeed& aChosenSeed = mChosenSeeds[aSeedType];
 		SeedPacket& aSeedPacket = mBoard->mSeedBank->mSeedPackets[anIndex];
 		aSeedPacket.SetPacketType(aSeedType, aChosenSeed.mImitaterType);
@@ -1109,6 +1140,7 @@ void SeedChooserScreen::CloseSeedChooser()
 			aSeedPacket.mActive = false;
 		}
 	}
+	mBoard->PreloadSpriteCache();
 	mBoard->mCutScene->EndSeedChooser();
 }
 

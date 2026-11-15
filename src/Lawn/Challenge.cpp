@@ -2143,7 +2143,10 @@ void Challenge::DrawSlotMachine(Graphics* g)
 	}
 	gBoardParent.mTransX = mBoard->mSeedBank->mX - mBoard->mX;
 	gBoardParent.mTransY = mBoard->mSeedBank->mY - mBoard->mY;
-	mApp->ReanimationGet(mReanimChallenge)->Draw(&gBoardParent);
+	if (Reanimation* aChallengeReanim = mApp->ReanimationTryToGet(mReanimChallenge))
+	{
+		aChallengeReanim->Draw(&gBoardParent);
+	}
 }
 
 void Challenge::DrawBackdrop(Graphics* g)
@@ -2271,22 +2274,29 @@ void Challenge::InitZombieWavesSurvival()
 		mBoard->mZombieAllowed[ZOMBIE_TRAFFIC_CONE] = true;
 	}
 
-	int aCapacity = std::min(mSurvivalStage + 1, 9);
-	while (aCapacity > 0)
+	std::vector<ZombieType> aCandidates;
+	for (int z = 0; z < NUM_ZOMBIE_TYPES; z++)
 	{
-		ZombieType aRandZombie = (ZombieType)aLevelRNG.Next((unsigned long)NUM_ZOMBIE_TYPES);
-		if (mBoard->mZombieAllowed[aRandZombie])																	continue;
-		if (mBoard->IsZombieTypePoolOnly(aRandZombie) && !mBoard->StageHasPool())									continue;
-		if (mBoard->StageHasRoof() && (aRandZombie == ZOMBIE_DIGGER || aRandZombie == ZOMBIE_DANCER))				continue;
-		if (mBoard->StageHasGraveStones() && aRandZombie == ZOMBIE_ZAMBONI)											continue;
-		if (!mBoard->StageHasRoof() && !mApp->IsSurvivalEndless(mApp->mGameMode) && aRandZombie == ZOMBIE_BUNGEE)	continue;
-		if (mBoard->GetSurvivalFlagsCompleted() < 10 && aRandZombie == ZOMBIE_REDEYE_GARGANTUAR)								continue;
-		if (mApp->IsSurvivalNormal(mApp->mGameMode) && aRandZombie > ZOMBIE_SNORKEL)								continue;
-		if (mBoard->IsZombieTypeSpawnedOnly(aRandZombie) || Zombie::IsZombotany(aRandZombie) ||
-			aRandZombie == ZOMBIE_DUCKY_TUBE || aRandZombie == ZOMBIE_YETI)											continue;
+		ZombieType aZombie = static_cast<ZombieType>(z);
+		if (mBoard->mZombieAllowed[aZombie]) continue;
+		if (mBoard->IsZombieTypePoolOnly(aZombie) && !mBoard->StageHasPool()) continue;
+		if (mBoard->StageHasRoof() && (aZombie == ZOMBIE_DIGGER || aZombie == ZOMBIE_DANCER)) continue;
+		if (mBoard->StageHasGraveStones() && aZombie == ZOMBIE_ZAMBONI) continue;
+		if (!mBoard->StageHasRoof() && !mApp->IsSurvivalEndless(mApp->mGameMode) && aZombie == ZOMBIE_BUNGEE) continue;
+		if (mBoard->GetSurvivalFlagsCompleted() < 10 && aZombie == ZOMBIE_REDEYE_GARGANTUAR) continue;
+		if (mApp->IsSurvivalNormal(mApp->mGameMode) && aZombie > ZOMBIE_SNORKEL) continue;
+		if (mBoard->IsZombieTypeSpawnedOnly(aZombie) || Zombie::IsZombotany(aZombie) ||
+			aZombie == ZOMBIE_DUCKY_TUBE || aZombie == ZOMBIE_YETI) continue;
 
-		mBoard->mZombieAllowed[aRandZombie] = true;
-		aCapacity--;
+		aCandidates.push_back(aZombie);
+	}
+
+	int aCapacity = std::min(static_cast<int>(aCandidates.size()), std::min(mSurvivalStage + 1, 9));
+	for (int i = 0; i < aCapacity && !aCandidates.empty(); i++)
+	{
+		int anIndex = aLevelRNG.Next(static_cast<unsigned long>(aCandidates.size()));
+		mBoard->mZombieAllowed[aCandidates[anIndex]] = true;
+		aCandidates.erase(aCandidates.begin() + anIndex);
 	}
 }
 
@@ -4951,6 +4961,8 @@ int Challenge::TreeOfWisdomMouseOn(int theX, int theY)
 
 int Challenge::TreeOfWisdomGetSize()
 {
+	if (!mApp->mPlayerInfo)
+		return 0;
 	return mApp->mPlayerInfo->mChallengeRecords[mApp->GetCurrentChallengeIndex()];
 }
 
@@ -4958,12 +4970,17 @@ void Challenge::TreeOfWisdomDraw(Graphics* g)
 {
 	int aMouseOn = TreeOfWisdomMouseOn(mApp->mWidgetManager->mLastMouseX - mBoard->mX, mApp->mWidgetManager->mLastMouseY - mBoard->mY);
 
-	Reanimation* aReanimTree = mApp->ReanimationGet(mReanimChallenge);
+	Reanimation* aReanimTree = mApp->ReanimationTryToGet(mReanimChallenge);
+	if (!aReanimTree)
+		return;
+
 	aReanimTree->mEnableExtraOverlayDraw = false;
 	aReanimTree->DrawRenderGroup(g, 0);  // draw the background
 	for (int i = 0; i < 6; i++)
 	{
-		mApp->ReanimationGet(mReanimClouds[i])->DrawRenderGroup(g, 0);
+		Reanimation* aCloud = mApp->ReanimationTryToGet(mReanimClouds[i]);
+		if (aCloud)
+			aCloud->DrawRenderGroup(g, 0);
 	}
 
 	int aHeight = TreeOfWisdomGetSize();
@@ -5011,7 +5028,8 @@ void Challenge::TreeOfWisdomDraw(Graphics* g)
 			aPosY = 52;
 		}
 
-		g->DrawImage(Sexy::IMAGE_STORE_SPEECHBUBBLE2, aPosX, aPosY);
+		if (Sexy::IMAGE_STORE_SPEECHBUBBLE2)
+			g->DrawImage(Sexy::IMAGE_STORE_SPEECHBUBBLE2, aPosX, aPosY);
 		std::string aText = std::format("[TREE_OF_WISDOM_{}]", mTreeOfWisdomTalkIndex);
 		auto aWrapEnum = static_cast<DrawStringJustification>(mApp->GetInteger("TREE_OF_WISDOM_TEXT_WRAP_ENUM", DS_ALIGN_CENTER_VERTICAL_MIDDLE));
 		PvzpDrawStringWrapped(g, aText, Rect(aPosX + 25, aPosY + 6, 233, 144), Sexy::FONT_BRIANNETOD16, Color::Black, aWrapEnum);
@@ -5042,46 +5060,68 @@ void Challenge::TreeOfWisdomDraw(Graphics* g)
 void Challenge::TreeOfWisdomInit()
 {
 	ReanimatorEnsureDefinitionLoaded(REANIM_TREEOFWISDOM, true);
-	Reanimation* aReanimTree = mApp->AddReanimation(0.5f, 0.5f, 0, REANIM_TREEOFWISDOM);
-	aReanimTree->mIsAttachment = true;
-	aReanimTree->AssignRenderGroupToPrefix("bg", 0);
-	aReanimTree->AssignRenderGroupToPrefix("tree", 2);
-	aReanimTree->AssignRenderGroupToPrefix("grass", 3);
-	aReanimTree->AssignRenderGroupToPrefix("overlay", 4);
-	aReanimTree->AssignRenderGroupToPrefix("leaf", 4);
-	aReanimTree->AssignRenderGroupToPrefix("bunch", 4);
-	aReanimTree->SetTruncateDisappearingFrames(nullptr, false);
-	mReanimChallenge = mApp->ReanimationGetID(aReanimTree);
+	ReanimatorEnsureDefinitionLoaded(REANIM_TREEOFWISDOM_CLOUDS, true);
+	ReanimatorEnsureDefinitionLoaded(REANIM_TREEOFWISDOM_TREEFOOD, true);
 
-	int aTreeSize = std::clamp(TreeOfWisdomGetSize(), 1, 50);
-	aReanimTree->PlayReanim(std::format("anim_grow{}", aTreeSize).c_str(), REANIM_PLAY_ONCE_AND_HOLD, 0, 18.0f);
-	if (aTreeSize == 0 && mApp->mPlayerInfo->mPurchases[STORE_ITEM_TREE_FOOD] < PURCHASE_COUNT_OFFSET)
+	Reanimation* aReanimTree = mApp->AddReanimation(0.5f, 0.5f, 0, REANIM_TREEOFWISDOM);
+	if (aReanimTree)
 	{
-		aReanimTree->mFrameCount += aReanimTree->mFrameStart;
-		aReanimTree->mFrameStart = 0;
-	}
-	else
-	{
-		aReanimTree->mAnimTime = 0.99f;
+		aReanimTree->mIsAttachment = true;
+		aReanimTree->AssignRenderGroupToPrefix("bg", 0);
+		aReanimTree->AssignRenderGroupToPrefix("tree", 2);
+		aReanimTree->AssignRenderGroupToPrefix("grass", 3);
+		aReanimTree->AssignRenderGroupToPrefix("overlay", 4);
+		aReanimTree->AssignRenderGroupToPrefix("leaf", 4);
+		aReanimTree->AssignRenderGroupToPrefix("bunch", 4);
+		aReanimTree->SetTruncateDisappearingFrames(nullptr, false);
+		mReanimChallenge = mApp->ReanimationGetID(aReanimTree);
+
+		int aRawSize = TreeOfWisdomGetSize();
+		int aTreeSize = std::clamp(aRawSize, 1, 50);
+		std::string aAnimName = std::format("anim_grow{}", aTreeSize);
+		if (aReanimTree->TrackExists(aAnimName.c_str()))
+		{
+			aReanimTree->PlayReanim(aAnimName.c_str(), REANIM_PLAY_ONCE_AND_HOLD, 0, 18.0f);
+		}
+		if (aRawSize <= 0 && mApp->mPlayerInfo && mApp->mPlayerInfo->mPurchases[STORE_ITEM_TREE_FOOD] < PURCHASE_COUNT_OFFSET)
+		{
+			aReanimTree->mFrameCount += aReanimTree->mFrameStart;
+			aReanimTree->mFrameStart = 0;
+		}
+		else
+		{
+			aReanimTree->mAnimTime = 0.99f;
+		}
 	}
 
 	for (int i = 0; i < 6; i++)
 	{
 		Reanimation* aReanimCloud = mApp->AddReanimation(0, 0, 0, REANIM_TREEOFWISDOM_CLOUDS);
-		aReanimCloud->PlayReanim(std::format("Cloud{}", i + 1).c_str(), REANIM_PLAY_ONCE_AND_HOLD, 0, 0);
-		mReanimClouds[i] = mApp->ReanimationGetID(aReanimCloud);
-
-		int aCloudCounter = RandRangeInt(-6000, 2000);
-		mCloudsCounter[i] = aCloudCounter;
-		if (aCloudCounter < 0)
+		if (aReanimCloud)
 		{
-			aReanimCloud->mAnimTime = -aCloudCounter / 6000.0f;
-			aReanimCloud->mAnimRate = 0.2f;
-			mCloudsCounter[i] = 0;
+			std::string aCloudTrack = std::format("Cloud{}", i + 1);
+			if (aReanimCloud->TrackExists(aCloudTrack.c_str()))
+			{
+				aReanimCloud->PlayReanim(aCloudTrack.c_str(), REANIM_PLAY_ONCE_AND_HOLD, 0, 0);
+			}
+			mReanimClouds[i] = mApp->ReanimationGetID(aReanimCloud);
+
+			int aCloudCounter = RandRangeInt(-6000, 2000);
+			mCloudsCounter[i] = aCloudCounter;
+			if (aCloudCounter < 0)
+			{
+				aReanimCloud->mAnimTime = -aCloudCounter / 6000.0f;
+				aReanimCloud->mAnimRate = 0.2f;
+				mCloudsCounter[i] = 0;
+			}
+			else
+			{
+				aReanimCloud->mAnimRate = 0;
+			}
 		}
 		else
 		{
-			aReanimCloud->mAnimRate = 0;
+			mReanimClouds[i] = REANIMATIONID_NULL;
 		}
 	}
 
@@ -5093,7 +5133,11 @@ void Challenge::TreeOfWisdomGrow()
 {
 	mApp->mPlayerInfo->mChallengeRecords[mApp->GetCurrentChallengeIndex()]++;
 	int aTreeSize = TreeOfWisdomGetSize();
-	mApp->ReanimationGet(mReanimChallenge)->PlayReanim(std::format("anim_grow{}", std::clamp(aTreeSize, 1, 51)).c_str(), REANIM_PLAY_ONCE_AND_HOLD, 0, 8.0f);
+	Reanimation* aTreeReanim = mApp->ReanimationTryToGet(mReanimChallenge);
+	if (aTreeReanim)
+	{
+		aTreeReanim->PlayReanim(std::format("anim_grow{}", std::clamp(aTreeSize, 1, 51)).c_str(), REANIM_PLAY_ONCE_AND_HOLD, 0, 8.0f);
+	}
 	mApp->PlayFoley(FOLEY_PLANTGROW);
 
 	if (aTreeSize > 1)
@@ -5255,7 +5299,9 @@ void Challenge::TreeOfWisdomUpdate()
 
 	for (int i = 5; i >= 0; i--) // Off by one error!
 	{
-		Reanimation* aReanimCloud = mApp->ReanimationGet(mReanimClouds[i]);
+		Reanimation* aReanimCloud = mApp->ReanimationTryToGet(mReanimClouds[i]);
+		if (!aReanimCloud)
+			continue;
 		if (mCloudsCounter[i] > 0)
 		{
 			mCloudsCounter[i]--;
@@ -5277,6 +5323,9 @@ void Challenge::TreeOfWisdomUpdate()
 
 void Challenge::TreeOfWisdomLeave()
 {
+	if (mBoard == nullptr || mBoard->mBackground != BackgroundType::BACKGROUND_TREEOFWISDOM)
+		return;
+
 	for (GridItem* aGridItem : mBoard->mGridItems)
 	{
 		if (aGridItem->mDead)
@@ -5292,6 +5341,13 @@ void Challenge::TreeOfWisdomLeave()
 void Challenge::TreeOfWisdomNextGarden()
 {
 	TreeOfWisdomLeave();
+#ifdef LOW_MEMORY
+	ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_TREEOFWISDOM]);
+	ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_TREEOFWISDOM_CLOUDS]);
+	ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_TREEOFWISDOM_TREEFOOD]);
+	mApp->CleanSharedImages();
+#endif
+	mApp->mZenGarden->mGardenType = GardenType::GARDEN_MAIN;
 	mApp->mGameMode = GAMEMODE_CHALLENGE_ZEN_GARDEN;
 	mApp->mDeferredNewGame = true;
 }

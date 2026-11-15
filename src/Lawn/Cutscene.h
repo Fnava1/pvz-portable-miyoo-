@@ -46,6 +46,7 @@ public:
 	int                         mLawnMowerTime;
 	int                         mCrazyDaveDialogStart;
 	bool                        mSeedChoosing;
+	bool                        mSeedChooserStarted;
 	ReanimationID               mZombiesWonReanimID;
 	bool                        mPreloaded;
 	bool                        mPlacedZombies;

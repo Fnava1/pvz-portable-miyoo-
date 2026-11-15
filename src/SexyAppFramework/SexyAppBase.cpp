@@ -1732,7 +1732,7 @@ void SexyAppBase::UpdateVirtualCursor()
 	if (state)
 	{
 		float speed = 6.0f;
-		if (state[SDL_SCANCODE_LSHIFT] || state[SDL_SCANCODE_TAB] || state[SDL_SCANCODE_BACKSPACE])
+		if (GetDialogCount() > 0 || state[SDL_SCANCODE_LSHIFT] || state[SDL_SCANCODE_TAB] || state[SDL_SCANCODE_BACKSPACE])
 			speed = 12.0f;
 
 		bool moved = false;
@@ -1784,7 +1784,8 @@ void SexyAppBase::UpdateFrames()
 		mWidgetManager->UpdateFrame();
 
 	mMusicInterface->Update();
-	CleanSharedImages();
+	if (mCleanupSharedImages.load(std::memory_order_relaxed))
+		CleanSharedImages();
 }
 
 void SexyAppBase::DoUpdateFramesF(float theFrac)
@@ -2822,6 +2823,10 @@ bool SexyAppBase::Process(bool allowSleep)
 			mPendingUpdatesAcc += anUpdatesPerUpdateF;
 			mPendingUpdatesAcc -= 1.0;
 			ProcessSafeDeleteList();
+
+			// Cap pending updates to prevent multi-tick judder cascades
+			if (mPendingUpdatesAcc > 1.8)
+				mPendingUpdatesAcc = 1.8;
 
 			// Process any extra updates
 			while (mPendingUpdatesAcc >= 1.0)
@@ -4377,34 +4382,44 @@ SharedImageRef SexyAppBase::GetSharedImage(const std::string& theFileName, const
 
 void SexyAppBase::CleanSharedImages()
 {
-	if (mGLInterface == nullptr) return;
-
 	std::vector<GLImage*> imagesToDelete;
+	if (mGLInterface != nullptr)
 	{
 		std::scoped_lock anAutoCrit(mGLInterface->mCritSect);
 
-		if (mCleanupSharedImages.load(std::memory_order_relaxed))
+		SharedImageMap::iterator aSharedImageItr = mSharedImageMap.begin();
+		while (aSharedImageItr != mSharedImageMap.end())
 		{
-			// Delete shared images with reference counts of 0
-			// This doesn't occur in ~SharedImageRef because sometimes we can not only access the image
-			//  through the SharedImageRef returned by GetSharedImage, but also by calling GetSharedImage
-			//  again with the same params -- so we can have instances where we do the 'final' deref on
-			//  an image but immediately re-request it via GetSharedImage
-			SharedImageMap::iterator aSharedImageItr = mSharedImageMap.begin();
-			while (aSharedImageItr != mSharedImageMap.end())
+			SharedImage* aSharedImage = &aSharedImageItr->second;
+			if (aSharedImage->mRefCount == 0)
 			{
-				SharedImage* aSharedImage = &aSharedImageItr->second;
-				if (aSharedImage->mRefCount == 0)
-				{
+				if (aSharedImage->mImage != nullptr)
 					imagesToDelete.push_back(aSharedImage->mImage);
-					mSharedImageMap.erase(aSharedImageItr++);
-				}
-				else
-					++aSharedImageItr;
+				mSharedImageMap.erase(aSharedImageItr++);
 			}
-
-			mCleanupSharedImages.store(false, std::memory_order_relaxed);
+			else
+				++aSharedImageItr;
 		}
+
+		mCleanupSharedImages.store(false, std::memory_order_relaxed);
+	}
+	else
+	{
+		SharedImageMap::iterator aSharedImageItr = mSharedImageMap.begin();
+		while (aSharedImageItr != mSharedImageMap.end())
+		{
+			SharedImage* aSharedImage = &aSharedImageItr->second;
+			if (aSharedImage->mRefCount == 0)
+			{
+				if (aSharedImage->mImage != nullptr)
+					imagesToDelete.push_back(aSharedImage->mImage);
+				mSharedImageMap.erase(aSharedImageItr++);
+			}
+			else
+				++aSharedImageItr;
+		}
+
+		mCleanupSharedImages.store(false, std::memory_order_relaxed);
 	}
 
 	for (GLImage* img : imagesToDelete)

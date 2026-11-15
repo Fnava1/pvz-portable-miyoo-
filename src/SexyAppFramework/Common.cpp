@@ -35,7 +35,13 @@
 
 #include "misc/PerfTimer.h"
 
+#ifndef _WIN32
+#include <fcntl.h>
+#include <unistd.h>
+#endif
+
 bool Sexy::gDebug = false;
+bool Sexy::gEnableFileLogging = false;
 static Sexy::MTRand gMTRand;
 namespace Sexy
 {
@@ -68,8 +74,70 @@ static inline bool IsUnicodeSpace(char32_t theChar)
 static std::ofstream gLogFileSink;
 static std::mutex gLogFileSinkMutex;
 
+static constexpr size_t LOG_RING_BUFFER_SIZE = 32768;
+static char sLogRingBuffer[LOG_RING_BUFFER_SIZE];
+static size_t sLogRingHead = 0;
+static bool sLogRingWrapped = false;
+static std::mutex sLogRingMutex;
+
+static void RingBufferWriteBytes(const char* theData, size_t theLength)
+{
+	if (theLength == 0)
+		return;
+
+	if (theLength >= LOG_RING_BUFFER_SIZE)
+	{
+		theData += (theLength - LOG_RING_BUFFER_SIZE);
+		theLength = LOG_RING_BUFFER_SIZE;
+		std::memcpy(sLogRingBuffer, theData, LOG_RING_BUFFER_SIZE);
+		sLogRingHead = 0;
+		sLogRingWrapped = true;
+		return;
+	}
+
+	size_t aSpaceToEnd = LOG_RING_BUFFER_SIZE - sLogRingHead;
+	if (theLength <= aSpaceToEnd)
+	{
+		std::memcpy(sLogRingBuffer + sLogRingHead, theData, theLength);
+		sLogRingHead += theLength;
+		if (sLogRingHead == LOG_RING_BUFFER_SIZE)
+		{
+			sLogRingHead = 0;
+			sLogRingWrapped = true;
+		}
+	}
+	else
+	{
+		std::memcpy(sLogRingBuffer + sLogRingHead, theData, aSpaceToEnd);
+		size_t aRemainder = theLength - aSpaceToEnd;
+		std::memcpy(sLogRingBuffer, theData + aSpaceToEnd, aRemainder);
+		sLogRingHead = aRemainder;
+		sLogRingWrapped = true;
+	}
+}
+
+void Sexy::InitLogRingBuffer()
+{
+	std::scoped_lock aLock(sLogRingMutex);
+	std::memset(sLogRingBuffer, 0, LOG_RING_BUFFER_SIZE);
+	sLogRingHead = 0;
+	sLogRingWrapped = false;
+}
+
+void Sexy::ClearLogRingBuffer()
+{
+	std::scoped_lock aLock(sLogRingMutex);
+	std::memset(sLogRingBuffer, 0, LOG_RING_BUFFER_SIZE);
+	sLogRingHead = 0;
+	sLogRingWrapped = false;
+}
+
 void Sexy::RegisterLogFileSink(std::string_view thePath)
 {
+	if (!gEnableFileLogging)
+		return;
+
+	std::scoped_lock aLock(gLogFileSinkMutex);
 	gLogFileSink.open(PathFromU8(thePath), std::ios::app | std::ios::binary);
 	if (!gLogFileSink)
 		LogErrorLn("Failed to open log file '{}'", thePath);
@@ -82,16 +150,74 @@ void Sexy::DispatchLogLn(SexyLogPriority thePriority, std::string_view theText)
 
 	SDL_LogMessage(SDL_LOG_CATEGORY_APPLICATION, thePriority == SexyLogPriority::Error ? SDL_LOG_PRIORITY_ERROR : SDL_LOG_PRIORITY_INFO, "%.*s", static_cast<int>(theText.size()), theText.data());
 
-	std::scoped_lock aLock(gLogFileSinkMutex);
-	if (gLogFileSink.is_open())
 	{
-		gLogFileSink << theText << '\n' << std::flush;
-		if (!gLogFileSink)
+		std::scoped_lock aLock(sLogRingMutex);
+		RingBufferWriteBytes(theText.data(), theText.size());
+		char aNewline = '\n';
+		RingBufferWriteBytes(&aNewline, 1);
+	}
+
+	if (gEnableFileLogging)
+	{
+		std::scoped_lock aLock(gLogFileSinkMutex);
+		if (gLogFileSink.is_open())
 		{
-			SDL_LogMessage(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_ERROR, "%s", "Failed to write to log file");
-			gLogFileSink.close();
+			gLogFileSink << theText << '\n';
+			if (!gLogFileSink)
+			{
+				SDL_LogMessage(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_ERROR, "%s", "Failed to write to log file");
+				gLogFileSink.close();
+			}
 		}
 	}
+}
+
+void Sexy::DumpLogRingBufferToCrashFile(const char* theFilePath)
+{
+	if (!theFilePath || *theFilePath == '\0')
+		theFilePath = "/tmp/pvz_crash.log";
+
+	std::scoped_lock aLock(sLogRingMutex);
+
+#ifndef _WIN32
+	int fd = open(theFilePath, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+	if (fd >= 0)
+	{
+		if (sLogRingWrapped)
+		{
+			size_t aFirstPart = LOG_RING_BUFFER_SIZE - sLogRingHead;
+			if (aFirstPart > 0)
+				(void)write(fd, sLogRingBuffer + sLogRingHead, aFirstPart);
+			if (sLogRingHead > 0)
+				(void)write(fd, sLogRingBuffer, sLogRingHead);
+		}
+		else
+		{
+			if (sLogRingHead > 0)
+				(void)write(fd, sLogRingBuffer, sLogRingHead);
+		}
+		close(fd);
+	}
+#else
+	FILE* fp = fopen(theFilePath, "wb");
+	if (fp)
+	{
+		if (sLogRingWrapped)
+		{
+			size_t aFirstPart = LOG_RING_BUFFER_SIZE - sLogRingHead;
+			if (aFirstPart > 0)
+				fwrite(sLogRingBuffer + sLogRingHead, 1, aFirstPart, fp);
+			if (sLogRingHead > 0)
+				fwrite(sLogRingBuffer, 1, sLogRingHead, fp);
+		}
+		else
+		{
+			if (sLogRingHead > 0)
+				fwrite(sLogRingBuffer, 1, sLogRingHead, fp);
+		}
+		fclose(fp);
+	}
+#endif
 }
 
 int Sexy::Rand()

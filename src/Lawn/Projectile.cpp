@@ -115,8 +115,11 @@ void Projectile::ProjectileInitialize(int theX, int theY, int theRenderOrder, in
 		break;
 	case ProjectileType::PROJECTILE_SNOWPEA:
 	{
-		PvzpParticleSystem* aParticle = mApp->AddPvzpParticle(mPosX + 8.0f, mPosY + 13.0f, 400000, ParticleEffect::PARTICLE_SNOWPEA_TRAIL);
-		AttachParticle(mAttachmentID, aParticle, 8.0f, 13.0f);
+		if (!mBoard || mBoard->mProjectiles.mSize <= 15)
+		{
+			PvzpParticleSystem* aParticle = mApp->AddPvzpParticle(mPosX + 8.0f, mPosY + 13.0f, 400000, ParticleEffect::PARTICLE_SNOWPEA_TRAIL);
+			AttachParticle(mAttachmentID, aParticle, 8.0f, 13.0f);
+		}
 		break;
 	}
 	case ProjectileType::PROJECTILE_FIREBALL:
@@ -129,8 +132,11 @@ void Projectile::ProjectileInitialize(int theX, int theY, int theRenderOrder, in
 		break;
 	case ProjectileType::PROJECTILE_PUFF:
 	{
-		PvzpParticleSystem* aParticle = mApp->AddPvzpParticle(mPosX + 13.0f, mPosY + 13.0f, 400000, ParticleEffect::PARTICLE_PUFFSHROOM_TRAIL);
-		AttachParticle(mAttachmentID, aParticle, 13.0f, 13.0f);
+		if (!mBoard || mBoard->mProjectiles.mSize <= 15)
+		{
+			PvzpParticleSystem* aParticle = mApp->AddPvzpParticle(mPosX + 13.0f, mPosY + 13.0f, 400000, ParticleEffect::PARTICLE_PUFFSHROOM_TRAIL);
+			AttachParticle(mAttachmentID, aParticle, 13.0f, 13.0f);
+		}
 		break;
 	}
 	case ProjectileType::PROJECTILE_BASKETBALL:
@@ -156,9 +162,12 @@ void Projectile::ProjectileInitialize(int theX, int theY, int theRenderOrder, in
 
 Plant* Projectile::FindCollisionTargetPlant()
 {
+	if (mRow < 0 || mRow >= MAX_GRID_SIZE_Y || (mBoard->mRowHasPlantsMask & (1U << mRow)) == 0)
+		return nullptr;
+
 	Rect aProjectileRect = GetProjectileRect();
 
-	for (Plant* aPlant : mBoard->mPlants)
+	for (Plant* aPlant : mBoard->mRowPlants[mRow])
 	{
 		if (aPlant->mDead)
 			continue;
@@ -483,16 +492,65 @@ bool Projectile::IsZombieHitBySplash(Zombie* theZombie)
 
 void Projectile::DoSplashDamage(Zombie* theZombie)
 {
+	if (!mBoard)
+		return;
+
 	const ProjectileDefinition& aProjectileDef = GetProjectileDef();
 
+	Zombie* aHitZombies[256];
+	int aHitCount = 0;
 	int aZombiesGetSplashed = 0;
-	for (Zombie* aZombie : mBoard->mZombies)
+
+	int aMinRow = std::max(0, mRow - 1);
+	int aMaxRow = std::min(5, mRow + 1);
+
+	for (int r = aMinRow; r <= aMaxRow; ++r)
 	{
-		if (aZombie->mDead)
-			continue;
-		if (aZombie != theZombie && IsZombieHitBySplash(aZombie))
+		for (Zombie* aZombie : mBoard->mRowZombies[r])
 		{
-			aZombiesGetSplashed++;
+			if (aZombie->mDead)
+				continue;
+			if (IsZombieHitBySplash(aZombie))
+			{
+				if (aHitCount < 256)
+				{
+					aHitZombies[aHitCount++] = aZombie;
+				}
+				if (aZombie != theZombie)
+				{
+					aZombiesGetSplashed++;
+				}
+			}
+		}
+	}
+
+	if (mBoard->mHasBossZombie)
+	{
+		for (Zombie* aZombie : mBoard->mZombies)
+		{
+			if (aZombie->mZombieType == ZombieType::ZOMBIE_BOSS && !aZombie->mDead && IsZombieHitBySplash(aZombie))
+			{
+				bool alreadyIn = false;
+				for (int i = 0; i < aHitCount; ++i)
+				{
+					if (aHitZombies[i] == aZombie)
+					{
+						alreadyIn = true;
+						break;
+					}
+				}
+				if (!alreadyIn)
+				{
+					if (aHitCount < 256)
+					{
+						aHitZombies[aHitCount++] = aZombie;
+					}
+					if (aZombie != theZombie)
+					{
+						aZombiesGetSplashed++;
+					}
+				}
+			}
 		}
 	}
 
@@ -511,21 +569,20 @@ void Projectile::DoSplashDamage(Zombie* theZombie)
 		aSplashDamage = std::max(aSplashDamage, 1);
 	}
 
-	for (Zombie* aZombie : mBoard->mZombies)
+	for (int i = 0; i < aHitCount; ++i)
 	{
+		Zombie* aZombie = aHitZombies[i];
 		if (aZombie->mDead)
 			continue;
-		if (IsZombieHitBySplash(aZombie))
+
+		unsigned int aDamageFlags = GetDamageFlags(aZombie);
+		if (aZombie == theZombie)
 		{
-			unsigned int aDamageFlags = GetDamageFlags(aZombie);
-			if (aZombie == theZombie)
-			{
-				aZombie->TakeDamage(aOriginalDamage, aDamageFlags);
-			}
-			else
-			{
-				aZombie->TakeDamage(aSplashDamage, aDamageFlags);
-			}
+			aZombie->TakeDamage(aOriginalDamage, aDamageFlags);
+		}
+		else
+		{
+			aZombie->TakeDamage(aSplashDamage, aDamageFlags);
 		}
 	}
 }
@@ -1108,22 +1165,8 @@ bool Projectile::HasShadow() const
 
 void Projectile::DrawShadow(Graphics* g)
 {
-	if (!mBoard)
+	if (!mBoard || (!mApp->Is3DAccelerated() && mBoard->mProjectiles.mSize > 15))
 		return;
-
-	if (mRow >= 0 && mRow < MAX_GRID_SIZE_Y && mBoard->mRowZombies[mRow].size() > 3)
-	{
-		int zombiesNear = 0;
-		for (Zombie* aZombie : mBoard->mRowZombies[mRow])
-		{
-			if (std::abs(aZombie->mPosX - mPosX) < 50.0f)
-			{
-				zombiesNear++;
-				if (zombiesNear >= 2)
-					return;
-			}
-		}
-	}
 
 	int aCelCol = 0;
 	float aScale = 1.0f;
@@ -1195,11 +1238,21 @@ void Projectile::DrawShadow(Graphics* g)
 
 	if (mMotionType == ProjectileMotion::MOTION_LOBBED)
 	{
-		float aHeight = std::clamp(-mPosZ, 0.0f, 200.0f);
-		aScale *= 200.0f / (aHeight + 200.0f);
+		if (mProjectileType == ProjectileType::PROJECTILE_COBBIG)
+		{
+			// For PROJECTILE_COBBIG, optimize / clamp shadow stretch to avoid per-frame fractional software scaling
+			aScale = 1.0f;
+		}
+		else
+		{
+			float aHeight = std::clamp(-mPosZ, 0.0f, 200.0f);
+			aScale *= 200.0f / (aHeight + 200.0f);
+		}
 	}
 
-	PvzpDrawImageCelScaledF(g, IMAGE_PEA_SHADOWS, aOffsetX, (mShadowY - mPosY + aOffsetY), aCelCol, 0, aScale * aStretch, aScale);
+	float aScaleX = (mProjectileType == ProjectileType::PROJECTILE_COBBIG) ? 3.0f : (aScale * aStretch);
+	float aScaleY = (mProjectileType == ProjectileType::PROJECTILE_COBBIG) ? 1.0f : aScale;
+	PvzpDrawImageCelScaledF(g, IMAGE_PEA_SHADOWS, aOffsetX, (mShadowY - mPosY + aOffsetY), aCelCol, 0, aScaleX, aScaleY);
 }
 
 void Projectile::Die()

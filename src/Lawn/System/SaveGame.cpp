@@ -33,6 +33,7 @@
 #include "zlib.h"
 #include "../../PvzpLib/Attachment.h"
 #include "../../PvzpLib/Reanimator.h"
+#include "../../PvzpLib/SpriteCachePool.h"
 #include "../../PvzpLib/PvzpParticle.h"
 #include "../../PvzpLib/EffectSystem.h"
 #include "../../PvzpLib/DataArray.h"
@@ -1153,6 +1154,7 @@ static void SyncReanimTrackInstancePortable(PortableSaveContext& theContext, Rea
 static void SyncReanimationPortable(Board* theBoard, Reanimation* theReanimation, PortableSaveContext& theContext)
 {
 	SyncReanimationDefPortable(theContext, theReanimation->mDefinition);
+	theContext.SyncEnum(theReanimation->mReanimationType);
 	if (theContext.mReading)
 	{
 		theReanimation->mReanimationHolder = theBoard->mApp->mEffectSystem->mReanimationHolder.get();
@@ -1177,7 +1179,6 @@ static void SyncReanimationPortable(Board* theBoard, Reanimation* theReanimation
 		}
 	}
 
-	theContext.SyncEnum(theReanimation->mReanimationType);
 	theContext.SyncFloat(theReanimation->mAnimTime);
 	theContext.SyncFloat(theReanimation->mAnimRate);
 	theContext.SyncEnum(theReanimation->mLoopType);
@@ -2099,7 +2100,7 @@ static void FixBoardAfterLoad(Board* theBoard)
 			case ZombieType::ZOMBIE_GARGANTUAR:
 			case ZombieType::ZOMBIE_REDEYE_GARGANTUAR:
 			{
-				Reanimation* aBodyReanim = theBoard->mApp->ReanimationGet(aZombie->mBodyReanimID);
+				Reanimation* aBodyReanim = theBoard->mApp->ReanimationTryToGet(aZombie->mBodyReanimID);
 				if (aBodyReanim)
 				{
 					int aDamageIndex = aZombie->GetBodyDamageIndex();
@@ -2131,7 +2132,7 @@ static void FixBoardAfterLoad(Board* theBoard)
 
 			case ZombieType::ZOMBIE_ZAMBONI:
 			{
-				Reanimation* aBodyReanim = theBoard->mApp->ReanimationGet(aZombie->mBodyReanimID);
+				Reanimation* aBodyReanim = theBoard->mApp->ReanimationTryToGet(aZombie->mBodyReanimID);
 				if (aBodyReanim)
 				{
 					int aDamageIndex = aZombie->GetBodyDamageIndex();
@@ -2151,7 +2152,7 @@ static void FixBoardAfterLoad(Board* theBoard)
 
 			case ZombieType::ZOMBIE_CATAPULT:
 			{
-				Reanimation* aBodyReanim = theBoard->mApp->ReanimationGet(aZombie->mBodyReanimID);
+				Reanimation* aBodyReanim = theBoard->mApp->ReanimationTryToGet(aZombie->mBodyReanimID);
 				if (aBodyReanim)
 				{
 					int aDamageIndex = aZombie->GetBodyDamageIndex();
@@ -2165,7 +2166,7 @@ static void FixBoardAfterLoad(Board* theBoard)
 
 			case ZombieType::ZOMBIE_BOSS:
 			{
-				Reanimation* aBodyReanim = theBoard->mApp->ReanimationGet(aZombie->mBodyReanimID);
+				Reanimation* aBodyReanim = theBoard->mApp->ReanimationTryToGet(aZombie->mBodyReanimID);
 				if (aBodyReanim)
 				{
 					int aDamageIndex = aZombie->GetBodyDamageIndex();
@@ -2239,6 +2240,79 @@ static void FixBoardAfterLoad(Board* theBoard)
 	theBoard->mChallenge->mBoard = theBoard;
 	theBoard->mApp->mMusic->mApp = theBoard->mApp;
 	theBoard->mApp->mMusic->mMusicInterface = theBoard->mApp->mMusicInterface.get();
+
+	// Scan active plants on board and in seedbank, preload plant resources
+	bool aPlantNeeded[SeedType::NUM_SEED_TYPES] = {};
+	for (Plant* aPlant : theBoard->mPlants)
+	{
+		if (aPlant && !aPlant->mDead && aPlant->mSeedType >= 0 && aPlant->mSeedType < SeedType::NUM_SEED_TYPES)
+		{
+			aPlantNeeded[aPlant->mSeedType] = true;
+			if (aPlant->mImitaterType >= 0 && aPlant->mImitaterType < SeedType::NUM_SEED_TYPES)
+			{
+				aPlantNeeded[aPlant->mImitaterType] = true;
+			}
+		}
+	}
+	if (theBoard->mSeedBank)
+	{
+		for (int i = 0; i < theBoard->mSeedBank->mNumPackets && i < SEEDBANK_MAX; ++i)
+		{
+			SeedPacket* aPacket = &theBoard->mSeedBank->mSeedPackets[i];
+			if (aPacket->mPacketType >= 0 && aPacket->mPacketType < SeedType::NUM_SEED_TYPES)
+			{
+				aPlantNeeded[aPacket->mPacketType] = true;
+			}
+			if (aPacket->mImitaterType >= 0 && aPacket->mImitaterType < SeedType::NUM_SEED_TYPES)
+			{
+				aPlantNeeded[aPacket->mImitaterType] = true;
+			}
+		}
+	}
+	for (int p = 0; p < SeedType::NUM_SEED_TYPES; ++p)
+	{
+		if (aPlantNeeded[p])
+		{
+			Plant::PreloadPlantResources(static_cast<SeedType>(p));
+		}
+	}
+
+	// Scan zombies and allowed zombies, preload zombie resources
+	bool aZombieNeeded[ZombieType::NUM_ZOMBIE_TYPES] = {};
+	for (int z = 0; z < ZombieType::NUM_ZOMBIE_TYPES; ++z)
+	{
+		if (theBoard->mZombieAllowed[z])
+		{
+			aZombieNeeded[z] = true;
+		}
+	}
+	for (Zombie* aZombie : theBoard->mZombies)
+	{
+		if (aZombie && !aZombie->mDead && aZombie->mZombieType >= 0 && aZombie->mZombieType < ZombieType::NUM_ZOMBIE_TYPES)
+		{
+			aZombieNeeded[aZombie->mZombieType] = true;
+		}
+	}
+	for (int z = 0; z < ZombieType::NUM_ZOMBIE_TYPES; ++z)
+	{
+		if (aZombieNeeded[z])
+		{
+			Zombie::PreloadZombieResources(static_cast<ZombieType>(z));
+		}
+	}
+
+	// Preload universal charred definitions and combat reanimations
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_IMP, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_DIGGER, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_ZAMBONI, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_CATAPULT, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_GARGANTUAR, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_PUFF, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_LAWN_MOWERED_ZOMBIE, true);
+
+	// Synchronously preload sprite cache pool for all active plants and allowed zombies
+	SpriteCachePool::PreloadSynchronous(theBoard);
 }
 
 static bool LawnLoadGameV4(Board* theBoard, const std::string& theFilePath)

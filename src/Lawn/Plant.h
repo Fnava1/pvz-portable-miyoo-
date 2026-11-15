@@ -295,7 +295,7 @@ public:
 	void                    UpdateCobCannon();
 	void                    CobCannonFire(int theTargetX, int theTargetY);
 	void                    UpdateGoldMagnetShroom();
-	bool         IsOnBoard();
+	bool         IsOnBoard() const;
 	void                    RemoveEffects();
 	void                    UpdateCoffeeBean();
 	void                    UpdateUmbrella();
@@ -306,6 +306,7 @@ public:
 	void                    ImitaterMorph();
 	void                    UpdateImitater();
 	void                    UpdateReanim();
+	bool                    CanUseSpriteCache() const;
 	void                    SpikeRockTakeDamage();
 	bool                    IsSpiky();
 	static void  PreloadPlantResources(SeedType theSeedType);

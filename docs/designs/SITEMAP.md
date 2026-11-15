@@ -1,0 +1,8 @@
+# Design Documents Index (Sitemap)
+
+| Document | Date | Author | Status | Target Hardware | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| [optimizacion_ram_sprite_cache_pool_14mb.md](optimizacion_ram_sprite_cache_pool_14mb.md) | 2026-11-12 | Fnava1 | Proposed | Miyoo Mini Plus (SSD202D) | Expansión del SpriteCachePool a 14 MB virtual con purga física madvise, eliminación de leaks en Supervivencia y ahorro de 1.92 MB de fondo vía PurgeBits. |
+| [rendimiento_combate_denso_supervivencia_infinita.md](rendimiento_combate_denso_supervivencia_infinita.md) | 2026-11-14 | Fnava1 | Proposed | Miyoo Mini Plus (SSD202D) | Retención de Sprite Cache para zombies ralentizados y daño superficial, tolerancia branchless a impactos, decimación a 20 Hz, vectorización NEON y caché de calabazas en dos pases. |
+| [optimizacion_entidades_criticas_supervivencia_infinita.md](optimizacion_entidades_criticas_supervivencia_infinita.md) | 2026-11-14 | Fnava1 | Proposed | Miyoo Mini Plus (SSD202D) | Pre-baking de focos del Zombie Bailarín, control de vanguardia en Zombiditos comiendo, desacople esquelético de Zombiestein y optimización de salpicadura de proyectiles en combate denso. |
+| [estabilizacion_supervivencia_densa_congelamiento.md](estabilizacion_supervivencia_densa_congelamiento.md) | 2026-11-14 | Fnava1 | Proposed | Miyoo Mini Plus (SSD202D) | Erradicación de micro-congelamientos y detención del juego en Supervivencia Densa mediante buffer de log en RAM de 32 KB, rehidratación síncrona en SaveGame, SpriteCache para Tripitidoras (12 slots) y muerte simplificada fuera de pantalla. |
