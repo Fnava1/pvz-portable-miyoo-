@@ -764,13 +764,27 @@ void SeedChooserScreen::ButtonDepress(int theId)
 	{
 		StoreScreen* aStore = mApp->ShowStoreScreen();
 		aStore->mBackButton->SetLabel("[STORE_BACK_TO_GAME]");
-		aStore->WaitForResult();
-		if (aStore->mGoToTreeNow)
+		aStore->WaitForResult(false);
+		bool aGoToTree = aStore->mGoToTreeNow;
+		mApp->KillStoreScreen();
+		if (aGoToTree)
 		{
 			mApp->mGameMode = GAMEMODE_TREE_OF_WISDOM;
 			mApp->mDeferredNewGame = true;
 		}
-		else mApp->mMusic->MakeSureMusicIsPlaying(MUSIC_TUNE_CHOOSE_YOUR_SEEDS);
+		else
+		{
+			mApp->mMusic->MakeSureMusicIsPlaying(MUSIC_TUNE_CHOOSE_YOUR_SEEDS);
+		}
+
+		if (mBoard)
+		{
+			mBoard->mPaused = false;
+			if (mBoard->mSeedBank)
+			{
+				mBoard->mSeedBank->UpdateWidth();
+			}
+		}
 	}
 	else if (theId == SeedChooserScreen::SeedChooserScreen_Menu)
 	{

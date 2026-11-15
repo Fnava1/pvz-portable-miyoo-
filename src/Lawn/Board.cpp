@@ -6406,6 +6406,12 @@ void Board::Update()
 {
 	PvzpHesitationBracket aHesitation("Board::Update");
 
+	if (mApp->GetDialog(Dialogs::DIALOG_STORE) != nullptr)
+	{
+		mPaused = true;
+		return;
+	}
+
 	SpriteStreamer::Update();
 
 	Widget::Update();
@@ -8370,10 +8376,12 @@ void Board::DrawUITop(Graphics* g)
 		mCutScene->DrawIntro(g);
 	}
 
-	if (mApp->mGameScene == GameScenes::SCENE_LEVEL_INTRO ||
+	bool aStoreActive = (mApp->GetDialog(Dialogs::DIALOG_STORE) != nullptr);
+	if (!aStoreActive &&
+		((mApp->mGameScene == GameScenes::SCENE_LEVEL_INTRO && mCutScene->IsShowingCrazyDave()) ||
 		mApp->mGameMode == GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN ||
 		mApp->mGameMode == GameMode::GAMEMODE_TREE_OF_WISDOM ||
-		IsScaryPotterDaveTalking())
+		IsScaryPotterDaveTalking()))
 	{
 		Graphics aScreenSpace(*g);
 		aScreenSpace.mTransX -= mX;

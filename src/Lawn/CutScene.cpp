@@ -380,12 +380,46 @@ void CutScene::PreloadResources()
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_BACKUP_DANCER, true);
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_BOBSLED, true);
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_SURPRISE, true);
-		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);
-		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_IMP, true);
-		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_DIGGER, true);
-		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_ZAMBONI, true);
-		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_CATAPULT, true);
-		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_GARGANTUAR, true);
+		bool aHasExplosivePlant = false;
+		if (mBoard->mSeedBank)
+		{
+			for (int i = 0; i < mBoard->mSeedBank->mNumPackets; i++)
+			{
+				SeedType aSeedType = mBoard->mSeedBank->mSeedPackets[i].mPacketType;
+				SeedType aImitaterType = mBoard->mSeedBank->mSeedPackets[i].mImitaterType;
+				if (aSeedType == SeedType::SEED_CHERRYBOMB || aSeedType == SeedType::SEED_JALAPENO ||
+					aSeedType == SeedType::SEED_DOOMSHROOM || aSeedType == SeedType::SEED_COBCANNON ||
+					(aSeedType == SeedType::SEED_IMITATER && (aImitaterType == SeedType::SEED_CHERRYBOMB ||
+															 aImitaterType == SeedType::SEED_JALAPENO ||
+															 aImitaterType == SeedType::SEED_DOOMSHROOM ||
+															 aImitaterType == SeedType::SEED_COBCANNON)))
+				{
+					aHasExplosivePlant = true;
+					break;
+				}
+			}
+		}
+
+		if (aHasExplosivePlant)
+		{
+			ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);
+			if (mBoard->mZombieAllowed[ZombieType::ZOMBIE_GARGANTUAR] || mBoard->mZombieAllowed[ZombieType::ZOMBIE_REDEYE_GARGANTUAR])
+			{
+				ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_GARGANTUAR, true);
+			}
+			if (mBoard->mZombieAllowed[ZombieType::ZOMBIE_ZAMBONI])
+			{
+				ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_ZAMBONI, true);
+			}
+			if (mBoard->mZombieAllowed[ZombieType::ZOMBIE_CATAPULT])
+			{
+				ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_CATAPULT, true);
+			}
+			if (mBoard->mZombieAllowed[ZombieType::ZOMBIE_DIGGER])
+			{
+				ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_DIGGER, true);
+			}
+		}
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_PUFF, true);
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_FLAG, true);
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_LAWN_MOWERED_ZOMBIE, true);

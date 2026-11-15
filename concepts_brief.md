@@ -1,69 +1,73 @@
-# Estabilización y Rediseño de Rendimiento en Supervivencia Densa
+# Estabilización de la Tienda de Crazy Dave en el Interludio de Supervivencia
 
 * **Author:** Fnava1
 * **Date:** 2026-11-14
 
 ## Overview
 
-Este documento establece el plan de rediseño técnico para erradicar las caídas severas de cuadros por segundo (FPS) y los micro-congelamientos durante partidas de alta densidad en el modo Supervivencia (Survival Endless) en la consola portátil Miyoo Mini Plus (SoC SigmaStar SSD202D, CPU Dual-Core ARM Cortex-A7 @ 1.2 GHz, 128 MB RAM, techo OOM kernel de 85 MB).
+Este documento establece el plan técnico y de arquitectura para erradicar los cierres inesperados (fallos de segmentación `SIGSEGV` y terminación forzada por falta de memoria `OOM SIGKILL`) al ingresar y salir de la tienda de Crazy Dave desde la pantalla de selección de semillas (`SeedChooserScreen`) durante el interludio entre oleadas en los modos de Supervivencia (`Survival: Endless` y `Survival: Pool Hard`) en la consola portátil Miyoo Mini Plus (SoC SigmaStar SSD202D, ARM Cortex-A7, 128 MB RAM, techo OOM de 85 MB).
 
-La solución ataca cuatro frentes críticos identificados en el motor:
-1. Desactivación absoluta de la escritura síncrona a disco (`std::flush`) en el sistema de logging, eliminando la contención en el bus de la tarjeta microSD.
-2. Rehidratación y precarga síncrona completa en la restauración de partidas guardadas (`LawnLoadGameV4` / `FixBoardAfterLoad`), garantizando en memoria RAM todas las definiciones `.reanim`, `.spc` y variantes calcinadas de zombies antes de reanudar el combate.
-3. Despacho optimizado por `SeedType` para el estado de reposo de plantas en `Plant.cpp`, habilitando el uso inmediato de `SpriteCachePool` para la Tripitidora (`ThreePeater`) y el Lanzaguisantes Doble (`SplitPea`) sin búsquedas lineales de pistas de animación ni caídas al renderizador por software.
-4. Muerte simplificada fuera del césped visible para entidades destruidas por explosiones (Petacereza) antes de cruzar la línea de juego (`GetZombieRect().mX >= 800`), previniendo picos de asignación de reanimaciones esqueléticas pesadas fuera de pantalla.
+La solución preserva el 100% de la funcionalidad, diálogos, fonemas Foley, movimientos de boca y presencia visual de Crazy Dave en la tienda, aislando por completo su renderizado y pausando el tablero de fondo sin purgar la caché activa de plantas.
 
 ## Analysis
 
-### Revisión Multi-Lente de Goldfishes (Hallazgos Críticos)
+### Síntesis Multi-Lente de Goldfishes (Hallazgos y Mecanismos Forenses)
 
-1. **Cuello de Botella de I/O en Almacenamiento (Lente Bajo Nivel & E/S):**
-   * `Sexy::DispatchLogLn` en `Common.cpp` adquiere un mutex global y ejecuta `gLogFileSink << theText << '\n' << std::flush;`.
-   * En la arquitectura de la consola, la tarjeta microSD opera bajo un bus SDIO compartido. Cada `std::flush` detiene la tubería de ejecución del Cortex-A7 esperando la sincronización física del controlador de bloques. Más de 700 líneas por segundo congelan el juego independientemente de la potencia de cálculo.
-   * *Resolución:* Desactivar la escritura a archivo de texto en disco. Implementar un buffer circular estático en memoria RAM de 32 KB (`gMemLogRingBuffer`) que registre únicamente en memoria sin bloquear la CPU ni tocar la microSD durante el gameplay.
+1. **Vulnerabilidad de Puntero Invalido (Use-After-Free en `SeedChooserScreen.cpp`):**
+   * En `SeedChooserScreen::ButtonDepress` (líneas 765-768), se ejecuta:
+     ```cpp
+     StoreScreen* aStore = mApp->ShowStoreScreen();
+     aStore->mBackButton->SetLabel("[STORE_BACK_TO_GAME]");
+     aStore->WaitForResult(); // autoKill por defecto es TRUE en Dialog.h
+     if (aStore->mGoToTreeNow) // <-- USE-AFTER-FREE
+     ```
+   * Al hacer clic en "Regresar al juego", `Dialog::WaitForResult(true)` invoca `gSexyAppBase->KillDialog(mId)`, removiendo y encolando `aStore` para su destrucción. Evaluar `aStore->mGoToTreeNow` lee memoria invalidada del heap, provocando un fallo de segmentación instantáneo.
+   * *Resolución:* Invocar `aStore->WaitForResult(false)`, almacenar la variable local `bool aGoToTree = aStore->mGoToTreeNow;` y destruir explícitamente el diálogo con `mApp->KillStoreScreen()`.
 
-2. **Falla Estructural de Precarga en Partidas Guardadas (Lente Arquitectura & Estados):**
-   * Al iniciar una partida fresca, `Board::StartLevel` invoca `PreloadSpriteCache()`. Sin embargo, al cargar una partida guardada (`LawnLoadGameV4`), el motor transiciona directamente a `GameScenes::SCENE_PLAYING` sin invocar `PreloadSpriteCache()` ni `PreloadResources()`.
-   * Además, el `SpriteStreamer` lee secuencialmente de la tarjeta a razón de **1 solo fotograma por tick de juego** (24 ticks / 240 ms por entidad). Con 10 plantas y múltiples zombies, la cola demora más de 400 ticks (4 segundos) en transferir los sprites a la memoria, forzando la evaluación por CPU durante el combate.
-   * *Resolución:* Ejecutar la precarga en bloque síncrona dentro de `FixBoardAfterLoad` mediante lecturas contiguas (`fread` de archivo completo al slot asignado), dejando todo listo antes del primer fotograma visible.
+2. **Colisión de Renderizado y Duplicación de Crazy Dave (`Board.cpp`):**
+   * El interludio de supervivencia se ejecuta bajo el estado `mGameScene == GameScenes::SCENE_LEVEL_INTRO`.
+   * En `Board::DrawUITop` (líneas 8373-8382), el motor posee una guarda que evalúa `if (mApp->mGameScene == GameScenes::SCENE_LEVEL_INTRO)` e invoca `mApp->DrawCrazyDave(&aScreenSpace)`, dibujando a Dave sobre las coordenadas del césped.
+   * Al abrir la tienda, `StoreScreen::StorePreload()` invoca `mApp->CrazyDaveEnter()`, inicializando `mCrazyDaveReanimID`. Acto seguido, `StoreScreen::Draw()` renderiza a Dave en la camioneta (`&gCrazyDave`).
+   * Debido a esto, el motor intenta renderizar dos instancias de Crazy Dave en matrices de coordenadas contradictorias en el mismo fotograma.
+   * *Resolución:* Excluir el dibujado de Dave en `Board::DrawUITop` si el diálogo modal `DIALOG_STORE` está activo o si la cinemática no demanda explícitamente a Dave (`mCutScene->IsShowingCrazyDave()`).
 
-3. **Trampa de Desbordamiento de Slots en SpriteCachePool (Lente Integración & Riesgos):**
-   * En `SpriteCacheDef.h`, la constante `SPC_MAX_PLANT_SLOTS` está fijada en **10**. No obstante, el arreglo de entidades `gPlantCacheEntities` contiene **11** plantas pre-horneadas, siendo la Tripitidora (`SEED_THREEPEATER`) la entidad #11.
-   * Si en la partida conviven 10 plantas base, la asignación de la Tripitidora es rechazada silenciosamente en `AllocatePlantSlot`.
-   * *Resolución:* Incrementar `SPC_MAX_PLANT_SLOTS` a **12** para garantizar espacio suficiente para todas las plantas cacheadas y sus variantes en partidas avanzadas.
+3. **Reentrancia y Ejecución en Segundo Plano del Tablero (`Board.cpp`):**
+   * Durante la selección de semillas, `mBoard->mPaused` es `false`.
+   * Aunque `StoreScreen` es modal, el bucle de eventos `UpdateAppStep` continúa actualizando el gestor de widgets (`WidgetManager::UpdateAll`), ejecutando `Board::Update()` por debajo de la tienda.
+   * Esto mantiene activas las partículas de agua de la piscina, la cinemática de la cámara (`CutScene::Update`) y físicas de objetos, desperdiciando ciclos de CPU en el Cortex-A7.
+   * *Resolución:* Establecer `mBoard->mPaused = true` de forma incondicional al abrir la tienda y saltar `CutScene::Update()` mientras `DIALOG_STORE` esté en pantalla.
 
-4. **Escaneo de Plantas Existentes en el Tablero (Lente Casos Borde):**
-   * `Board::PreloadSpriteCache()` inspeccionaba históricamente solo `mSeedBank->mSeedPackets`. En Supervivencia Infinita, el jugador suele llevar semillas utilitarias en el banco (Setas Congeladas, Calabazas, Granos de Café), mientras que en el césped ya están sembradas plantas mejoradas complejas (Mazorcañon, Pinchorroca, Tripitidora).
-   * *Resolución:* `FixBoardAfterLoad` debe recorrer tanto `theBoard->mPlants` como `theBoard->mSeedBank->mSeedPackets` para capturar todas las plantas activas en el mapa.
-
-5. **Corte Visual en Muerte Fuera de Pantalla (Lente Experiencia & Pulido):**
-   * Vehículos como el Zomboni tienen dimensiones anchas (153x140 px). Evaluar ciegamente `mPosX >= 800.0f` provocaría que un Zomboni cuya parte delantera ya asoma en el pixel 740 desaparezca abruptamente si su origen está en 810.
-   * *Resolución:* La condición de simplificación debe validar `GetZombieRect().mX >= BOARD_WIDTH` (800) o `mPosX >= 835.0f` para garantizar que la entidad esté 100% fuera del campo de visión antes de aplicar la eliminación ligera con partícula de humo.
+4. **Presupuesto de Memoria RAM y Supresión de Precarga Ciega (`CutScene.cpp`):**
+   * En Supervivencia avanzada, el tablero retiene el césped, plantas sembradas, podadoras y el `SpriteCachePool` (ocupando ~58.5 MB combinados).
+   * Al abrir la tienda, `DelayLoad_Store` añade ~10.2 MB de texturas de fondo y coche, y Dave añade ~3.8 MB.
+   * Adicionalmente, `CutScene::PreloadResources()` forzaba la precarga ciega de 6 atlas masivos de zombies calcinados (`REANIM_ZOMBIE_CHARRED`, `_IMP`, `_DIGGER`, `_ZAMBONI`, `_CATAPULT`, `_GARGANTUAR`), consumiendo ~11.4 MB adicionales.
+   * El total acumulado alcanzaba 89.4 MB, superando el límite de 85 MB del kernel Linux de la Miyoo Mini y provocando el cierre forzado por *OOM Killer*.
+   * *Resolución:* Eliminar la precarga universal e indiscriminada de los 6 zombies calcinados. Condicionar la precarga de calcinados únicamente a la presencia de plantas explosivas (Petacereza, Jalapeño, Petaseta, Mazorcañon) en el banco de semillas del jugador, y solo para los tipos de zombies permitidos en la oleada actual (`mBoard->mZombieAllowed[...]`).
 
 ## Goals vs. Non-Goals
 
 ### In-Scope Goals
-* **G1:** Desactivar la escritura a archivo en disco en `DispatchLogLn`, reemplazándola por un buffer circular estático en RAM de 32 KB con volcado exclusivo ante fallos críticos (`SIGSEGV`, `SIGABRT`).
-* **G2:** Rehidratar de forma síncrona `PreloadResources()` y `PreloadSpriteCache()` en `FixBoardAfterLoad`, asegurando la carga contigua en memoria de zombies permitidos, sus animaciones de calcinado (`Zombie_charred_*`) y todas las plantas del mapa.
-* **G3:** Elevar `SPC_MAX_PLANT_SLOTS` de 10 a 12 en `SpriteCacheDef.h`.
-* **G4:** Refactorizar `Plant::UpdateReanim` y `Plant::Draw` centralizando la condición de caché en el método unificado `bool Plant::CanUseSpriteCache() const`, despachando por `mSeedType` sin comparaciones de cadenas lineales.
-* **G5:** Implementar muerte simplificada en `Zombie::ApplyBurn` cuando `GetZombieRect().mX >= BOARD_WIDTH`, emitiendo `PARTICLE_POWDER_SMOKE` y llamando `DieWithLoot()` sin alocar reanimaciones calcinadas pesadas ni alterar `mActiveCharredCount`.
+* **G1:** Habilitar la apertura y retorno sin fallos de la tienda de Crazy Dave desde `SeedChooserScreen` en cualquier momento del interludio de supervivencia.
+* **G2:** Preservar al 100% la presencia, animaciones (`anim_enter`, `anim_idle`, `anim_blahblah`), diálogos, sonidos Foley y apertura de maletero de Crazy Dave en la tienda.
+* **G3:** Pausar la actualización del tablero (`Board::Update`) y cinemáticas (`CutScene::Update`) mientras la tienda esté abierta.
+* **G4:** Suprimir el renderizado duplicado de Crazy Dave en el césped en `Board::DrawUITop` cuando `DIALOG_STORE` esté presente.
+* **G5:** Reemplazar la precarga indiscriminada de 6 zombies calcinados por precarga selectiva basada en las semillas del jugador y los zombies de la ronda, asegurando un consumo de RAM pico inferior a 80 MB (margen de 5 MB bajo el techo de 85 MB).
+* **G6:** Corregir el Use-After-Free en `SeedChooserScreen.cpp` mediante `WaitForResult(false)` y extracción segura de variables antes de `mApp->KillStoreScreen()`.
 
 ### Out-of-Scope Non-Goals
-* **NG1:** No se integrarán vehículos (`Zomboni`, `Catapult`) en `SpriteCachePool` como `.spc`: su baja densidad de aparición (1 a 3 a la vez) y sus estados de daño y animación de conducción no justifican comprometer los 8 MB del pool de zombies.
-* **NG2:** No se alterará el límite global de memoria virtual de 14 MB ni el sistema de descarte de páginas con `madvise(MADV_DONTNEED)`, que ya opera correctamente al vaciar oleadas.
-* **NG3:** No se crearán hilos secundarios de I/O en Core 1 para evitar contención con el mezclador de audio de libopenmpt.
+* **NG1:** No se modificará la apariencia, diálogos, catálogo ni comportamiento de Crazy Dave en la tienda.
+* **NG2:** No se vaciarán los slots de la caché de plantas (`SpriteCachePool`) en el interludio, evitando caídas de FPS al volver al combate.
+* **NG3:** No se reestructurará el sistema de guardado de partidas ni la economía de monedas.
 
 ## Alternatives Weighed
 
-* **Buffer asíncrono con hilo worker de logging:** Rechazado. El Core 1 del SoC SSD202D está asignado al hilo de audio SDL/libopenmpt. La creación de un hilo worker introduce contención de mutex/futex y arriesga chasquidos en el sonido. Se adoptó el buffer circular en RAM sin hilos.
-* **Hornear Zomboni en SpriteCache (.spc):** Rechazado. Un frame de vehículo de 180x150 px ocupa ~1.3 MB en el pool de 8 MB. Dada su baja frecuencia y múltiples capas de daño en chasis, la relación costo-beneficio en memoria es negativa. La precarga en RAM de su `.reanim` es suficiente para garantizar 60 FPS sin tirones.
-* **Comprobación de `mPosX >= 800.0f` simple para muerte off-screen:** Rechazado. Provoca desaparición visual abrupta de vehículos anchos que ya muestran el frontal en pantalla. Se adoptó `GetZombieRect().mX >= BOARD_WIDTH`.
-* **Streaming dinámico perezoso en partidas cargadas:** Rechazado. Distribuir la lectura a 1 frame por tick durante el combate mantiene a las entidades en fallback de software por más de 2 segundos. Se adoptó la carga masiva en bloque durante el paso de restauración.
+* **Alternativa A (Eliminar la reanimación de Dave en la tienda):** Rechazada por el autor. Rompe la identidad visual y la inmersión del juego.
+* **Alternativa B (Vaciar todo el pool de sprites de plantas al entrar a la tienda):** Descartada. Solo recupera ~1.8 MB y genera un congelamiento perceptible al cerrar la tienda para redecodificar las plantas en el césped.
+* **Alternativa C (Destruir y reconstruir el tablero completo al abrir la tienda):** Descartada. Destruir `mBoard` en pleno interludio corrompe el estado de oleada de supervivencia y fragmenta la memoria RAM.
+* **Alternativa D (Precarga on-demand / perezosa de zombies calcinados durante el combate):** Descartada en favor de precarga selectiva. La decodificación en caliente de un Gargantuar calcinado durante una explosión masiva provocaría un tirón severo de varios fotogramas en la CPU Cortex-A7.
 
 ## Key Decisions & Staging for Next Steps
 
-1. **Decisión de Arquitectura de Memoria:** El incremento de `SPC_MAX_PLANT_SLOTS` a 12 añade únicamente 2 estructuras `SpriteCacheSlot` (~80 bytes de metadata), manteniéndose perfectamente dentro del presupuesto de 4 MB de la zona de plantas.
-2. **Decisión de Mapeo de Plantas:** En `FixBoardAfterLoad`, se iterará un `std::set<SeedType>` que consolidará tanto las plantas vivas en el césped como las semillas del banco de cartas para ejecutar una precarga completa y sin duplicados.
-3. **Decisión de Desacople de Animación:** En `Reanimation::IsAnimPlaying`, se verificará `TrackExists` antes de calcular el índice para evitar que consultas booleanas generen trazas de error.
-4. **Paso Siguiente:** Someter este brief al proceso formal de diseño con `/egm-draft` o aprobación directa para ejecución.
+1. **Decisión 1 (Propiedad Exclusiva de Dave):** `StoreScreen` asume la propiedad visual temporal de Crazy Dave. `Board::DrawUITop` subordina su dibujado a la ausencia de diálogos modales de tienda.
+2. **Decisión 2 (Ciclo de Vida Seguro del Diálogo):** En `SeedChooserScreen.cpp`, `WaitForResult(false)` previene la autodestrucción prematura de `StoreScreen`, garantizando lecturas seguras de flags antes de liberar la memoria.
+3. **Decisión 3 (Presupuesto de RAM Acotado):** La precarga selectiva de animaciones de calcinado en `CutScene.cpp` garantiza que el proceso no supere los 79.8 MB en el peor escenario en la Miyoo Mini.
