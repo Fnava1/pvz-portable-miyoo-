@@ -374,6 +374,7 @@ void CutScene::PreloadResources()
 	if (mApp->mGameMode != GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN && mApp->mGameMode != GameMode::GAMEMODE_TREE_OF_WISDOM)
 	{
 		// Universal preloading for surprise ambushes, drops, and common reanimations across combat game modes & minigames
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_READYSETPLANT, true);
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_BUNGEE, true);
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_IMP, true);
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_BACKUP_DANCER, true);

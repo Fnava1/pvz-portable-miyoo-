@@ -2879,58 +2879,12 @@ void Plant::UpdateReanim()
 
 	bool isDrawnFromSpriteCache = CanUseSpriteCache();
 
-	if (isDrawnFromSpriteCache)
-	{
-		if (mHeadReanimID != ReanimationID::REANIMATIONID_NULL)
-		{
-			if (Reanimation* h1 = mApp->ReanimationTryToGet(mHeadReanimID))
-				h1->mAnimRate = 0.0f;
-		}
-		if (mHeadReanimID2 != ReanimationID::REANIMATIONID_NULL)
-		{
-			if (Reanimation* h2 = mApp->ReanimationTryToGet(mHeadReanimID2))
-				h2->mAnimRate = 0.0f;
-		}
-		if (mHeadReanimID3 != ReanimationID::REANIMATIONID_NULL)
-		{
-			if (Reanimation* h3 = mApp->ReanimationTryToGet(mHeadReanimID3))
-				h3->mAnimRate = 0.0f;
-		}
-	}
-	else if (mShootingCounter == 0)
-	{
-		if (mHeadReanimID != ReanimationID::REANIMATIONID_NULL)
-		{
-			if (Reanimation* h1 = mApp->ReanimationTryToGet(mHeadReanimID))
-			{
-				if (h1->mAnimRate == 0.0f && (h1->IsAnimPlaying("anim_head_idle") || h1->IsAnimPlaying("anim_head_idle1")))
-					h1->mAnimRate = aBodyReanim->mAnimRate;
-			}
-		}
-		if (mHeadReanimID2 != ReanimationID::REANIMATIONID_NULL)
-		{
-			if (Reanimation* h2 = mApp->ReanimationTryToGet(mHeadReanimID2))
-			{
-				if (h2->mAnimRate == 0.0f && (h2->IsAnimPlaying("anim_head_idle2") || h2->IsAnimPlaying("anim_splitpea_idle")))
-					h2->mAnimRate = aBodyReanim->mAnimRate;
-			}
-		}
-		if (mHeadReanimID3 != ReanimationID::REANIMATIONID_NULL)
-		{
-			if (Reanimation* h3 = mApp->ReanimationTryToGet(mHeadReanimID3))
-			{
-				if (h3->mAnimRate == 0.0f && h3->IsAnimPlaying("anim_head_idle3"))
-					h3->mAnimRate = aBodyReanim->mAnimRate;
-			}
-		}
-	}
-
 	bool skipPlantBoneUpdate = false;
 	if (isDrawnFromSpriteCache)
 	{
 		skipPlantBoneUpdate = true;
 	}
-	else if (mBoard && (mBoard->mPlants.mSize > 15 || mBoard->mZombies.mSize > 10) && IsOnBoard() && mPottedPlantIndex == -1 &&
+	else if (mShootingCounter == 0 && mBoard && (mBoard->mPlants.mSize > 15 || mBoard->mZombies.mSize > 10) && IsOnBoard() && mPottedPlantIndex == -1 &&
 	    mState != PlantState::STATE_DOINGSPECIAL && mState != PlantState::STATE_SQUASH_RISING &&
 	    mState != PlantState::STATE_SQUASH_FALLING && mState != PlantState::STATE_CHOMPER_BITING &&
 	    mRecentlyEatenCountdown == 0 && mEatenFlashCountdown == 0 &&

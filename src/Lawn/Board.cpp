@@ -1821,25 +1821,7 @@ void Board::StartLevel()
 void Board::PreloadSpriteCache()
 {
 	mApp->PreloadCommonSounds();
-	if (mSeedBank)
-	{
-		for (int i = 0; i < mSeedBank->mNumPackets; i++)
-		{
-			SeedType st = mSeedBank->mSeedPackets[i].mPacketType;
-			if (st >= 0 && st < SeedType::NUM_SEED_TYPES)
-			{
-				SpriteStreamer::RequestPlant(st);
-			}
-		}
-	}
-
-	for (int z = 0; z < ZombieType::NUM_ZOMBIE_TYPES; z++)
-	{
-		if (mZombieAllowed[z])
-		{
-			SpriteStreamer::RequestZombie((ZombieType)z);
-		}
-	}
+	SpriteCachePool::PreloadSynchronous(this);
 }
 
 LawnMower* Board::GetBottomLawnMower()

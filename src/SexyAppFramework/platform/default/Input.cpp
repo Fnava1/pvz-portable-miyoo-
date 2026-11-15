@@ -812,6 +812,12 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 						CloseRequestAsync();
 						break;
 					}
+					// If the pause dialog is showing, pressing Start immediately unpauses the game
+					if (gLawnApp && gLawnApp->GetDialog(Dialogs::DIALOG_PAUSED))
+					{
+						gLawnApp->KillDialog(Dialogs::DIALOG_PAUSED);
+						break;
+					}
 				}
 
 				// Power button: mute audio and request clean exit
@@ -831,6 +837,11 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 					{
 						sMenuDown = true;
 						sMenuDownTime = SDL_GetTicks();
+						if (gLawnApp && gLawnApp->GetDialog(Dialogs::DIALOG_PAUSED))
+						{
+							gLawnApp->KillDialog(Dialogs::DIALOG_PAUSED);
+							break;
+						}
 						mWidgetManager->KeyDown(KeyCode::KEYCODE_ESCAPE);
 						mWidgetManager->KeyUp(KeyCode::KEYCODE_ESCAPE);
 					}
@@ -875,7 +886,19 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 				}
 				else if (event.key.keysym.sym == SDLK_LCTRL || event.key.keysym.sym == 'x' || event.key.keysym.sym == 'X')
 				{
-					// Button B: Right Click (Cancel / Drop / Deselect)
+					// Button B: Dismiss dialog if any modal dialog is open (unpauses or cancels)
+					if (GetDialogCount() > 0)
+					{
+						if (gLawnApp && gLawnApp->GetDialog(Dialogs::DIALOG_PAUSED))
+						{
+							gLawnApp->KillDialog(Dialogs::DIALOG_PAUSED);
+							break;
+						}
+						mWidgetManager->KeyDown(KeyCode::KEYCODE_ESCAPE);
+						mWidgetManager->KeyUp(KeyCode::KEYCODE_ESCAPE);
+						break;
+					}
+					// Otherwise, Button B: Right Click (Cancel / Drop / Deselect)
 					mWidgetManager->MouseMove((int)sVirtualCursorX, (int)sVirtualCursorY);
 					mWidgetManager->MouseDown((int)sVirtualCursorX, (int)sVirtualCursorY, -1);
 					break;
@@ -985,7 +1008,10 @@ bool SexyAppBase::ProcessDeferredMessages(bool singleMessage)
 				}
 				else if (event.key.keysym.sym == SDLK_LCTRL || event.key.keysym.sym == 'x' || event.key.keysym.sym == 'X')
 				{
-					mWidgetManager->MouseUp((int)sVirtualCursorX, (int)sVirtualCursorY, -1);
+					if (GetDialogCount() == 0)
+					{
+						mWidgetManager->MouseUp((int)sVirtualCursorX, (int)sVirtualCursorY, -1);
+					}
 					break;
 				}
 				else if (event.key.keysym.sym == SDLK_LSHIFT || event.key.keysym.sym == 'y' || event.key.keysym.sym == 'Y' ||

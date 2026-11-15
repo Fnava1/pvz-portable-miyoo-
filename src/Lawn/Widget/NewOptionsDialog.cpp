@@ -134,8 +134,16 @@ void NewOptionsDialog::AddedToManager(Sexy::WidgetManager* theWidgetManager)
 
 #if !PVZ_ENABLE_GLES
 	SexyAppBase::sShowVirtualCursor = true;
-	SexyAppBase::sVirtualCursorX = mX + mWidth / 2.0f;
-	SexyAppBase::sVirtualCursorY = mY + mHeight / 2.0f;
+	if (mBackToGameButton)
+	{
+		SexyAppBase::sVirtualCursorX = mX + mBackToGameButton->mX + mBackToGameButton->mWidth / 2.0f;
+		SexyAppBase::sVirtualCursorY = mY + mBackToGameButton->mY + mBackToGameButton->mHeight / 2.0f;
+	}
+	else
+	{
+		SexyAppBase::sVirtualCursorX = mX + mWidth / 2.0f;
+		SexyAppBase::sVirtualCursorY = mY + mHeight / 2.0f;
+	}
 	if (theWidgetManager)
 	{
 		theWidgetManager->MouseMove((int)SexyAppBase::sVirtualCursorX, (int)SexyAppBase::sVirtualCursorY);

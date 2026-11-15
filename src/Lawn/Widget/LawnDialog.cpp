@@ -163,8 +163,16 @@ void LawnDialog::AddedToManager(WidgetManager* theWidgetManager)
 
 #if !PVZ_ENABLE_GLES
 	SexyAppBase::sShowVirtualCursor = true;
-	SexyAppBase::sVirtualCursorX = mX + mWidth / 2.0f;
-	SexyAppBase::sVirtualCursorY = mY + mHeight / 2.0f;
+	if (mLawnYesButton)
+	{
+		SexyAppBase::sVirtualCursorX = mX + mLawnYesButton->mX + mLawnYesButton->mWidth / 2.0f;
+		SexyAppBase::sVirtualCursorY = mY + mLawnYesButton->mY + mLawnYesButton->mHeight / 2.0f;
+	}
+	else
+	{
+		SexyAppBase::sVirtualCursorX = mX + mWidth / 2.0f;
+		SexyAppBase::sVirtualCursorY = mY + mHeight / 2.0f;
+	}
 	if (theWidgetManager)
 	{
 		theWidgetManager->MouseMove((int)SexyAppBase::sVirtualCursorX, (int)SexyAppBase::sVirtualCursorY);
