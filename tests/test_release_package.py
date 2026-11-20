@@ -50,7 +50,7 @@ class TestReleasePackage(unittest.TestCase):
             shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_memory_budget_audit_constraints(self):
-        """Verify steady-state memory budget is <= 78 MB and ceiling is <= 85 MB."""
+        """Verify steady-state combat memory budget is <= 53 MB and headroom is >= 30 MB."""
         report = audit_memory_budget()
 
         # Audit status
@@ -58,26 +58,26 @@ class TestReleasePackage(unittest.TestCase):
 
         # Verify subsystem budgets
         subsystems = report["subsystems"]
-        self.assertEqual(subsystems["textures"]["budget_mb"], 24.0)
+        self.assertEqual(subsystems["textures"]["budget_mb"], 12.0)
+        self.assertEqual(subsystems["dma_pool"]["budget_mb"], 10.0)
         self.assertEqual(subsystems["reanim"]["budget_mb"], 8.0)
-        self.assertEqual(subsystems["music_stream"]["budget_mb"], 2.0)
-        self.assertEqual(subsystems["sfx_cache"]["budget_mb"], 8.0)
+        self.assertEqual(subsystems["audio"]["budget_mb"], 4.0)
         self.assertEqual(subsystems["logic_and_fb"]["budget_mb"], 15.0)
 
-        # Base steady-state should sum to 57.0 MB
-        self.assertEqual(report["base_steady_state_mb"], 57.0)
-        self.assertLessEqual(report["base_steady_state_mb"], 60.0)
+        # Base steady-state should sum to 49.0 MB
+        self.assertEqual(report["base_steady_state_mb"], 49.0)
+        self.assertLessEqual(report["base_steady_state_mb"], 50.0)
 
-        # Peak wave surge + base should sum to 78.0 MB (<= 78.0 MB requirement)
-        self.assertEqual(report["max_steady_state_mb"], 78.0)
-        self.assertLessEqual(report["max_steady_state_mb"], 78.0)
+        # Peak wave surge + base should sum to 51.0 MB (<= 53.0 MB requirement)
+        self.assertEqual(report["max_steady_state_mb"], 51.0)
+        self.assertLessEqual(report["max_steady_state_mb"], 53.0)
 
-        # Hard memory ceiling should be <= 85.0 MB
-        self.assertEqual(report["hard_ceiling_mb"], 85.0)
+        # Hard memory ceiling should be 83.0 MB
+        self.assertEqual(report["hard_ceiling_mb"], 83.0)
         self.assertLessEqual(report["hard_ceiling_mb"], 85.0)
 
-        # Headroom before OOM killer
-        self.assertGreaterEqual(report["safety_margin_mb"], 7.0)
+        # Headroom before OOM killer (>= 30 MB)
+        self.assertGreaterEqual(report["safety_margin_mb"], 30.0)
         self.assertLessEqual(report["hard_ceiling_mb"], report["usable_system_ram_mb"])
 
     def test_stage_release_structure(self):
