@@ -59,6 +59,21 @@ void NeonBlit_AdditiveBlend_Tint_ARGB(uint32_t* dst, const uint32_t* src, size_t
 void NeonBlit_RGB565_From_ARGB(uint16_t* dst, const uint32_t* src, size_t count);
 
 /**
+ * Direct 16-bit RGB565 stream copy (used for opaque full-screen backgrounds).
+ */
+void NeonBlit_Span_RGB565(uint16_t* dst, const uint16_t* src, size_t count);
+
+/**
+ * Unpack 16-bit RGB565 pixels into 32-bit ARGB8888 destination with opaque alpha (0xFF).
+ */
+void NeonBlit_Span_RGB565_to_ARGB8888(uint32_t* dst, const uint16_t* src, size_t count);
+
+/**
+ * 16-bit ARGB4444 pre-multiplied span blend onto 32-bit ARGB destination.
+ */
+void NeonBlit_Span_ARGB4444_PreMul(uint32_t* dst, const uint16_t* src, size_t count);
+
+/**
  * General span blending dispatcher with mode and tint support.
  */
 void NeonBlit_Span(uint32_t* dst, const uint32_t* src, size_t count, BlitMode mode, uint32_t tint_color = 0xFFFFFFFFu);

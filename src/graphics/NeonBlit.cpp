@@ -465,6 +465,123 @@ void NeonBlit_RGB565_From_ARGB(uint16_t* dst, const uint32_t* src, size_t count)
     }
 }
 
+void NeonBlit_Span_RGB565(uint16_t* dst, const uint16_t* src, size_t count) {
+    if (!dst || !src || count == 0) return;
+    std::memcpy(dst, src, count * sizeof(uint16_t));
+}
+
+void NeonBlit_Span_RGB565_to_ARGB8888(uint32_t* dst, const uint16_t* src, size_t count) {
+    if (!dst || !src || count == 0) return;
+
+#if PVZ_HAS_NEON
+    while (count >= 8) {
+        uint16x8_t s16 = vld1q_u16(src);
+        uint16x8_t r5 = vandq_u16(vshrq_n_u16(s16, 11), vdupq_n_u16(0x1F));
+        uint16x8_t g6 = vandq_u16(vshrq_n_u16(s16, 5),  vdupq_n_u16(0x3F));
+        uint16x8_t b5 = vandq_u16(s16, vdupq_n_u16(0x1F));
+
+        uint16x8_t r8 = vorrq_u16(vshlq_n_u16(r5, 3), vshrq_n_u16(r5, 2));
+        uint16x8_t g8 = vorrq_u16(vshlq_n_u16(g6, 2), vshrq_n_u16(g6, 4));
+        uint16x8_t b8 = vorrq_u16(vshlq_n_u16(b5, 3), vshrq_n_u16(b5, 2));
+        uint16x8_t a8 = vdupq_n_u16(0xFF);
+
+        uint8x8x4_t res;
+        res.val[0] = vqmovn_u16(b8);
+        res.val[1] = vqmovn_u16(g8);
+        res.val[2] = vqmovn_u16(r8);
+        res.val[3] = vqmovn_u16(a8);
+        vst4_u8(reinterpret_cast<uint8_t*>(dst), res);
+
+        src += 8;
+        dst += 8;
+        count -= 8;
+    }
+#endif
+
+    while (count > 0) {
+        uint16_t c16 = *src++;
+        uint32_t r = ((c16 >> 11) & 0x1F) * 255 / 31;
+        uint32_t g = ((c16 >> 5) & 0x3F) * 255 / 63;
+        uint32_t b = (c16 & 0x1F) * 255 / 31;
+        *dst++ = 0xFF000000u | (r << 16) | (g << 8) | b;
+        count--;
+    }
+}
+
+void NeonBlit_Span_ARGB4444_PreMul(uint32_t* dst, const uint16_t* src, size_t count) {
+    if (!dst || !src || count == 0) return;
+
+#if PVZ_HAS_NEON
+    while (count >= 8) {
+        uint16x8_t s16 = vld1q_u16(src);
+
+        uint16x8_t a4 = vshrq_n_u16(s16, 12);
+        uint16x8_t r4 = vandq_u16(vshrq_n_u16(s16, 8), vdupq_n_u16(0x0F));
+        uint16x8_t g4 = vandq_u16(vshrq_n_u16(s16, 4), vdupq_n_u16(0x0F));
+        uint16x8_t b4 = vandq_u16(s16, vdupq_n_u16(0x0F));
+
+        uint16x8_t a8 = vorrq_u16(vshlq_n_u16(a4, 4), a4);
+        uint16x8_t r8 = vorrq_u16(vshlq_n_u16(r4, 4), r4);
+        uint16x8_t g8 = vorrq_u16(vshlq_n_u16(g4, 4), g4);
+        uint16x8_t b8 = vorrq_u16(vshlq_n_u16(b4, 4), b4);
+
+        uint8x8x4_t d = vld4_u8(reinterpret_cast<const uint8_t*>(dst));
+        uint16x8_t db = vmovl_u8(d.val[0]);
+        uint16x8_t dg = vmovl_u8(d.val[1]);
+        uint16x8_t dr = vmovl_u8(d.val[2]);
+        uint16x8_t da = vmovl_u8(d.val[3]);
+
+        uint16x8_t inv_a = vsubq_u16(vdupq_n_u16(255), a8);
+        uint16x8_t out_b = vaddq_u16(b8, vshrq_n_u16(vmulq_u16(db, inv_a), 8));
+        uint16x8_t out_g = vaddq_u16(g8, vshrq_n_u16(vmulq_u16(dg, inv_a), 8));
+        uint16x8_t out_r = vaddq_u16(r8, vshrq_n_u16(vmulq_u16(dr, inv_a), 8));
+        uint16x8_t out_a = vaddq_u16(a8, vshrq_n_u16(vmulq_u16(da, inv_a), 8));
+
+        uint8x8x4_t res;
+        res.val[0] = vqmovn_u16(out_b);
+        res.val[1] = vqmovn_u16(out_g);
+        res.val[2] = vqmovn_u16(out_r);
+        res.val[3] = vqmovn_u16(out_a);
+
+        vst4_u8(reinterpret_cast<uint8_t*>(dst), res);
+
+        src += 8;
+        dst += 8;
+        count -= 8;
+    }
+#endif
+
+    while (count > 0) {
+        uint16_t c16 = *src++;
+        uint32_t a = (c16 >> 12) & 0x0F;
+        if (a > 0) {
+            uint32_t r = (c16 >> 8) & 0x0F;
+            uint32_t g = (c16 >> 4) & 0x0F;
+            uint32_t b = c16 & 0x0F;
+            a = (a << 4) | a;
+            r = (r << 4) | r;
+            g = (g << 4) | g;
+            b = (b << 4) | b;
+
+            uint32_t d = *dst;
+            uint32_t db = d & 0xFF;
+            uint32_t dg = (d >> 8) & 0xFF;
+            uint32_t dr = (d >> 16) & 0xFF;
+            uint32_t da = (d >> 24) & 0xFF;
+
+            uint32_t inv_a = 255 - a;
+            uint32_t out_b = std::min(255u, b + ((db * inv_a) >> 8));
+            uint32_t out_g = std::min(255u, g + ((dg * inv_a) >> 8));
+            uint32_t out_r = std::min(255u, r + ((dr * inv_a) >> 8));
+            uint32_t out_a = std::min(255u, a + ((da * inv_a) >> 8));
+
+            *dst = (out_a << 24) | (out_r << 16) | (out_g << 8) | out_b;
+        }
+        dst++;
+        count--;
+    }
+}
+
 void NeonBlit_Span(uint32_t* dst, const uint32_t* src, size_t count, BlitMode mode, uint32_t tint_color) {
     switch (mode) {
         case BLIT_COPY:
