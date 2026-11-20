@@ -67,6 +67,8 @@ public:
 
 	bool					mBitsChanged;
 	bool					mTiled8x8 = false;
+	uint8_t					mPixelFormat = 0; // 0: ARGB8888, 1: RGB565, 2: ARGB4444
+	int						GetBytesPerPixel() const { return (mPixelFormat == 0) ? 4 : 2; }
 	SexyAppBase*			mApp;
 
 private:
@@ -117,6 +119,7 @@ public:
 	virtual void			SetBits(uint32_t* theBits, int theWidth, int theHeight, bool commitBits = true);
 	virtual void			Create(int theWidth, int theHeight);
 	virtual uint32_t*		GetBits();
+	uint16_t*				GetBits16() const { return reinterpret_cast<uint16_t*>(mBits.get()); }
 
 	void					FillRect(const Rect& theRect, const Color& theColor, int theDrawMode) override;
 	void					ClearRect(const Rect& theRect) override;

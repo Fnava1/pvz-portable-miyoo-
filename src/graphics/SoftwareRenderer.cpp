@@ -84,8 +84,11 @@ void DmaTexturePool::Reset() {
 // SoftwareSurface Implementation
 // ---------------------------------------------------------------------------
 
-SoftwareSurface::SoftwareSurface(int w, int h, int bpp, bool use_pool)
-    : mWidth(w), mHeight(h), mBytesPerPixel(bpp / 8) {
+SoftwareSurface::SoftwareSurface(int w, int h, int bpp, bool use_pool, PixelFormat fmt)
+    : mWidth(w), mHeight(h), mBytesPerPixel(bpp / 8), mFormat(fmt) {
+    if (mBytesPerPixel == 2 && mFormat == PixelFormat::FMT_ARGB8888) {
+        mFormat = PixelFormat::FMT_RGB565;
+    }
     mPitch = mWidth * mBytesPerPixel;
     size_t total_bytes = static_cast<size_t>(mPitch) * mHeight;
 
@@ -111,15 +114,20 @@ SoftwareSurface::SoftwareSurface(SDL_Surface* sdl_surface)
         mHeight = mSdlSurface->h;
         mPitch = mSdlSurface->pitch;
         mBytesPerPixel = mSdlSurface->format ? mSdlSurface->format->BytesPerPixel : 4;
+        mFormat = (mBytesPerPixel == 2) ? PixelFormat::FMT_RGB565 : PixelFormat::FMT_ARGB8888;
         mPixels = static_cast<uint8_t*>(mSdlSurface->pixels);
         mOwnsPixels = false;
         mFromPool = false;
     }
 }
 
-SoftwareSurface::SoftwareSurface(void* pixels, int w, int h, int pitch, int bpp)
-    : mWidth(w), mHeight(h), mPitch(pitch), mBytesPerPixel(bpp / 8),
-      mPixels(static_cast<uint8_t*>(pixels)), mOwnsPixels(false), mFromPool(false) {}
+SoftwareSurface::SoftwareSurface(void* pixels, int w, int h, int pitch, int bpp, PixelFormat fmt)
+    : mWidth(w), mHeight(h), mPitch(pitch), mBytesPerPixel(bpp / 8), mFormat(fmt),
+      mPixels(static_cast<uint8_t*>(pixels)), mOwnsPixels(false), mFromPool(false) {
+    if (mBytesPerPixel == 2 && mFormat == PixelFormat::FMT_ARGB8888) {
+        mFormat = PixelFormat::FMT_RGB565;
+    }
+}
 
 SoftwareSurface::~SoftwareSurface() {
     if (mOwnsPixels && mPixels) {
@@ -156,10 +164,18 @@ uint32_t SoftwareSurface::GetPixel(int x, int y) const {
     } else if (mBytesPerPixel == 2) {
         const uint16_t* row = reinterpret_cast<const uint16_t*>(mPixels + y * mPitch);
         uint16_t c16 = row[x];
-        uint32_t r = ((c16 >> 11) & 0x1F) << 3;
-        uint32_t g = ((c16 >> 5) & 0x3F) << 2;
-        uint32_t b = (c16 & 0x1F) << 3;
-        return (0xFF000000u) | (r << 16) | (g << 8) | b;
+        if (mFormat == PixelFormat::FMT_ARGB4444) {
+            uint32_t a = (c16 >> 12) & 0x0F;
+            uint32_t r = (c16 >> 8) & 0x0F;
+            uint32_t g = (c16 >> 4) & 0x0F;
+            uint32_t b = c16 & 0x0F;
+            return ((a | (a << 4)) << 24) | ((r | (r << 4)) << 16) | ((g | (g << 4)) << 8) | (b | (b << 4));
+        } else {
+            uint32_t r = ((c16 >> 11) & 0x1F) * 255 / 31;
+            uint32_t g = ((c16 >> 5) & 0x3F) * 255 / 63;
+            uint32_t b = (c16 & 0x1F) * 255 / 31;
+            return 0xFF000000u | (r << 16) | (g << 8) | b;
+        }
     }
     return 0;
 }
@@ -171,10 +187,18 @@ void SoftwareSurface::SetPixel(int x, int y, uint32_t color) {
         row[x] = color;
     } else if (mBytesPerPixel == 2) {
         uint16_t* row = reinterpret_cast<uint16_t*>(mPixels + y * mPitch);
-        uint8_t r = static_cast<uint8_t>((color >> 16) & 0xFF);
-        uint8_t g = static_cast<uint8_t>((color >> 8) & 0xFF);
-        uint8_t b = static_cast<uint8_t>(color & 0xFF);
-        row[x] = static_cast<uint16_t>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+        if (mFormat == PixelFormat::FMT_ARGB4444) {
+            uint8_t a = static_cast<uint8_t>((color >> 24) & 0xFF);
+            uint8_t r = static_cast<uint8_t>((color >> 16) & 0xFF);
+            uint8_t g = static_cast<uint8_t>((color >> 8) & 0xFF);
+            uint8_t b = static_cast<uint8_t>(color & 0xFF);
+            row[x] = static_cast<uint16_t>(((a >> 4) << 12) | ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4));
+        } else {
+            uint8_t r = static_cast<uint8_t>((color >> 16) & 0xFF);
+            uint8_t g = static_cast<uint8_t>((color >> 8) & 0xFF);
+            uint8_t b = static_cast<uint8_t>(color & 0xFF);
+            row[x] = static_cast<uint16_t>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+        }
     }
 }
 
@@ -518,8 +542,7 @@ void SoftwareRenderer::DrawImage(SoftwareSurface* image, int x, int y, const Rec
 }
 
 void SoftwareRenderer::DrawImage(SoftwareSurface* image, const Rect& dst_rect, const Rect& src_rect) {
-    if (!mCurrentTarget || !image || mCurrentTarget->mBytesPerPixel != 4 || image->mBytesPerPixel != 4 ||
-        dst_rect.IsEmpty() || src_rect.IsEmpty() || mPhysClipRect.IsEmpty()) return;
+    if (!mCurrentTarget || !image || dst_rect.IsEmpty() || src_rect.IsEmpty() || mPhysClipRect.IsEmpty()) return;
 
     Matrix3 composite = mViewport.ApplyTo(GetCurrentTransform());
     Point2D tl = composite.Transform(static_cast<float>(dst_rect.x), static_cast<float>(dst_rect.y));
@@ -550,15 +573,26 @@ void SoftwareRenderer::DrawImage(SoftwareSurface* image, const Rect& dst_rect, c
             int dy = clipped.y + row;
             if (sy < 0 || sy >= image->mHeight || dy < 0 || dy >= mCurrentTarget->mHeight) continue;
 
-            const uint32_t* src_ptr = reinterpret_cast<const uint32_t*>(
-                image->mPixels + sy * image->mPitch
-            ) + src_offset_x;
-
             uint32_t* dst_ptr = reinterpret_cast<uint32_t*>(
                 mCurrentTarget->mPixels + dy * mCurrentTarget->mPitch
             ) + clipped.x;
 
-            NeonBlit_Span(dst_ptr, src_ptr, clipped.w, mode, tint);
+            if (image->mFormat == PixelFormat::FMT_RGB565) {
+                const uint16_t* src_ptr = reinterpret_cast<const uint16_t*>(
+                    image->mPixels + sy * image->mPitch
+                ) + src_offset_x;
+                NeonBlit_Span_RGB565_to_ARGB8888(dst_ptr, src_ptr, clipped.w);
+            } else if (image->mFormat == PixelFormat::FMT_ARGB4444) {
+                const uint16_t* src_ptr = reinterpret_cast<const uint16_t*>(
+                    image->mPixels + sy * image->mPitch
+                ) + src_offset_x;
+                NeonBlit_Span_ARGB4444_PreMul(dst_ptr, src_ptr, clipped.w);
+            } else {
+                const uint32_t* src_ptr = reinterpret_cast<const uint32_t*>(
+                    image->mPixels + sy * image->mPitch
+                ) + src_offset_x;
+                NeonBlit_Span(dst_ptr, src_ptr, clipped.w, mode, tint);
+            }
         }
         return;
     }
@@ -573,12 +607,20 @@ void SoftwareRenderer::DrawImage(SoftwareSurface* image, const Rect& dst_rect, c
         int dy = clipped.y + row;
         float v_sample = src_rect.y + (clipped.y + row - phys.y) * v_scale;
         int sy = std::clamp(static_cast<int>(v_sample), 0, image->mHeight - 1);
-        const uint32_t* src_row = reinterpret_cast<const uint32_t*>(image->mPixels + sy * image->mPitch);
 
-        for (int col = 0; col < span_len; ++col) {
-            float u_sample = src_rect.x + (clipped.x + col - phys.x) * u_scale;
-            int sx = std::clamp(static_cast<int>(u_sample), 0, image->mWidth - 1);
-            span_buf[col] = src_row[sx];
+        if (image->mBytesPerPixel == 2) {
+            for (int col = 0; col < span_len; ++col) {
+                float u_sample = src_rect.x + (clipped.x + col - phys.x) * u_scale;
+                int sx = std::clamp(static_cast<int>(u_sample), 0, image->mWidth - 1);
+                span_buf[col] = image->GetPixel(sx, sy);
+            }
+        } else {
+            const uint32_t* src_row = reinterpret_cast<const uint32_t*>(image->mPixels + sy * image->mPitch);
+            for (int col = 0; col < span_len; ++col) {
+                float u_sample = src_rect.x + (clipped.x + col - phys.x) * u_scale;
+                int sx = std::clamp(static_cast<int>(u_sample), 0, image->mWidth - 1);
+                span_buf[col] = src_row[sx];
+            }
         }
 
         uint32_t* dst_ptr = reinterpret_cast<uint32_t*>(
@@ -602,8 +644,7 @@ void SoftwareRenderer::DrawImageColor(SoftwareSurface* image, int x, int y, cons
 void SoftwareRenderer::DrawQuad(SoftwareSurface* texture,
                                 const Vertex2D& v0, const Vertex2D& v1,
                                 const Vertex2D& v2, const Vertex2D& v3) {
-    if (!mCurrentTarget || !texture || mCurrentTarget->mBytesPerPixel != 4 || texture->mBytesPerPixel != 4 ||
-        mPhysClipRect.IsEmpty()) return;
+    if (!mCurrentTarget || !texture || mPhysClipRect.IsEmpty()) return;
 
     Matrix3 composite = mViewport.ApplyTo(GetCurrentTransform());
     Point2D p0 = composite.Transform(v0.x, v0.y);
@@ -636,8 +677,7 @@ void SoftwareRenderer::DrawQuad(SoftwareSurface* texture,
 
 void SoftwareRenderer::DrawTriangleTex(SoftwareSurface* texture,
                                        const Vertex2D& v0, const Vertex2D& v1, const Vertex2D& v2) {
-    if (!mCurrentTarget || !texture || mCurrentTarget->mBytesPerPixel != 4 || texture->mBytesPerPixel != 4 ||
-        mPhysClipRect.IsEmpty()) return;
+    if (!mCurrentTarget || !texture || mPhysClipRect.IsEmpty()) return;
 
     Matrix3 composite = mViewport.ApplyTo(GetCurrentTransform());
     Point2D p0 = composite.Transform(v0.x, v0.y);
@@ -665,7 +705,8 @@ void SoftwareRenderer::RasterizeTriangleSpan(SoftwareSurface* texture,
                                             float x1, float y1, float u1, float v1,
                                             float x2, float y2, float u2, float v2,
                                             uint32_t tint_color) {
-    if (!mCurrentTarget || !texture || mCurrentTarget->mBytesPerPixel != 4 || texture->mBytesPerPixel != 4 ||
+    if (!mCurrentTarget || !texture || mCurrentTarget->mBytesPerPixel != 4 ||
+        (texture->mBytesPerPixel != 4 && texture->mBytesPerPixel != 2) ||
         mPhysClipRect.IsEmpty()) return;
 
     // Sort vertices by Y: y0 <= y1 <= y2

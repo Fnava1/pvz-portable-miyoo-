@@ -242,21 +242,28 @@ private:
 // Software Surface (wraps SDL_Surface or DMA buffer)
 // ---------------------------------------------------------------------------
 
+enum class PixelFormat : uint8_t {
+    FMT_ARGB8888 = 0,
+    FMT_RGB565   = 1,
+    FMT_ARGB4444 = 2
+};
+
 class SoftwareSurface {
 public:
     int mWidth = 0;
     int mHeight = 0;
     int mPitch = 0;
-    int mBytesPerPixel = 4; // 4 for ARGB8888, 2 for RGB565
+    int mBytesPerPixel = 4; // 4 for ARGB8888, 2 for RGB565 / ARGB4444
+    PixelFormat mFormat = PixelFormat::FMT_ARGB8888;
     uint8_t* mPixels = nullptr;
     bool mOwnsPixels = false;
     bool mFromPool = false;
     SDL_Surface* mSdlSurface = nullptr;
 
     SoftwareSurface() = default;
-    SoftwareSurface(int w, int h, int bpp = 32, bool use_pool = false);
+    SoftwareSurface(int w, int h, int bpp = 32, bool use_pool = false, PixelFormat fmt = PixelFormat::FMT_ARGB8888);
     explicit SoftwareSurface(SDL_Surface* sdl_surface);
-    SoftwareSurface(void* pixels, int w, int h, int pitch, int bpp = 32);
+    SoftwareSurface(void* pixels, int w, int h, int pitch, int bpp = 32, PixelFormat fmt = PixelFormat::FMT_ARGB8888);
     ~SoftwareSurface();
 
     void Clear(uint32_t color);
