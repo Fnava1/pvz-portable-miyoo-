@@ -23,6 +23,9 @@
 #include <cstdarg>
 #include <cstdio>
 #include <format>
+#if defined(__linux__) && !defined(__ANDROID__)
+#include <malloc.h>
+#endif
 #include "LawnApp.h"
 #include "Resources.h"
 #include "Lawn/LawnCommon.h"
@@ -83,6 +86,15 @@ bool gSlowMo = false;
 bool gFastMo = false;
 LawnApp* gLawnApp = nullptr;
 int gSlowMoCounter = 0;
+
+#if defined(__linux__) && defined(__GLIBC__) && !defined(__ANDROID__)
+#include <malloc.h>
+static inline void TrimHeapIfLinux() {
+    malloc_trim(0);
+}
+#else
+static inline void TrimHeapIfLinux() {}
+#endif
 
 static bool HasUnshownAchievements(PlayerInfo* thePlayerInfo)
 {
@@ -293,7 +305,11 @@ void LawnApp::KillBoard()
 #endif
 	}
 
+	SpriteStreamer::CancelAll();
+	SpriteCachePool::FreeLevelArena();
+
 	SetCursor(CURSOR_POINTER);
+	TrimHeapIfLinux();
 }
 
 bool LawnApp::CanPauseNow()
@@ -386,6 +402,8 @@ void LawnApp::MakeNewBoard()
 {
 	KillBoard();
 	KillSeedChooserScreen();
+	SpriteStreamer::CancelAll();
+	SpriteCachePool::FreeLevelArena();
 
 	if (mResourceManager)
 	{
@@ -504,6 +522,8 @@ void LawnApp::NewGame()
 void LawnApp::ShowGameSelector()
 {
 	KillBoard();
+	SpriteStreamer::CancelAll();
+	SpriteCachePool::FreeLevelArena();
 	if (mWidgetManager && mWidgetManager->mImage)
 	{
 		mWidgetManager->mImage->Clear();
@@ -611,11 +631,16 @@ void LawnApp::KillStoreScreen()
 	{
 		KillDialog(Dialogs::DIALOG_STORE);
 		ClearUpdateBacklog(false);
+		TrimHeapIfLinux();
 	}
 }
 
 void LawnApp::ShowSeedChooserScreen()
 {
+	SpriteStreamer::CancelAll();
+	SpriteCachePool::FreeLevelArena();
+	TrimHeapIfLinux();
+
 	if (mSeedChooserScreen)
 	{
 		KillSeedChooserScreen();
@@ -705,20 +730,19 @@ AlmanacDialog* LawnApp::DoAlmanacDialog(SeedType theSeedType, ZombieType theZomb
 	PerfTimer mTimer;
 	mTimer.Start();
 
-	//FinishModelessDialogs();
-
-	AlmanacDialog* aDialog = new AlmanacDialog(this);
-	AddDialog(Dialogs::DIALOG_ALMANAC, aDialog);
-	mWidgetManager->SetFocus(aDialog);
-
+	AlmanacPage aPage = AlmanacPage::ALMANAC_PAGE_INDEX;
 	if (theSeedType != SeedType::SEED_NONE)
 	{
-		aDialog->ShowPlant(theSeedType);
+		aPage = AlmanacPage::ALMANAC_PAGE_PLANTS;
 	}
 	else if (theZombieType != ZombieType::ZOMBIE_INVALID)
 	{
-		aDialog->ShowZombie(theZombieType);
+		aPage = AlmanacPage::ALMANAC_PAGE_ZOMBIES;
 	}
+
+	AlmanacDialog* aDialog = new AlmanacDialog(this, aPage, theSeedType, theZombieType);
+	AddDialog(Dialogs::DIALOG_ALMANAC, aDialog);
+	mWidgetManager->SetFocus(aDialog);
 
 	int aDuration = mTimer.GetDuration();
 	PvzpLogLn("almanac load time: {} ms", aDuration);
@@ -1210,7 +1234,10 @@ void LawnApp::ModalClose()
 {
 	if (mBoard && !NeedPauseGame())
 	{
-	mBoard->Pause(false);
+		if (!mBoard->mCutScene || !mBoard->mCutScene->mSeedChoosing)
+		{
+			mBoard->Pause(false);
+		}
 	}
 }
 
@@ -1232,7 +1259,10 @@ bool LawnApp::KillDialog(int theDialogId)
 
 		if (mBoard && !NeedPauseGame())
 		{
-			mBoard->Pause(false);
+			if (!mBoard->mCutScene || !mBoard->mCutScene->mSeedChoosing)
+			{
+				mBoard->Pause(false);
+			}
 		}
 
 		return true;
@@ -1248,6 +1278,9 @@ void LawnApp::ShowResourceError(bool doExit)
 
 void LawnApp::Init()
 {
+#if defined(__linux__) && defined(__GLIBC__) && !defined(__ANDROID__)
+	mallopt(M_MMAP_THRESHOLD, 64 * 1024);
+#endif
 	DoParseCmdLine();
 	if (!mCheatKeys)
 	{
@@ -1949,7 +1982,9 @@ void LawnApp::LoadingThreadProc()
 	mReanimatorCache->ReanimatorCacheInitialize();
 	PvzpFoleyInitialize(gLawnFoleyParamArray, LENGTH(gLawnFoleyParamArray));
 	PvzpLoadResources("DelayLoad_Almanac");
-	mReanimatorCache->PrecacheAll();
+	// PrecacheAll is omitted from LoadingThreadProc: plant and zombie frames are rendered
+	// 100% lazily on demand on the main thread, avoiding concurrent SWTri rasterizer contention
+	// during startup and saving ~5 MB of RAM.
 	CheckAndGenerateSpriteCache();
 
 	PvzpLogLn("loading '{}' {} ms", "stuff", static_cast<int>(aTimer.GetDuration()));
@@ -2004,12 +2039,14 @@ void LawnApp::FastLoad(GameMode theGameMode)
 void LawnApp::LoadingThreadCompleted()
 {
 	Zombie::InitSpotlights();
+	TrimHeapIfLinux();
 }
 
 void LawnApp::LoadingCompleted()
 {
 	mWidgetManager->RemoveWidget(mTitleScreen.get());
 	SafeDeleteWidget(mTitleScreen.release());
+	TrimHeapIfLinux();
 
 	mResourceManager->DeleteImage("IMAGE_TITLESCREEN");
 

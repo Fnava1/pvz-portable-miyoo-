@@ -20,6 +20,9 @@
  */
 
 #include <format>
+#if defined(__linux__) && defined(__GLIBC__) && !defined(__ANDROID__)
+#include <malloc.h>
+#endif
 #include "../Board.h"
 #include "../Plant.h"
 #include "../Zombie.h"
@@ -35,19 +38,32 @@
 #include "../System/ReanimationLawn.h"
 #include "graphics/MemoryImage.h"
 #include "../../PvzpLib/PvzpStringFile.h"
+#include "../../PvzpLib/PvzpCommon.h"
 #include "widget/WidgetManager.h"
+#include "../../PvzpLib/Reanimator.h"
 
 bool gZombieDefeated[NUM_ZOMBIE_TYPES] = { false };
 
-AlmanacDialog::AlmanacDialog(LawnApp* theApp) : LawnDialog(theApp, DIALOG_ALMANAC, true, theApp->GetString("ALMANAC_HEADER", "Almanac"), "", "", BUTTONS_NONE)
+AlmanacDialog::AlmanacDialog(LawnApp* theApp, AlmanacPage thePage, SeedType theSeedType, ZombieType theZombieType) : LawnDialog(theApp, DIALOG_ALMANAC, true, theApp->GetString("ALMANAC_HEADER", "Almanac"), "", "", BUTTONS_NONE)
 {
 	mApp = (LawnApp*)gSexyAppBase;
-	mOpenPage = ALMANAC_PAGE_INDEX;
-	mSelectedSeed = SEED_PEASHOOTER;
-	mSelectedZombie = ZOMBIE_NORMAL;
+	mOpenPage = thePage;
+	mSelectedSeed = theSeedType != SeedType::SEED_NONE ? theSeedType : SEED_PEASHOOTER;
+	mSelectedZombie = theZombieType != ZombieType::ZOMBIE_INVALID ? theZombieType : ZOMBIE_NORMAL;
 	mPrewarmPlantIndex = 0;
 	mPrewarmZombieIndex = 0;
+	mPrewarmTickCounter = 0;
 	mDrawStandardBack = false;
+
+	if (mApp && mApp->mBoard)
+	{
+		mApp->mBoard->mStaticBackdrop.reset();
+		mApp->mBoard->mStaticBackdropValid = false;
+#if defined(__linux__) && defined(__GLIBC__) && !defined(__ANDROID__)
+		malloc_trim(0);
+#endif
+	}
+
 	mLoadedResourceNames.push_back("DelayLoad_Almanac");
 	LawnDialog::Resize(0, 0, BOARD_WIDTH, BOARD_HEIGHT);
 
@@ -101,22 +117,68 @@ AlmanacDialog::AlmanacDialog(LawnApp* theApp) : LawnDialog(theApp, DIALOG_ALMANA
 	mZombieButton->mDrawStoneButton = true;
 	mZombieButton->mParentWidget = this;
 
-	SetPage(ALMANAC_PAGE_INDEX);
+	mPriorBoardPaused = (mApp->mBoard != nullptr) ? mApp->mBoard->mPaused : false;
+
+	if (thePage == AlmanacPage::ALMANAC_PAGE_ZOMBIES && theZombieType != ZombieType::ZOMBIE_INVALID)
+	{
+		ShowZombie(theZombieType);
+	}
+	else if (thePage == AlmanacPage::ALMANAC_PAGE_PLANTS && theSeedType != SeedType::SEED_NONE)
+	{
+		ShowPlant(theSeedType);
+	}
+	else
+	{
+		SetPage(ALMANAC_PAGE_INDEX);
+	}
+
 	if (!mApp->mBoard || !mApp->mBoard->mPaused)
 		mApp->mMusic->MakeSureMusicIsPlaying(MUSIC_TUNE_CHOOSE_YOUR_SEEDS);
+
+	if (mApp->mBoard)
+		mApp->mBoard->Pause(true);
 }
 
 AlmanacDialog::~AlmanacDialog()
 {
 	ClearPlantsAndZombies();
+	if (mApp && mApp->mBoard)
+	{
+		mApp->mBoard->Pause(mPriorBoardPaused);
+	}
+	if (mApp && mApp->mReanimatorCache)
+	{
+		mApp->mReanimatorCache->ClearAlmanacTransientCaches();
+	}
 	if (mApp && mApp->mResourceManager)
 	{
 		mApp->mResourceManager->DeleteResources("DelayLoad_Almanac");
 	}
+	Sexy::IMAGE_ALMANAC_CLOSEBUTTON = nullptr;
+	Sexy::IMAGE_ALMANAC_CLOSEBUTTONHIGHLIGHT = nullptr;
+	Sexy::IMAGE_ALMANAC_GROUNDDAY = nullptr;
+	Sexy::IMAGE_ALMANAC_GROUNDICE = nullptr;
+	Sexy::IMAGE_ALMANAC_GROUNDNIGHT = nullptr;
+	Sexy::IMAGE_ALMANAC_GROUNDNIGHTPOOL = nullptr;
+	Sexy::IMAGE_ALMANAC_GROUNDPOOL = nullptr;
+	Sexy::IMAGE_ALMANAC_GROUNDROOF = nullptr;
+	Sexy::IMAGE_ALMANAC_INDEXBACK = nullptr;
+	Sexy::IMAGE_ALMANAC_INDEXBUTTON = nullptr;
+	Sexy::IMAGE_ALMANAC_INDEXBUTTONHIGHLIGHT = nullptr;
+	Sexy::IMAGE_ALMANAC_PLANTBACK = nullptr;
+	Sexy::IMAGE_ALMANAC_PLANTCARD = nullptr;
+	Sexy::IMAGE_ALMANAC_ZOMBIEBACK = nullptr;
+	Sexy::IMAGE_ALMANAC_ZOMBIEBLANK = nullptr;
+	Sexy::IMAGE_ALMANAC_ZOMBIECARD = nullptr;
+	Sexy::IMAGE_ALMANAC_ZOMBIEWINDOW = nullptr;
+	Sexy::IMAGE_ALMANAC_ZOMBIEWINDOW2 = nullptr;
 	if (mApp)
 	{
 		mApp->CleanSharedImages();
 	}
+#if defined(__linux__) && defined(__GLIBC__) && !defined(__ANDROID__)
+	malloc_trim(0);
+#endif
 }
 
 void AlmanacDialog::ClearPlantsAndZombies()
@@ -128,8 +190,11 @@ void AlmanacDialog::ClearPlantsAndZombies()
 	}
 	if (mZombie)
 	{
+		ZombieType aZombieType = mZombie->mZombieType;
 		mZombie->DieNoLoot();
 		mZombie.reset();
+
+
 	}
 	for (std::unique_ptr<Zombie>& aZombie : mZombiePerfTest)
 	{
@@ -171,6 +236,16 @@ void AlmanacDialog::SetupZombie()
 {
 	ClearPlantsAndZombies();
 
+	const ZombieDefinition& aZombieDef = GetZombieDefinition(mSelectedZombie);
+	if (aZombieDef.mReanimationType != ReanimationType::REANIM_NONE)
+	{
+		ReanimatorEnsureDefinitionLoaded(aZombieDef.mReanimationType, true);
+	}
+	if (mSelectedZombie == ZombieType::ZOMBIE_BOSS)
+	{
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_BOSS_DRIVER, true);
+	}
+
 	mZombie = std::make_unique<Zombie>();
 	mZombie->mBoard = nullptr;
 	mZombie->ZombieInitialize(0, mSelectedZombie, false, nullptr, Zombie::ZOMBIE_WAVE_UI);
@@ -178,10 +253,146 @@ void AlmanacDialog::SetupZombie()
 	mZombie->mPosY = ALMANAC_ZOMBIE_POSITION_Y;
 }
 
+void AlmanacDialog::EnsurePageResources(AlmanacPage thePage)
+{
+	if (!mApp || !mApp->mResourceManager)
+		return;
+
+	if (thePage == AlmanacPage::ALMANAC_PAGE_ZOMBIES)
+	{
+		if (Sexy::IMAGE_ALMANAC_ZOMBIEBACK == nullptr)
+		{
+			Image* aImg = (Image*)mApp->mResourceManager->LoadImage("IMAGE_ALMANAC_ZOMBIEBACK");
+			if (aImg != nullptr)
+			{
+				PvzpMarkImageForSanding(aImg);
+				Sexy::IMAGE_ALMANAC_ZOMBIEBACK = aImg;
+			}
+		}
+		if (Sexy::IMAGE_ALMANAC_ZOMBIECARD == nullptr)
+		{
+			Image* aImg = (Image*)mApp->mResourceManager->LoadImage("IMAGE_ALMANAC_ZOMBIECARD");
+			if (aImg != nullptr)
+			{
+				PvzpMarkImageForSanding(aImg);
+				Sexy::IMAGE_ALMANAC_ZOMBIECARD = aImg;
+			}
+		}
+
+		if (mApp->mBoard != nullptr)
+		{
+			if (Sexy::IMAGE_ALMANAC_INDEXBACK != nullptr)
+			{
+				mApp->mResourceManager->DeleteImage("IMAGE_ALMANAC_INDEXBACK");
+				Sexy::IMAGE_ALMANAC_INDEXBACK = nullptr;
+			}
+			if (Sexy::IMAGE_ALMANAC_PLANTBACK != nullptr)
+			{
+				mApp->mResourceManager->DeleteImage("IMAGE_ALMANAC_PLANTBACK");
+				Sexy::IMAGE_ALMANAC_PLANTBACK = nullptr;
+			}
+			if (Sexy::IMAGE_ALMANAC_PLANTCARD != nullptr)
+			{
+				mApp->mResourceManager->DeleteImage("IMAGE_ALMANAC_PLANTCARD");
+				Sexy::IMAGE_ALMANAC_PLANTCARD = nullptr;
+			}
+			mApp->CleanSharedImages();
+#if defined(__linux__) && defined(__GLIBC__) && !defined(__ANDROID__)
+			malloc_trim(0);
+#endif
+		}
+	}
+	else if (thePage == AlmanacPage::ALMANAC_PAGE_PLANTS)
+	{
+		if (Sexy::IMAGE_ALMANAC_PLANTBACK == nullptr)
+		{
+			Image* aImg = (Image*)mApp->mResourceManager->LoadImage("IMAGE_ALMANAC_PLANTBACK");
+			if (aImg != nullptr)
+			{
+				PvzpMarkImageForSanding(aImg);
+				Sexy::IMAGE_ALMANAC_PLANTBACK = aImg;
+			}
+		}
+		if (Sexy::IMAGE_ALMANAC_PLANTCARD == nullptr)
+		{
+			Image* aImg = (Image*)mApp->mResourceManager->LoadImage("IMAGE_ALMANAC_PLANTCARD");
+			if (aImg != nullptr)
+			{
+				PvzpMarkImageForSanding(aImg);
+				Sexy::IMAGE_ALMANAC_PLANTCARD = aImg;
+			}
+		}
+
+		if (mApp->mBoard != nullptr)
+		{
+			if (Sexy::IMAGE_ALMANAC_INDEXBACK != nullptr)
+			{
+				mApp->mResourceManager->DeleteImage("IMAGE_ALMANAC_INDEXBACK");
+				Sexy::IMAGE_ALMANAC_INDEXBACK = nullptr;
+			}
+			if (Sexy::IMAGE_ALMANAC_ZOMBIEBACK != nullptr)
+			{
+				mApp->mResourceManager->DeleteImage("IMAGE_ALMANAC_ZOMBIEBACK");
+				Sexy::IMAGE_ALMANAC_ZOMBIEBACK = nullptr;
+			}
+			if (Sexy::IMAGE_ALMANAC_ZOMBIECARD != nullptr)
+			{
+				mApp->mResourceManager->DeleteImage("IMAGE_ALMANAC_ZOMBIECARD");
+				Sexy::IMAGE_ALMANAC_ZOMBIECARD = nullptr;
+			}
+			mApp->CleanSharedImages();
+#if defined(__linux__) && defined(__GLIBC__) && !defined(__ANDROID__)
+			malloc_trim(0);
+#endif
+		}
+	}
+	else if (thePage == AlmanacPage::ALMANAC_PAGE_INDEX)
+	{
+		if (Sexy::IMAGE_ALMANAC_INDEXBACK == nullptr)
+		{
+			Image* aImg = (Image*)mApp->mResourceManager->LoadImage("IMAGE_ALMANAC_INDEXBACK");
+			if (aImg != nullptr)
+			{
+				PvzpMarkImageForSanding(aImg);
+				Sexy::IMAGE_ALMANAC_INDEXBACK = aImg;
+			}
+		}
+
+		if (mApp->mBoard != nullptr)
+		{
+			if (Sexy::IMAGE_ALMANAC_PLANTBACK != nullptr)
+			{
+				mApp->mResourceManager->DeleteImage("IMAGE_ALMANAC_PLANTBACK");
+				Sexy::IMAGE_ALMANAC_PLANTBACK = nullptr;
+			}
+			if (Sexy::IMAGE_ALMANAC_PLANTCARD != nullptr)
+			{
+				mApp->mResourceManager->DeleteImage("IMAGE_ALMANAC_PLANTCARD");
+				Sexy::IMAGE_ALMANAC_PLANTCARD = nullptr;
+			}
+			if (Sexy::IMAGE_ALMANAC_ZOMBIEBACK != nullptr)
+			{
+				mApp->mResourceManager->DeleteImage("IMAGE_ALMANAC_ZOMBIEBACK");
+				Sexy::IMAGE_ALMANAC_ZOMBIEBACK = nullptr;
+			}
+			if (Sexy::IMAGE_ALMANAC_ZOMBIECARD != nullptr)
+			{
+				mApp->mResourceManager->DeleteImage("IMAGE_ALMANAC_ZOMBIECARD");
+				Sexy::IMAGE_ALMANAC_ZOMBIECARD = nullptr;
+			}
+			mApp->CleanSharedImages();
+#if defined(__linux__) && defined(__GLIBC__) && !defined(__ANDROID__)
+			malloc_trim(0);
+#endif
+		}
+	}
+}
+
 void AlmanacDialog::SetPage(AlmanacPage thePage)
 {
 	mOpenPage = thePage;
 	ClearPlantsAndZombies();
+	EnsurePageResources(mOpenPage);
 
 	if (mOpenPage == AlmanacPage::ALMANAC_PAGE_INDEX)
 	{
@@ -244,23 +455,57 @@ void AlmanacDialog::Update()
 		}
 	}
 
-	if (mApp->mReanimatorCache)
+	if (mApp->mReanimatorCache && (mPrewarmTickCounter++ % 2 == 0))
 	{
-		for (int i = 0; i < 2 && mPrewarmPlantIndex < NUM_ALMANAC_SEEDS; i++, mPrewarmPlantIndex++)
+		bool aPrewarmZombie = false;
+		if (mOpenPage == AlmanacPage::ALMANAC_PAGE_ZOMBIES)
 		{
-			SeedType aSeed = static_cast<SeedType>(mPrewarmPlantIndex);
-			if (mApp->mReanimatorCache->mPlantImages[aSeed] == nullptr)
-			{
-				mApp->mReanimatorCache->mPlantImages[aSeed] = mApp->mReanimatorCache->MakeCachedPlantFrame(aSeed, DrawVariation::VARIATION_NORMAL);
-			}
+			if (mPrewarmZombieIndex < NUM_ALMANAC_ZOMBIES)
+				aPrewarmZombie = true;
+			else if (mPrewarmPlantIndex < NUM_ALMANAC_SEEDS)
+				aPrewarmZombie = false;
+		}
+		else if (mOpenPage == AlmanacPage::ALMANAC_PAGE_PLANTS)
+		{
+			if (mPrewarmPlantIndex < NUM_ALMANAC_SEEDS)
+				aPrewarmZombie = false;
+			else if (mPrewarmZombieIndex < NUM_ALMANAC_ZOMBIES)
+				aPrewarmZombie = true;
+		}
+		else
+		{
+			if (mPrewarmZombieIndex < NUM_ALMANAC_ZOMBIES)
+				aPrewarmZombie = true;
+			else if (mPrewarmPlantIndex < NUM_ALMANAC_SEEDS)
+				aPrewarmZombie = false;
 		}
 
-		for (int i = 0; i < 2 && mPrewarmZombieIndex < NUM_ALMANAC_ZOMBIES; i++, mPrewarmZombieIndex++)
+		if (aPrewarmZombie)
 		{
-			ZombieType aZombie = GetZombieType(mPrewarmZombieIndex);
-			if (aZombie != ZombieType::ZOMBIE_INVALID && mApp->mReanimatorCache->mZombieImages[aZombie] == nullptr)
+			while (mPrewarmZombieIndex < NUM_ALMANAC_ZOMBIES)
 			{
-				mApp->mReanimatorCache->mZombieImages[aZombie] = mApp->mReanimatorCache->MakeCachedZombieFrame(aZombie);
+				ZombieType aZombie = GetZombieType(mPrewarmZombieIndex++);
+				if (aZombie == ZombieType::ZOMBIE_POLEVAULTER)
+				{
+					aZombie = ZombieType::ZOMBIE_CACHED_POLEVAULTER_WITH_POLE;
+				}
+				if (aZombie != ZombieType::ZOMBIE_INVALID && mApp->mReanimatorCache->mZombieImages[aZombie] == nullptr)
+				{
+					mApp->mReanimatorCache->mZombieImages[aZombie] = mApp->mReanimatorCache->MakeCachedZombieFrame(aZombie);
+					break;
+				}
+			}
+		}
+		else
+		{
+			while (mPrewarmPlantIndex < NUM_ALMANAC_SEEDS)
+			{
+				SeedType aSeed = static_cast<SeedType>(mPrewarmPlantIndex++);
+				if (mApp->mReanimatorCache->mPlantImages[aSeed] == nullptr)
+				{
+					mApp->mReanimatorCache->mPlantImages[aSeed] = mApp->mReanimatorCache->MakeCachedPlantFrame(aSeed, DrawVariation::VARIATION_NORMAL);
+					break;
+				}
 			}
 		}
 	}
@@ -291,7 +536,8 @@ ZombieType AlmanacDialog::GetZombieType(int theIndex)
 
 void AlmanacDialog::DrawIndex(Graphics* g)
 {
-	g->DrawImage(Sexy::IMAGE_ALMANAC_INDEXBACK, 0, 0);
+	if (Sexy::IMAGE_ALMANAC_INDEXBACK)
+		g->DrawImage(Sexy::IMAGE_ALMANAC_INDEXBACK, 0, 0);
 	PvzpDrawString(g, "[SUBURBAN_ALMANAC_INDEX]", BOARD_WIDTH / 2, 60, Sexy::FONT_HOUSEOFTERROR28, Color(220, 220, 220), DrawStringJustification::DS_ALIGN_CENTER);
 
 	if (mPlant)
@@ -310,7 +556,8 @@ void AlmanacDialog::DrawIndex(Graphics* g)
 
 void AlmanacDialog::DrawPlants(Graphics* g)
 {
-	g->DrawImage(Sexy::IMAGE_ALMANAC_PLANTBACK, 0, 0);
+	if (Sexy::IMAGE_ALMANAC_PLANTBACK)
+		g->DrawImage(Sexy::IMAGE_ALMANAC_PLANTBACK, 0, 0);
 	PvzpDrawString(g, "[SUBURBAN_ALMANAC_PLANTS]", BOARD_WIDTH / 2, 48, Sexy::FONT_HOUSEOFTERROR20, Color(213, 159, 43), DrawStringJustification::DS_ALIGN_CENTER);
 
 	int aCreatedPlants = 0;
@@ -367,7 +614,8 @@ void AlmanacDialog::DrawPlants(Graphics* g)
 		mPlant->Draw(&aPlantGraphics);
 	}
 
-	g->DrawImage(Sexy::IMAGE_ALMANAC_PLANTCARD, 459, 86);
+	if (Sexy::IMAGE_ALMANAC_PLANTCARD)
+		g->DrawImage(Sexy::IMAGE_ALMANAC_PLANTCARD, 459, 86);
 	const PlantDefinition& aPlantDef = GetPlantDefinition(mSelectedSeed);
 	std::string aName = Plant::GetNameString(mSelectedSeed, SEED_NONE);
 	std::string aDescriptionName = std::format("[{}_DESCRIPTION]", aPlantDef.mPlantName);
@@ -391,7 +639,8 @@ void AlmanacDialog::DrawPlants(Graphics* g)
 
 void AlmanacDialog::DrawZombies(Graphics* g)
 {
-	g->DrawImage(Sexy::IMAGE_ALMANAC_ZOMBIEBACK, 0, 0);
+	if (Sexy::IMAGE_ALMANAC_ZOMBIEBACK)
+		g->DrawImage(Sexy::IMAGE_ALMANAC_ZOMBIEBACK, 0, 0);
 	PvzpDrawString(g, "[SUBURBAN_ALMANAC_ZOMBIES]", BOARD_WIDTH / 2, 54, Sexy::FONT_DWARVENTODCRAFT24, Color(0, 196, 0), DS_ALIGN_CENTER);
 
 	int aCreatedZombies = 0;
@@ -404,29 +653,31 @@ void AlmanacDialog::DrawZombies(Graphics* g)
 		if (aZombieType != ZombieType::ZOMBIE_INVALID)
 		{
 			if (!ZombieIsShown(aZombieType))
-				g->DrawImage(Sexy::IMAGE_ALMANAC_ZOMBIEBLANK, aPosX, aPosY);
-			else
 			{
+				g->DrawImage(Sexy::IMAGE_ALMANAC_ZOMBIEBLANK, aPosX, aPosY);
+				continue;
+			}
+
+			ZombieType aZombieTypeToDraw = aZombieType;
+			if (aZombieType == ZombieType::ZOMBIE_POLEVAULTER)
+				aZombieTypeToDraw = ZombieType::ZOMBIE_CACHED_POLEVAULTER_WITH_POLE;
+
+			g->DrawImage(Sexy::IMAGE_ALMANAC_ZOMBIEWINDOW, aPosX, aPosY);
+			if (aZombieType == aZombieMouseOn && mApp->Is3DAccelerated())
+			{
+				g->SetDrawMode(Graphics::DRAWMODE_ADDITIVE);
+				g->SetColor(Color(255, 255, 255, 48));
+				g->SetColorizeImages(true);
 				g->DrawImage(Sexy::IMAGE_ALMANAC_ZOMBIEWINDOW, aPosX, aPosY);
-				if (aZombieType == aZombieMouseOn && mApp->Is3DAccelerated())
-				{
-					g->SetDrawMode(Graphics::DRAWMODE_ADDITIVE);
-					g->SetColor(Color(255, 255, 255, 48));
-					g->SetColorizeImages(true);
-					g->DrawImage(Sexy::IMAGE_ALMANAC_ZOMBIEWINDOW, aPosX, aPosY);
-					g->SetDrawMode(Graphics::DRAWMODE_NORMAL);
-					g->SetColorizeImages(false);
-				}
+				g->SetDrawMode(Graphics::DRAWMODE_NORMAL);
+				g->SetColorizeImages(false);
+			}
 
-				ZombieType aZombieTypeToDraw = aZombieType;
-				if (aZombieType == ZombieType::ZOMBIE_POLEVAULTER)
-					aZombieTypeToDraw = ZombieType::ZOMBIE_CACHED_POLEVAULTER_WITH_POLE;
-
-				Graphics aZombieGraphics = Graphics(*g);
-				aZombieGraphics.SetClipRect(aPosX + 2, aPosY + 2, 72, 72);
-				aZombieGraphics.Translate(aPosX + 1, aPosY - 6);
-				aZombieGraphics.mScaleX = 0.5f;
-				aZombieGraphics.mScaleY = 0.5f;
+			Graphics aZombieGraphics = Graphics(*g);
+			aZombieGraphics.SetClipRect(aPosX + 2, aPosY + 2, 72, 72);
+			aZombieGraphics.Translate(aPosX + 1, aPosY - 6);
+			aZombieGraphics.mScaleX = 0.5f;
+			aZombieGraphics.mScaleY = 0.5f;
 				switch (aZombieType)
 				{
 				case ZombieType::ZOMBIE_POLEVAULTER:
@@ -469,7 +720,6 @@ void AlmanacDialog::DrawZombies(Graphics* g)
 					g->SetDrawMode(Graphics::DRAWMODE_NORMAL);
 					g->SetColorizeImages(false);
 				}
-			}
 		}
 	}
 
@@ -496,7 +746,8 @@ void AlmanacDialog::DrawZombies(Graphics* g)
 			mZombie->DrawShadow(&aZombieGraphics);
 		mZombie->Draw(&aZombieGraphics);
 	}
-	g->DrawImage(Sexy::IMAGE_ALMANAC_ZOMBIECARD, 455, 78);
+	if (Sexy::IMAGE_ALMANAC_ZOMBIECARD)
+		g->DrawImage(Sexy::IMAGE_ALMANAC_ZOMBIECARD, 455, 78);
 
 	const ZombieDefinition& aZombieDef = GetZombieDefinition(mSelectedZombie);
 	std::string aName = ZombieHasSilhouette(mSelectedZombie) ? "???" : std::format("[{}]", aZombieDef.mZombieName);
@@ -711,7 +962,7 @@ void AlmanacDialog::KeyDown(KeyCode theKey)
 {
 	if (theKey == KeyCode::KEYCODE_ESCAPE)
 	{
-		if (mOpenPage == AlmanacPage::ALMANAC_PAGE_INDEX)
+		if (mOpenPage == AlmanacPage::ALMANAC_PAGE_INDEX || (mApp && mApp->mBoard != nullptr))
 			mApp->KillAlmanacDialog();
 		else
 			SetPage(AlmanacPage::ALMANAC_PAGE_INDEX);

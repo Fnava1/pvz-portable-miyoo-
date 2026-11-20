@@ -22,6 +22,9 @@
 #include <time.h>
 #include <algorithm>
 #include <SDL.h>
+#if defined(__linux__) && defined(__GLIBC__) && !defined(__ANDROID__)
+#include <malloc.h>
+#endif
 #include <format>
 #include "ZenGarden.h"
 #include "BoardInclude.h"
@@ -45,6 +48,10 @@
 #include "widget/Dialog.h"
 #include "misc/MTRand.h"
 #include "../PvzpLib/PvzpParticle.h"
+#if defined(PVZ_ENABLE_DUALCORE)
+#include "../threading/ComputeWorker.h"
+#include "../PvzpLib/ReanimRigEvaluator.h"
+#endif
 #include "../PvzpLib/EffectSystem.h"
 #include "../PvzpLib/PvzpStringFile.h"
 #include "graphics/ImageFont.h"
@@ -141,6 +148,8 @@ Board::Board(LawnApp* theApp)
 	mCobCannonMouseX = 0;
 	mCobCannonMouseY = 0;
 	mDroppedFirstCoin = false;
+	mWorkerEngaged = false;
+	mWorkerHysteresisCounter = 0;
 	mBonusLawnMowersRemaining = 0;
 	mEnableGraveStones = false;
 	mHelpIndex = AdviceType::ADVICE_NONE;
@@ -291,6 +300,27 @@ void Board::DisposeBoard()
 	{
 		mApp->mZenGarden->LeaveGarden();
 #ifdef LOW_MEMORY
+		if (mApp->mPlayerInfo)
+		{
+			for (int i = 0; i < mApp->mPlayerInfo->mNumPottedPlants; ++i)
+			{
+				SeedType aSeed = mApp->mPlayerInfo->mPottedPlant[i].mSeedType;
+				if (aSeed >= 0 && aSeed < SeedType::NUM_SEED_TYPES)
+				{
+					const PlantDefinition& aDef = GetPlantDefinition(aSeed);
+					if (aDef.mReanimationType != ReanimationType::REANIM_NONE && gReanimatorDefArray)
+					{
+						ReanimationFreeDefinition(&gReanimatorDefArray[static_cast<int>(aDef.mReanimationType)]);
+					}
+				}
+			}
+			if (gReanimatorDefArray)
+			{
+				ReanimationFreeDefinition(&gReanimatorDefArray[static_cast<int>(ReanimationType::REANIM_ZENGARDEN_SPROUT)]);
+				ReanimationFreeDefinition(&gReanimatorDefArray[static_cast<int>(ReanimationType::REANIM_FLOWER_POT)]);
+			}
+		}
+
 		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_ZENGARDEN_WATERINGCAN]);
 		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_ZENGARDEN_FERTILIZER]);
 		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_ZENGARDEN_BUGSPRAY]);
@@ -335,15 +365,34 @@ void Board::DisposeBoard()
 		ReanimationFreeDefinition(&gReanimatorDefArray[ReanimationType::REANIM_ROOF_CLEANER]);
 	}
 
+	for (SeedType aSeedType : mPuzzlePreloadedSeeds)
+	{
+		if (aSeedType >= 0 && aSeedType < SeedType::NUM_SEED_TYPES)
+		{
+			const PlantDefinition& aDef = GetPlantDefinition(aSeedType);
+			if (aDef.mReanimationType != ReanimationType::REANIM_NONE && gReanimatorDefArray)
+			{
+				ReanimationFreeDefinition(&gReanimatorDefArray[static_cast<int>(aDef.mReanimationType)]);
+			}
+		}
+	}
+	mPuzzlePreloadedSeeds.clear();
+
 	mApp->mResourceManager->ReleaseTrackedResources(mLoadedResourceNames);
 	mLoadedResourceNames.clear();
 	mApp->CleanSharedImages();
+#else
+	mPuzzlePreloadedSeeds.clear();
 #endif
 
 	mApp->mSoundSystem->StopFoley(FoleyType::FOLEY_RAIN);
 	mApp->mZenGarden->mBoard = nullptr;
 	mApp->CrazyDaveDie();
 	mApp->mEffectSystem->EffectSystemFreeAll();
+	if (GridItem::sSharedSunReanim) { delete GridItem::sSharedSunReanim; GridItem::sSharedSunReanim = nullptr; }
+#if defined(__linux__) && defined(__GLIBC__) && !defined(__ANDROID__)
+	malloc_trim(0);
+#endif
 }
 
 bool Board::AreEnemyZombiesOnScreen()
@@ -460,7 +509,7 @@ bool Board::LoadGame(const std::string& theFileName)
 
 	for (Zombie* aZombie : mZombies)
 	{
-		if (!aZombie->mDead)
+		if (!aZombie->mDead && aZombie->mZombieType >= 0 && aZombie->mZombieType < ZombieType::NUM_ZOMBIE_TYPES)
 		{
 			Zombie::PreloadZombieResources(aZombie->mZombieType);
 		}
@@ -470,8 +519,11 @@ bool Board::LoadGame(const std::string& theFileName)
 	{
 		if (!aPlant->mDead)
 		{
-			Plant::PreloadPlantResources(aPlant->mSeedType);
-			if (aPlant->mImitaterType != SeedType::SEED_NONE)
+			if (aPlant->mSeedType >= 0 && aPlant->mSeedType < SeedType::NUM_SEED_TYPES)
+			{
+				Plant::PreloadPlantResources(aPlant->mSeedType);
+			}
+			if (aPlant->mImitaterType >= 0 && aPlant->mImitaterType < SeedType::NUM_SEED_TYPES)
 			{
 				Plant::PreloadPlantResources(aPlant->mImitaterType);
 			}
@@ -485,10 +537,58 @@ bool Board::LoadGame(const std::string& theFileName)
 			SeedPacket* aPacket = &mSeedBank->mSeedPackets[i];
 			if (aPacket->mPacketType != SeedType::SEED_NONE)
 			{
-				Plant::PreloadPlantResources(aPacket->mPacketType);
-				if (aPacket->mImitaterType != SeedType::SEED_NONE)
+				if (Challenge::IsZombieSeedType(aPacket->mPacketType))
+				{
+					ZombieType aZombieType = Challenge::IZombieSeedTypeToZombieType(aPacket->mPacketType);
+					if (aZombieType >= 0 && aZombieType < ZombieType::NUM_ZOMBIE_TYPES)
+					{
+						Zombie::PreloadZombieResources(aZombieType);
+					}
+				}
+				else if (aPacket->mPacketType >= 0 && aPacket->mPacketType < SeedType::NUM_SEED_TYPES)
+				{
+					Plant::PreloadPlantResources(aPacket->mPacketType);
+					if (std::find(mPuzzlePreloadedSeeds.begin(), mPuzzlePreloadedSeeds.end(), aPacket->mPacketType) == mPuzzlePreloadedSeeds.end())
+					{
+						mPuzzlePreloadedSeeds.push_back(aPacket->mPacketType);
+					}
+				}
+
+				if (aPacket->mImitaterType >= 0 && aPacket->mImitaterType < SeedType::NUM_SEED_TYPES)
 				{
 					Plant::PreloadPlantResources(aPacket->mImitaterType);
+					if (std::find(mPuzzlePreloadedSeeds.begin(), mPuzzlePreloadedSeeds.end(), aPacket->mImitaterType) == mPuzzlePreloadedSeeds.end())
+					{
+						mPuzzlePreloadedSeeds.push_back(aPacket->mImitaterType);
+					}
+				}
+			}
+		}
+	}
+
+	if (mApp->IsScaryPotterLevel())
+	{
+		for (GridItem* aGridItem : mGridItems)
+		{
+			if (!aGridItem || aGridItem->mDead || aGridItem->mGridItemType != GridItemType::GRIDITEM_SCARY_POT)
+				continue;
+
+			if (aGridItem->mScaryPotType == ScaryPotType::SCARYPOT_SEED &&
+				aGridItem->mSeedType >= 0 && aGridItem->mSeedType < SeedType::NUM_SEED_TYPES)
+			{
+				Plant::PreloadPlantResources(aGridItem->mSeedType);
+				if (std::find(mPuzzlePreloadedSeeds.begin(), mPuzzlePreloadedSeeds.end(), aGridItem->mSeedType) == mPuzzlePreloadedSeeds.end())
+				{
+					mPuzzlePreloadedSeeds.push_back(aGridItem->mSeedType);
+				}
+			}
+			else if (aGridItem->mScaryPotType == ScaryPotType::SCARYPOT_ZOMBIE &&
+					 aGridItem->mZombieType >= 0 && aGridItem->mZombieType < ZombieType::NUM_ZOMBIE_TYPES)
+			{
+				Zombie::PreloadZombieResources(aGridItem->mZombieType);
+				if (aGridItem->mZombieType == ZombieType::ZOMBIE_GARGANTUAR)
+				{
+					Zombie::PreloadZombieResources(ZombieType::ZOMBIE_IMP);
 				}
 			}
 		}
@@ -498,6 +598,7 @@ bool Board::LoadGame(const std::string& theFileName)
 	mApp->ClearUpdateBacklog();
 	ResetFPSStats();
 	UpdateLayers();
+	SpriteCachePool::PreloadSynchronous(this);
 	return true;
 }
 
@@ -1391,7 +1492,11 @@ void Board::InitSurvivalStage()
 	mLevelComplete = false;
 	if (mApp->mReanimatorCache)
 		mApp->mReanimatorCache->ClearLevelTransientCaches();
-	SpriteCachePool::ClearZombieSlots();
+	SpriteStreamer::CancelAll();
+	SpriteCachePool::FreeLevelArena();
+#if defined(__linux__) && defined(__GLIBC__) && !defined(__ANDROID__)
+	malloc_trim(0);
+#endif
 	InitZombieWaves();
 	mApp->mGameScene = GameScenes::SCENE_LEVEL_INTRO;
 	mSeedBank->Move(SEED_BANK_OFFSET_X, 0);
@@ -1478,6 +1583,8 @@ void Board::InitLevel()
 	mBoardUpdateCounter = 0;
 	mActiveVanguardCount = 0;
 	mActiveCharredCount = 0;
+	mWorkerEngaged = false;
+	mWorkerHysteresisCounter = 0;
 	mEnableGraveStones = false;
 	mSodPosition = 0;
 	mPrevBoardResult = mApp->mBoardResult;
@@ -2260,6 +2367,9 @@ void Board::CycleSeedPacket(int theDelta)
 		return;
 	}
 
+	if (mSeedBank == nullptr || mSeedBank->mNumPackets <= 1)
+		return;
+
 	int aIndex = aCurrentIndex;
 	for (int i = 0; i < mSeedBank->mNumPackets; ++i)
 	{
@@ -2529,6 +2639,11 @@ void Board::DrawGridReticle(Graphics* g)
 		}
 		aHasTool = true;
 	}
+	else if (!IsPlantInCursor() && GetGridItemAt(GridItemType::GRIDITEM_SCARY_POT, mGridCursorCol, mGridCursorRow) != nullptr)
+	{
+		aColor = Color(255, 215, 0, 240); // Amber/gold tint: mallet action indicator over scary pot
+		aHasTool = true;
+	}
 
 	// 1. Subtle tile interior tint for instant spatial awareness
 	Color aFillColor = aColor;
@@ -2582,6 +2697,11 @@ Plant* Board::NewPlant(int theGridX, int theGridY, SeedType theSeedType, SeedTyp
 	Plant* aPlant = mPlants.DataArrayAlloc();
 	aPlant->mIsOnBoard = true;
 	aPlant->PlantInitialize(theGridX, theGridY, theSeedType, theImitaterType);
+	if (theGridY >= 0 && theGridY < MAX_GRID_SIZE_Y)
+	{
+		mRowHasPlantsMask |= (1U << theGridY);
+		mRowPlants[theGridY].push_back(aPlant);
+	}
 	if (mStaticBackdropValid)
 	{
 		BakePlantShadow(aPlant);
@@ -2994,7 +3114,10 @@ ZombieType Board::PickZombieType(int theZombiePoints, int theWaveIndex, ZombiePi
 				continue;
 			}
 		}
-		else if (aGameMode != GameMode::GAMEMODE_CHALLENGE_POGO_PARTY && aGameMode != GameMode::GAMEMODE_CHALLENGE_BOBSLED_BONANZA && aGameMode != GameMode::GAMEMODE_CHALLENGE_AIR_RAID)
+		else if (aGameMode != GameMode::GAMEMODE_CHALLENGE_POGO_PARTY &&
+				 aGameMode != GameMode::GAMEMODE_CHALLENGE_BOBSLED_BONANZA &&
+				 aGameMode != GameMode::GAMEMODE_CHALLENGE_AIR_RAID &&
+				 aGameMode != GameMode::GAMEMODE_CHALLENGE_FINAL_BOSS)
 		{
 			int aFirstAllowedWave = aZombieDef.mFirstAllowedWave;
 			// Endless mode gradually moves the first allowed wave earlier
@@ -3055,6 +3178,25 @@ ZombieType Board::PickZombieType(int theZombiePoints, int theWaveIndex, ZombiePi
 		aZombieWeightArray[aPickCount].mItem = aZombieType;
 		aZombieWeightArray[aPickCount].mWeight = aPickWeight;
 		aPickCount++;
+	}
+
+	if (aPickCount == 0)
+	{
+		int aLowestValue = 999999;
+		ZombieType aBestZombie = ZombieType::ZOMBIE_NORMAL;
+		for (int aZombieType = ZombieType::ZOMBIE_NORMAL; aZombieType < ZombieType::NUM_ZOMBIE_TYPES; aZombieType++)
+		{
+			if (mZombieAllowed[aZombieType])
+			{
+				const ZombieDefinition& aZombieDef = GetZombieDefinition((ZombieType)aZombieType);
+				if (aZombieDef.mZombieValue < aLowestValue && aZombieDef.mPickWeight > 0)
+				{
+					aLowestValue = aZombieDef.mZombieValue;
+					aBestZombie = (ZombieType)aZombieType;
+				}
+			}
+		}
+		return aBestZombie;
 	}
 
 	return (ZombieType)PvzpPickFromWeightedArray(aZombieWeightArray, aPickCount);
@@ -4807,7 +4949,10 @@ bool Board::MouseHitTest(int x, int y, HitResult* theHitResult)
 		mApp->GetDialog(Dialogs::DIALOG_GAME_OVER) == nullptr &&
 		mApp->GetDialog(Dialogs::DIALOG_CONTINUE) == nullptr)
 	{
-		GridItem* aScaryPot = GetGridItemAt(GridItemType::GRIDITEM_SCARY_POT, PixelToGridX(x, y), PixelToGridY(x, y));
+		int aGridX = PixelToGridX(x, y);
+		int aGridY = PixelToGridY(x, y);
+		if (mGridCursorActive) { aGridX = mGridCursorCol; aGridY = mGridCursorRow; }
+		GridItem* aScaryPot = GetGridItemAt(GridItemType::GRIDITEM_SCARY_POT, aGridX, aGridY);
 		if (aScaryPot)
 		{
 			theHitResult->mObject = aScaryPot;
@@ -5064,6 +5209,12 @@ void Board::MouseDown(int x, int y, int theClickCount)
 			break;
 		case GameObjectType::OBJECT_TYPE_PLANT:
 			((Plant*)aHitResult.mObject)->MouseDown(x, y, theClickCount);
+			break;
+		case GameObjectType::OBJECT_TYPE_SCARY_POT:
+			if (aHitResult.mObjectType == GameObjectType::OBJECT_TYPE_SCARY_POT && mChallenge && mApp->IsScaryPotterLevel())
+			{
+				mChallenge->ScaryPotterMalletPot((GridItem*)aHitResult.mObject);
+			}
 			break;
 		default:
 			break;
@@ -6406,9 +6557,8 @@ void Board::Update()
 {
 	PvzpHesitationBracket aHesitation("Board::Update");
 
-	if (mApp->GetDialog(Dialogs::DIALOG_STORE) != nullptr)
+	if (mApp->GetDialog(Dialogs::DIALOG_STORE) != nullptr || mApp->GetDialog(Dialogs::DIALOG_ALMANAC) != nullptr)
 	{
-		mPaused = true;
 		return;
 	}
 
@@ -6957,8 +7107,97 @@ static inline void AddUIRenderItem(RenderItem* theRenderList, int& theCurRenderI
 	theCurRenderItem++;
 }
 
+bool Board::ShouldEngageComputeWorker(int theUncachedRigs)
+{
+#if defined(PVZ_ENABLE_DUALCORE)
+	if (!mWorkerEngaged)
+	{
+		if (theUncachedRigs >= 12)
+		{
+			mWorkerEngaged = true;
+			mWorkerHysteresisCounter = 0;
+		}
+	}
+	else
+	{
+		if (theUncachedRigs <= 8)
+		{
+			if (++mWorkerHysteresisCounter >= 45)
+			{
+				mWorkerEngaged = false;
+				mWorkerHysteresisCounter = 0;
+			}
+		}
+		else
+		{
+			mWorkerHysteresisCounter = 0;
+		}
+	}
+	return mWorkerEngaged;
+#else
+	return false;
+#endif
+}
+
 void Board::DrawGameObjects(Graphics* g)
 {
+#if defined(PVZ_ENABLE_DUALCORE)
+	Reanimation* activeRigs[MAX_ACTIVE_RIGS];
+	int rigCount = 0;
+
+	// Pre-pass: collect visible active rigs that require skeletal evaluation
+	for (Zombie* aZombie : mZombies)
+	{
+		if (aZombie->mDead)
+			continue;
+		if (aZombie->CanUseWalkCache())
+			continue;
+		float aScreenX = aZombie->mPosX + mX;
+		if (aScreenX > 860.0f || aScreenX < -260.0f)
+			continue;
+		if (rigCount < MAX_ACTIVE_RIGS)
+		{
+			Reanimation* aReanim = mApp->ReanimationTryToGet(aZombie->mBodyReanimID);
+			if (aReanim && !aReanim->mDead)
+			{
+				aReanim->mCacheIndex = rigCount;
+				activeRigs[rigCount++] = aReanim;
+			}
+		}
+	}
+	for (Plant* aPlant : mPlants)
+	{
+		if (aPlant->mDead)
+			continue;
+		if (aPlant->CanUseSpriteCache())
+			continue;
+		if (rigCount < MAX_ACTIVE_RIGS)
+		{
+			Reanimation* aReanim = mApp->ReanimationTryToGet(aPlant->mBodyReanimID);
+			if (aReanim && !aReanim->mDead)
+			{
+				aReanim->mCacheIndex = rigCount;
+				activeRigs[rigCount++] = aReanim;
+			}
+		}
+	}
+
+	if (ShouldEngageComputeWorker(rigCount) && rigCount > 0)
+	{
+		int half = rigCount / 2;
+		ComputeWorker::DispatchTask(WORKER_TASK_EVAL_RIGS, activeRigs, nullptr, half, rigCount - half);
+		ReanimRigEvaluator::EvaluateBatch(activeRigs, 0, half);
+		ComputeWorker::WaitForTask();
+	}
+	else
+	{
+		for (int i = 0; i < rigCount; ++i)
+		{
+			activeRigs[i]->mCacheIndex = -1;
+		}
+	}
+#endif
+
 	RenderItem aRenderList[MAX_RENDER_ITEMS];
 	int aRenderItemCount = 0;
 
@@ -7409,6 +7648,12 @@ void Board::DrawGameObjects(Graphics* g)
 		}
 	}
 
+#if defined(PVZ_ENABLE_DUALCORE)
+	for (int i = 0; i < rigCount; ++i)
+	{
+		activeRigs[i]->mCacheIndex = -1;
+	}
+#endif
 }
 
 bool Board::HasProgressMeter()
