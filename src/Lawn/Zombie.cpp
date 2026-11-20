@@ -5978,10 +5978,6 @@ void Zombie::DrawReanim(Graphics* g, const ZombieDrawPosition& theDrawPos, int t
 			if (SpriteCachePool::DrawZombie(g, drawX, drawY, mZombieType, aBodyReanim->mAnimTime, theIsChilled))
 				return;
 		}
-		else if (SpriteCache_GetZombieEntityInfo(mZombieType) != nullptr && !SpriteCachePool::IsZombieReady(mZombieType))
-		{
-			SpriteStreamer::RequestZombie(mZombieType);
-		}
 
 		aBodyReanim->DrawRenderGroup(g, theBaseRenderGroup);
 	}
@@ -7450,7 +7446,7 @@ void Zombie::EatZombie(Zombie* theZombie)
 
 bool Zombie::TrySpawnLevelAward()
 {
-	if (!IsOnBoard() || mBoard->HasLevelAwardDropped() || mBoard->mLevelComplete || mDroppedLoot)
+	if (!IsOnBoard() || mBoard->HasLevelAwardDropped() || mBoard->mLevelComplete)
 	{
 		return false;
 	}
@@ -7690,6 +7686,9 @@ void Zombie::BobsledBurn()
 
 void Zombie::BungeeDropPlant()
 {
+	if (!mBoard)
+		return;
+
 	if (mZombiePhase == ZombiePhase::PHASE_BUNGEE_GRABBING)
 	{
 		Plant* aPlant = mBoard->mPlants.DataArrayTryToGet(mTargetPlantID);
@@ -7711,16 +7710,16 @@ void Zombie::BungeeDropPlant()
 
 void Zombie::BungeeDie()
 {
+	if (!mBoard)
+		return;
+
 	BungeeDropPlant();
 
-	if (mBoard)  // null check added for safety; DataArrayTryToGet() does not dereference mBoard
+	Plant* aPlant = mBoard->mPlants.DataArrayTryToGet(static_cast<unsigned int>(mTargetPlantID));
+	if (aPlant)
 	{
-		Plant* aPlant = mBoard->mPlants.DataArrayTryToGet(static_cast<unsigned int>(mTargetPlantID));
-		if (aPlant)
-		{
-			mBoard->mPlantsEaten++;
-			aPlant->Die();
-		}
+		mBoard->mPlantsEaten++;
+		aPlant->Die();
 	}
 
 	Zombie* aZombie = mBoard->ZombieTryToGet(mRelatedZombieID);
@@ -9065,7 +9064,11 @@ void Zombie::ApplyBurn()
 	else
 	{
 		int aRenderOrder = mRenderOrder;
+#ifdef LOW_MEMORY
+		if (mBoard && mBoard->mActiveCharredCount >= 2)
+#else
 		if (mBoard && mBoard->mActiveCharredCount >= 6)
+#endif
 		{
 			mApp->AddPvzpParticle(mPosX + 20.0f, mPosY + 40.0f, aRenderOrder, ParticleEffect::PARTICLE_POWDER_SMOKE);
 			DieWithLoot();
@@ -10920,6 +10923,11 @@ void Zombie::DrawBossPart(Graphics* g, BossPart theBossPart)
 
 void Zombie::PreloadZombieResources(ZombieType theZombieType)
 {
+	if (theZombieType < 0 || theZombieType >= ZombieType::NUM_ZOMBIE_TYPES)
+	{
+		return;
+	}
+
 	const ZombieDefinition& aZombieDef = GetZombieDefinition(theZombieType);
 	if (aZombieDef.mReanimationType != ReanimationType::REANIM_NONE)
 	{

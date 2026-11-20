@@ -53,6 +53,11 @@
 #include "../PvzpLib/PvzpStringFile.h"
 #include "widget/WidgetManager.h"
 #include "Widget/AchievementsScreen.h"
+#include "System/ReanimationLawn.h"
+#include "../PvzpLib/SpriteCachePool.h"
+#if defined(__linux__)
+#include <malloc.h>
+#endif
 #include <algorithm>
 #include <format>
 
@@ -1073,7 +1078,7 @@ int Challenge::MouseDown(int x, int y, int theClickCount, HitResult* theHitResul
 		}
 	}
 
-	if (mApp->IsScaryPotterLevel() && theHitResult->mObjectType == OBJECT_TYPE_SCARY_POT)
+	if (mApp->IsScaryPotterLevel() && theHitResult->mObjectType == OBJECT_TYPE_SCARY_POT && theHitResult->mObject != nullptr)
 	{
 		ScaryPotterMalletPot((GridItem*)theHitResult->mObject);
 		return true;
@@ -2499,6 +2504,16 @@ void Challenge::InitZombieWaves()
 		aList[ZOMBIE_DOLPHIN_RIDER] = true;
 		aList[ZOMBIE_BALLOON] = true;
 	}
+	else if (aGameMode == GAMEMODE_CHALLENGE_FINAL_BOSS || mApp->IsFinalBossLevel())
+	{
+		aList[ZOMBIE_TRAFFIC_CONE] = true;
+		aList[ZOMBIE_PAIL] = true;
+		aList[ZOMBIE_FOOTBALL] = true;
+		aList[ZOMBIE_POLEVAULTER] = true;
+		aList[ZOMBIE_NEWSPAPER] = true;
+		aList[ZOMBIE_DOOR] = true;
+		aList[ZOMBIE_BUNGEE] = true;
+	}
 	else
 	{
 		aList[ZOMBIE_NORMAL] = true;
@@ -3509,6 +3524,12 @@ void Challenge::ScaryPotterPlacePot(ScaryPotType theScaryPotType, ZombieType the
 	if (theSeedType != SeedType::SEED_NONE)
 	{
 		Plant::PreloadPlantResources(theSeedType);
+		if (mBoard && std::find(mBoard->mPuzzlePreloadedSeeds.begin(), 
+								mBoard->mPuzzlePreloadedSeeds.end(), 
+								theSeedType) == mBoard->mPuzzlePreloadedSeeds.end())
+		{
+			mBoard->mPuzzlePreloadedSeeds.push_back(theSeedType);
+		}
 	}
 
 	ScaryPotType aPotType = theScaryPotType;
@@ -3783,6 +3804,24 @@ void Challenge::ScaryPotterPopulate()
 	}
 
 	mScaryPotterPots = ScaryPotterCountPots();
+
+	int aFirstPotCol = 5;
+	for (int aCol = 0; aCol < MAX_GRID_SIZE_X; aCol++)
+	{
+		bool aFound = false;
+		for (GridItem* aGridItem : mBoard->mGridItems)
+		{
+			if (!aGridItem->mDead && aGridItem->mGridItemType == GRIDITEM_SCARY_POT && aGridItem->mGridX == aCol)
+			{
+				aFirstPotCol = aCol;
+				aFound = true;
+				break;
+			}
+		}
+		if (aFound)
+			break;
+	}
+	mBoard->mGridCursorCol = aFirstPotCol;
 }
 
 void Challenge::ScaryPotterStart()
@@ -3812,7 +3851,12 @@ void Challenge::ScaryPotterUpdate()
 {
 	if (mChallengeState == STATECHALLENGE_SCARY_POTTER_MALLETING)
 	{
-		Reanimation* aMalletReanim = mApp->ReanimationGet(mReanimChallenge);
+		Reanimation* aMalletReanim = mApp->ReanimationTryToGet(mReanimChallenge);
+		if (!aMalletReanim)
+		{
+			mChallengeState = STATECHALLENGE_NORMAL;
+			return;
+		}
 		if (aMalletReanim->mLoopCount > 0)
 		{
 			GridItem* aScaryPot = mBoard->GetGridItemAt(GRIDITEM_SCARY_POT, mChallengeGridX, mChallengeGridY);
@@ -3828,16 +3872,32 @@ void Challenge::ScaryPotterUpdate()
 			mChallengeState = STATECHALLENGE_NORMAL;
 		}
 	}
+
+	if (!mBoard->HasLevelAwardDropped() && !mBoard->mLevelComplete && ScaryPotterIsCompleted())
+	{
+		if (mApp->IsScaryPotterLevel() && !mBoard->IsFinalScaryPotterStage())
+		{
+			PuzzlePhaseComplete(4, 2);
+		}
+		else
+		{
+			SpawnLevelAward(4, 2);
+		}
+	}
 }
 
 void Challenge::ScaryPotterMalletPot(GridItem* theScaryPot)
 {
+	if (mChallengeState == STATECHALLENGE_SCARY_POTTER_MALLETING || !theScaryPot || theScaryPot->mDead)
+		return;
+
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_HAMMER, true);
 	mChallengeGridX = theScaryPot->mGridX;
 	mChallengeGridY = theScaryPot->mGridY;
 	int aXPos = mBoard->GridToPixelX(theScaryPot->mGridX, theScaryPot->mGridY);
 	int aYPos = mBoard->GridToPixelY(theScaryPot->mGridX, theScaryPot->mGridY);
 	Reanimation* aMalletReanim = mApp->AddReanimation(aXPos, aYPos, RENDER_LAYER_TOP, REANIM_HAMMER);
-	aMalletReanim->PlayReanim("anim_pot_open", REANIM_PLAY_ONCE_AND_HOLD, 0, 40.0f);
+	aMalletReanim->PlayReanim("anim_open_pot", REANIM_PLAY_ONCE_AND_HOLD, 0, 40.0f);
 	mReanimChallenge = mApp->ReanimationGetID(aMalletReanim);
 	mChallengeState = STATECHALLENGE_SCARY_POTTER_MALLETING;
 	mApp->PlayFoley(FOLEY_SWING);
@@ -4023,10 +4083,22 @@ void Challenge::PuzzleNextStageClear()
 		}
 	}
 
+	SpriteCachePool::ClearZombieSlots();
+	SpriteCachePool::ClearPlantSlots();
+	if (mApp->mReanimatorCache)
+		mApp->mReanimatorCache->ClearLevelTransientCaches();
+
+#if defined(__linux__)
+	malloc_trim(0);
+#endif
+
 	mSurvivalStage++;
 	mBoard->ClearAdviceImmediately();
 	mBoard->mLevelAwardSpawned = false;
 	mApp->AddPvzpParticle(BOARD_WIDTH / 2, BOARD_HEIGHT / 2, RENDER_LAYER_TOP, PARTICLE_SCREEN_FLASH);
+
+	ScaryPotterPopulate();
+	SpriteCachePool::PreloadSynchronous(mBoard);
 }
 
 ZombieType Challenge::IZombieSeedTypeToZombieType(SeedType theSeedType)
@@ -4139,6 +4211,12 @@ void Challenge::IZombieSetupPlant(Plant* thePlant)
 void Challenge::IZombiePlacePlantInSquare(SeedType theSeedType, int theGridX, int theGridY)
 {
 	Plant::PreloadPlantResources(theSeedType);
+	if (mBoard && std::find(mBoard->mPuzzlePreloadedSeeds.begin(), 
+							mBoard->mPuzzlePreloadedSeeds.end(), 
+							theSeedType) == mBoard->mPuzzlePreloadedSeeds.end())
+	{
+		mBoard->mPuzzlePreloadedSeeds.push_back(theSeedType);
+	}
 	if (mBoard->CanPlantAt(theGridX, theGridY, theSeedType) == PLANTING_OK)
 	{
 		IZombieSetupPlant(mBoard->NewPlant(theGridX, theGridY, theSeedType));

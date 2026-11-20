@@ -1978,7 +1978,6 @@ void Board::UpdateLevelEndSequence()
 				if (!IsFinalScaryPotterStage())
 				{
 					mChallenge->PuzzleNextStageClear();
-					mChallenge->ScaryPotterPopulate();
 				}
 			}
 			else if (LawnApp::IsEndlessIZombie(mApp->mGameMode))
