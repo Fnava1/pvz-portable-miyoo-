@@ -158,6 +158,45 @@ int convert_image_buffer(const uint8_t *in_data, size_t in_size, const char *fil
         return -1;
     }
 
+    // 4x4 Bayer matrix for ordered dithering
+    static const int bayer4x4[4][4] = {
+        {  0,  8,  2, 10 },
+        { 12,  4, 14,  6 },
+        {  3, 11,  1,  9 },
+        { 15,  7, 13,  5 }
+    };
+
+    // Apply Bayer 4x4 ordered dithering to background images to eliminate 16-bit color banding
+    if (filename && (strstr(filename, "background") || strstr(filename, "Background"))) {
+        for (int y = 0; y < target_h; ++y) {
+            for (int x = 0; x < target_w; ++x) {
+                int dither = (bayer4x4[y & 3][x & 3] - 8);
+                size_t px_idx = ((size_t)y * target_w + x) * channels;
+                for (int c = 0; c < (channels >= 3 ? 3 : channels); ++c) {
+                    int val = (int)resized_pixels[px_idx + c] + dither;
+                    if (val < 0) val = 0;
+                    if (val > 255) val = 255;
+                    resized_pixels[px_idx + c] = (uint8_t)val;
+                }
+            }
+        }
+    } else if (channels == 4 && !is_preserved_image(filename)) {
+        // Straight-alpha ARGB4444 quantization with clamped Bayer dithering for sprites/reanimations
+        for (int y = 0; y < target_h; ++y) {
+            for (int x = 0; x < target_w; ++x) {
+                int dither = (bayer4x4[y & 3][x & 3] - 8);
+                size_t px_idx = ((size_t)y * target_w + x) * 4;
+                for (int c = 0; c < 4; ++c) {
+                    int val = (int)resized_pixels[px_idx + c] + dither;
+                    if (val < 0) val = 0;
+                    if (val > 255) val = 255;
+                    int q4 = val >> 4;
+                    resized_pixels[px_idx + c] = (uint8_t)((q4 << 4) | q4);
+                }
+            }
+        }
+    }
+
     DynBuffer dyn_buf = {NULL, 0, 0};
     int write_ok = 0;
 
@@ -362,10 +401,10 @@ int convert_wav_buffer(const uint8_t *in_data, size_t in_size,
     memcpy(out_wav + 36, "data", 4);
     write_u32_le(out_wav + 40, (uint32_t)out_pcm_bytes);
 
-    // Quantize float samples to int16
+    // Quantize float samples to int16 with -3 dB headroom attenuation
     int16_t *dst_samples = (int16_t *)(out_wav + 44);
     for (size_t i = 0; i < out_frames; ++i) {
-        float s = mono_out[i];
+        float s = mono_out[i] * 0.7079f; // -3 dB headroom to prevent clipping
         if (s > 1.0f) s = 1.0f;
         if (s < -1.0f) s = -1.0f;
         int val = (int)round(s * 32767.0f);
@@ -582,6 +621,25 @@ int convert_pak_streaming(const char *in_pak_path, const char *out_pak_path,
                 converted = 1;
                 audio_resampled++;
                 file_mem += resampled_sz;
+            } else {
+                passthrough_files++;
+            }
+        } else if (str_ends_with_case_insensitive(fname, ".png") ||
+                   str_ends_with_case_insensitive(fname, ".jpg") ||
+                   str_ends_with_case_insensitive(fname, ".jpeg")) {
+            if (!is_preserved_image(fname)) {
+                uint8_t *scaled_data = NULL;
+                size_t scaled_sz = 0;
+                if (convert_image_buffer(in_buf, orig_sz, fname, &scaled_data, &scaled_sz) == 0 && scaled_data) {
+                    final_buf = scaled_data;
+                    final_sz = scaled_sz;
+                    free(in_buf);
+                    converted = 1;
+                    images_scaled++;
+                    file_mem += scaled_sz;
+                } else {
+                    passthrough_files++;
+                }
             } else {
                 passthrough_files++;
             }
