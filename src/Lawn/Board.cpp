@@ -64,7 +64,7 @@
 //#define SEXY_PERF_ENABLED
 #include "misc/PerfTimer.h"
 #include "Widget/AchievementsScreen.h"
-#include "PvzpLib/SpriteCachePool.h"
+#include "graphics/SoftwareRenderer.hpp"
 #include "PvzpLib/SpriteStreamer.h"
 
 constexpr const int ZOMBIE_COUNTDOWN_FIRST_WAVE = 1800;
@@ -291,7 +291,7 @@ void BoardInitForPlayer()
 void Board::DisposeBoard()
 {
 	SpriteStreamer::CancelAll();
-	SpriteCachePool::FreeLevelArena();
+	PvZ::Graphics::DmaTexturePool::Instance().Reset();
 
 	if (mApp->mReanimatorCache)
 		mApp->mReanimatorCache->ClearLevelTransientCaches();
@@ -598,7 +598,6 @@ bool Board::LoadGame(const std::string& theFileName)
 	mApp->ClearUpdateBacklog();
 	ResetFPSStats();
 	UpdateLayers();
-	SpriteCachePool::PreloadSynchronous(this);
 	return true;
 }
 
@@ -1493,7 +1492,7 @@ void Board::InitSurvivalStage()
 	if (mApp->mReanimatorCache)
 		mApp->mReanimatorCache->ClearLevelTransientCaches();
 	SpriteStreamer::CancelAll();
-	SpriteCachePool::FreeLevelArena();
+	PvZ::Graphics::DmaTexturePool::Instance().Reset();
 #if defined(__linux__) && defined(__GLIBC__) && !defined(__ANDROID__)
 	malloc_trim(0);
 #endif
@@ -1576,7 +1575,7 @@ void Board::InitLevel()
 	if (!mApp->IsSurvivalMode() || mChallenge->mSurvivalStage == 0)
 	{
 		SpriteStreamer::CancelAll();
-		SpriteCachePool::InitLevelArena();
+		PvZ::Graphics::DmaTexturePool::Instance().Reset();
 	}
 
 	mMainCounter = 0;
@@ -1928,7 +1927,6 @@ void Board::StartLevel()
 void Board::PreloadSpriteCache()
 {
 	mApp->PreloadCommonSounds();
-	SpriteCachePool::PreloadSynchronous(this);
 }
 
 LawnMower* Board::GetBottomLawnMower()
@@ -8172,32 +8170,14 @@ void Board::DrawDebugText(Graphics* g)
 		aText += std::format("lawn mowers {}\n", mLawnMowers.mSize);
 		aText += std::format("grid items {}\n", mGridItems.mSize);
 
-		size_t aAllocBytes = SpriteCachePool::GetTotalAllocatedBytes();
+		size_t aAllocBytes = PvZ::Graphics::DmaTexturePool::Instance().GetUsedMemory();
 		double aAllocMB = static_cast<double>(aAllocBytes) / (1024.0 * 1024.0);
-		double aTotalMB = static_cast<double>(SpriteCachePool::POOL_MAX_BUDGET) / (1024.0 * 1024.0);
+		double aTotalMB = static_cast<double>(PvZ::Graphics::DmaTexturePool::DEFAULT_POOL_SIZE) / (1024.0 * 1024.0);
 		double aAllocPercent = aTotalMB > 0.0 ? (aAllocMB / aTotalMB) * 100.0 : 0.0;
 
-		int aActivePlants = 0;
-		int aActiveZombies = 0;
-		SpriteCachePool::GetActiveSlotCounts(aActivePlants, aActiveZombies);
-
-		uint32_t aHits = SpriteCachePool::GetCacheHitCount();
-		uint32_t aFallbacks = SpriteCachePool::GetReanimFallbackCount();
-		uint32_t aTotalDraws = aHits + aFallbacks;
-		double aHitRate = aTotalDraws > 0 ? (static_cast<double>(aHits) / aTotalDraws) * 100.0 : 0.0;
-		double aFallbackRate = aTotalDraws > 0 ? (static_cast<double>(aFallbacks) / aTotalDraws) * 100.0 : 0.0;
-
-		aText += std::format("SpriteCache: {:.1f} / {:.1f} MB ({:.1f}%) | Plants: {}/{}, Zombies: {}/{}\n",
-			aAllocMB, aTotalMB, aAllocPercent, aActivePlants, SPC_MAX_PLANT_SLOTS, aActiveZombies, 8);
-		aText += std::format("Cache Hits: {:.1f}% | Reanim Fallbacks: {:.1f}%\n",
-			aHitRate, aFallbackRate);
+		aText += std::format("DmaTexturePool: {:.1f} / {:.1f} MB ({:.1f}%)\n",
+			aAllocMB, aTotalMB, aAllocPercent);
 		aText += std::format("Vanguards: {}/{}\n", mActiveVanguardCount, mZombies.mSize);
-
-		const auto& aTelem = SpriteCachePool::GetTelemetry();
-		uint32_t aHitsTotal = aTelem.mHitsNormal + aTelem.mHitsChilled;
-		uint32_t aMissesTotal = aTelem.mMissesDamaged + aTelem.mMissesAccessories + aTelem.mMissesEating;
-		aText += std::format("SpriteCache Hits: {} (Chilled: {}) | Misses: {} (Damaged: {}, Eating: {})\n",
-			aHitsTotal, aTelem.mHitsChilled, aMissesTotal, aTelem.mMissesDamaged, aTelem.mMissesEating);
 		break;
 	}
 

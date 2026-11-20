@@ -5,6 +5,11 @@
 #include "../SexyAppFramework/graphics/MemoryImage.h"
 #include "../Lawn/Board.h"
 #include "../Lawn/SeedPacket.h"
+#include "../Lawn/Plant.h"
+#include "../Lawn/Zombie.h"
+#include "../Lawn/GridItem.h"
+#include "../Lawn/Challenge.h"
+#include "../LawnApp.h"
 #include <vector>
 #include <cmath>
 #include <algorithm>
@@ -49,19 +54,8 @@ static SpriteCacheSlot sZombieSlots[SPC_MAX_ZOMBIE_SLOTS];
 
 void SpriteCachePool::InitLevelArena()
 {
-    if (!sArenaBase)
-    {
-#if defined(__linux__)
-        sArenaBase = (uint8_t*)mmap(nullptr, POOL_MAX_BUDGET, PROT_READ | PROT_WRITE,
-                                    MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-        if (sArenaBase == MAP_FAILED)
-        {
-            sArenaBase = nullptr;
-        }
-#else
-        sArenaBase = new (std::nothrow) uint8_t[POOL_MAX_BUDGET];
-#endif
-    }
+    // Static 12 MB SpriteCachePool arena eliminated in favor of DmaTexturePool (10 MB).
+    sArenaBase = nullptr;
     sPlantArenaOffset = 0;
     sZombieArenaOffset = 0;
     sTotalAllocatedBytes = 0;
@@ -642,6 +636,8 @@ void SpriteCachePool::PreloadSynchronous(Board* theBoard)
     }
 
     bool aPlantNeeded[SeedType::NUM_SEED_TYPES] = {};
+    bool aZombieNeeded[ZombieType::NUM_ZOMBIE_TYPES] = {};
+
     for (Plant* aPlant : theBoard->mPlants)
     {
         if (aPlant && !aPlant->mDead && aPlant->mSeedType >= 0 && aPlant->mSeedType < SeedType::NUM_SEED_TYPES)
@@ -658,13 +654,49 @@ void SpriteCachePool::PreloadSynchronous(Board* theBoard)
         for (int i = 0; i < theBoard->mSeedBank->mNumPackets && i < SEEDBANK_MAX; ++i)
         {
             SeedPacket* aPacket = &theBoard->mSeedBank->mSeedPackets[i];
-            if (aPacket->mPacketType >= 0 && aPacket->mPacketType < SeedType::NUM_SEED_TYPES)
+            if (Challenge::IsZombieSeedType(aPacket->mPacketType))
+            {
+                ZombieType aZombieType = Challenge::IZombieSeedTypeToZombieType(aPacket->mPacketType);
+                if (aZombieType >= 0 && aZombieType < ZombieType::NUM_ZOMBIE_TYPES)
+                {
+                    aZombieNeeded[aZombieType] = true;
+                }
+            }
+            else if (aPacket->mPacketType >= 0 && aPacket->mPacketType < SeedType::NUM_SEED_TYPES)
             {
                 aPlantNeeded[aPacket->mPacketType] = true;
             }
             if (aPacket->mImitaterType >= 0 && aPacket->mImitaterType < SeedType::NUM_SEED_TYPES)
             {
                 aPlantNeeded[aPacket->mImitaterType] = true;
+            }
+        }
+    }
+
+    if (theBoard->mApp->IsScaryPotterLevel())
+    {
+        for (GridItem* aGridItem : theBoard->mGridItems)
+        {
+            if (!aGridItem || aGridItem->mDead || aGridItem->mGridItemType != GRIDITEM_SCARY_POT)
+                continue;
+
+            if (aGridItem->mScaryPotType == SCARYPOT_SEED && 
+                aGridItem->mSeedType >= 0 && aGridItem->mSeedType < SeedType::NUM_SEED_TYPES)
+            {
+                aPlantNeeded[aGridItem->mSeedType] = true;
+                Plant::PreloadPlantResources(aGridItem->mSeedType);
+            }
+            else if (aGridItem->mScaryPotType == SCARYPOT_ZOMBIE && 
+                     aGridItem->mZombieType >= 0 && aGridItem->mZombieType < ZombieType::NUM_ZOMBIE_TYPES)
+            {
+                aZombieNeeded[aGridItem->mZombieType] = true;
+                Zombie::PreloadZombieResources(aGridItem->mZombieType);
+
+                if (aGridItem->mZombieType == ZombieType::ZOMBIE_GARGANTUAR)
+                {
+                    aZombieNeeded[ZombieType::ZOMBIE_IMP] = true;
+                    Zombie::PreloadZombieResources(ZombieType::ZOMBIE_IMP);
+                }
             }
         }
     }
@@ -712,13 +744,25 @@ void SpriteCachePool::PreloadSynchronous(Board* theBoard)
         fclose(fp);
     }
 
-    bool aZombieNeeded[ZombieType::NUM_ZOMBIE_TYPES] = {};
     for (int z = 0; z < ZombieType::NUM_ZOMBIE_TYPES; ++z)
     {
         if (theBoard->mZombieAllowed[z])
         {
             aZombieNeeded[z] = true;
         }
+    }
+    if (theBoard->mApp->IsFinalBossLevel())
+    {
+        aZombieNeeded[ZombieType::ZOMBIE_TRAFFIC_CONE] = true;
+        aZombieNeeded[ZombieType::ZOMBIE_PAIL] = true;
+        aZombieNeeded[ZombieType::ZOMBIE_FOOTBALL] = true;
+        aZombieNeeded[ZombieType::ZOMBIE_POLEVAULTER] = true;
+        aZombieNeeded[ZombieType::ZOMBIE_NEWSPAPER] = true;
+        aZombieNeeded[ZombieType::ZOMBIE_DOOR] = true;
+    }
+    if (aZombieNeeded[ZombieType::ZOMBIE_GARGANTUAR])
+    {
+        aZombieNeeded[ZombieType::ZOMBIE_IMP] = true;
     }
     for (Zombie* aZombie : theBoard->mZombies)
     {

@@ -214,7 +214,7 @@ struct Vertex2D {
 
 class DmaTexturePool {
 public:
-    static constexpr size_t DEFAULT_POOL_SIZE = 16 * 1024 * 1024; // 16 MB
+    static constexpr size_t DEFAULT_POOL_SIZE = 10 * 1024 * 1024; // 10 MB (downsized from 16 MB for 16-bit textures)
 
     static DmaTexturePool& Instance();
 
@@ -411,5 +411,8 @@ private:
 
 } // namespace Graphics
 } // namespace PvZ
+
+using PvZ::Graphics::DmaTexturePool;
+using PvZ::Graphics::PixelFormat;
 
 #endif // PVZ_GRAPHICS_SOFTWARERENDERER_HPP

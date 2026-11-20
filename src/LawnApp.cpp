@@ -71,7 +71,7 @@
 #include "Lawn/Widget/ZombatarTOS.h"
 #include "Lawn/Widget/SeedChooserScreen.h"
 #include "PvzpLib/SpriteCacheBaker.h"
-#include "PvzpLib/SpriteCachePool.h"
+#include "graphics/SoftwareRenderer.hpp"
 #include "PvzpLib/SpriteStreamer.h"
 #include "widget/WidgetManager.h"
 #include "misc/ResourceManager.h"
@@ -251,7 +251,7 @@ void LawnApp::Shutdown()
 {
 	Zombie::FreeSpotlights();
 	SpriteStreamer::CancelAll();
-	SpriteCachePool::FreePool();
+	PvZ::Graphics::DmaTexturePool::Instance().Shutdown();
 
 	if (!mLoadingThreadCompleted)
 	{
@@ -306,7 +306,7 @@ void LawnApp::KillBoard()
 	}
 
 	SpriteStreamer::CancelAll();
-	SpriteCachePool::FreeLevelArena();
+	PvZ::Graphics::DmaTexturePool::Instance().Reset();
 
 	SetCursor(CURSOR_POINTER);
 	TrimHeapIfLinux();
@@ -403,7 +403,7 @@ void LawnApp::MakeNewBoard()
 	KillBoard();
 	KillSeedChooserScreen();
 	SpriteStreamer::CancelAll();
-	SpriteCachePool::FreeLevelArena();
+	PvZ::Graphics::DmaTexturePool::Instance().Reset();
 
 	if (mResourceManager)
 	{
@@ -523,7 +523,7 @@ void LawnApp::ShowGameSelector()
 {
 	KillBoard();
 	SpriteStreamer::CancelAll();
-	SpriteCachePool::FreeLevelArena();
+	PvZ::Graphics::DmaTexturePool::Instance().Reset();
 	if (mWidgetManager && mWidgetManager->mImage)
 	{
 		mWidgetManager->mImage->Clear();
@@ -638,7 +638,7 @@ void LawnApp::KillStoreScreen()
 void LawnApp::ShowSeedChooserScreen()
 {
 	SpriteStreamer::CancelAll();
-	SpriteCachePool::FreeLevelArena();
+	PvZ::Graphics::DmaTexturePool::Instance().Reset();
 	TrimHeapIfLinux();
 
 	if (mSeedChooserScreen)

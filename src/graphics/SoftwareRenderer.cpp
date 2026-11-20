@@ -272,7 +272,7 @@ SoftwareRenderer::~SoftwareRenderer() {
 bool SoftwareRenderer::Initialize(int phys_w, int phys_h, SDL_Surface* target_surface) {
     const char* env_pool = std::getenv("SDL_MMIYOO_TEXTURE_POOL");
     if (env_pool && (std::strcmp(env_pool, "1") == 0 || std::strcmp(env_pool, "true") == 0)) {
-        DmaTexturePool::Instance().Initialize(16 * 1024 * 1024);
+        DmaTexturePool::Instance().Initialize(DmaTexturePool::DEFAULT_POOL_SIZE);
     }
 
     mViewport = ViewportProjection(800, 600, phys_w, phys_h);
