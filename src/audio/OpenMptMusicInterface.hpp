@@ -54,6 +54,7 @@ typedef struct openmpt_module openmpt_module;
 typedef openmpt_module* (*openmpt_module_create_from_memory2_fn)(const void* filedata, size_t filesize, void* logfunc, void* loguser, void* errfunc, void* erruser, int* error, const char** error_message, const void* ctls);
 typedef void (*openmpt_module_destroy_fn)(openmpt_module* mod);
 typedef size_t (*openmpt_module_read_interleaved_stereo_fn)(openmpt_module* mod, int32_t samplerate, size_t count, int16_t* interleaved_stereo);
+typedef size_t (*openmpt_module_read_mono_fn)(openmpt_module* mod, int32_t samplerate, size_t count, int16_t* mono);
 typedef double (*openmpt_module_get_duration_seconds_fn)(openmpt_module* mod);
 typedef double (*openmpt_module_get_position_seconds_fn)(openmpt_module* mod);
 typedef double (*openmpt_module_set_position_seconds_fn)(openmpt_module* mod, double seconds);
@@ -109,7 +110,7 @@ class OpenMptMusicInterface : public MusicInterface {
 public:
     static constexpr size_t kChunkFrames = 2048;
     static constexpr size_t kSampleRate = 22050;
-    static constexpr size_t kNumChannels = 2;
+    static constexpr size_t kNumChannels = 1;
     static constexpr size_t kMaxMusicMemory = 2 * 1024 * 1024; // 2 MB limit
 
     OpenMptMusicInterface();
@@ -168,6 +169,7 @@ private:
     openmpt_module_create_from_memory2_fn mFnCreateFromMemory = nullptr;
     openmpt_module_destroy_fn mFnDestroy = nullptr;
     openmpt_module_read_interleaved_stereo_fn mFnReadStereo = nullptr;
+    openmpt_module_read_mono_fn mFnReadMono = nullptr;
     openmpt_module_get_duration_seconds_fn mFnGetDuration = nullptr;
     openmpt_module_get_position_seconds_fn mFnGetPosition = nullptr;
     openmpt_module_set_position_seconds_fn mFnSetPosition = nullptr;

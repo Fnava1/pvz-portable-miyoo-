@@ -54,7 +54,7 @@ SDLSoundManager::SDLSoundManager()
 		return;
 	}
 
-	if (Mix_OpenAudio(44100, AUDIO_S16SYS, 2, 2048))
+	if (Mix_OpenAudio(22050, AUDIO_S16SYS, 1, 1024))
 	{
 		Sexy::LogInfoLn("Failed to initialize SDL mixer");
 		return;

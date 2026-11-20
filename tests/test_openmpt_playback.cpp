@@ -1,3 +1,6 @@
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 #include <cassert>
 #include <cmath>
 #include <cstdint>
@@ -129,8 +132,9 @@ static void test_chunk_streaming_2048_samples() {
     constexpr size_t kChunk = OpenMptMusicInterface::kChunkFrames;
     assert(kChunk == 2048);
     assert(OpenMptMusicInterface::kSampleRate == 22050);
+    assert(OpenMptMusicInterface::kNumChannels == 1);
 
-    alignas(8) int16_t chunkBuffer[kChunk * 2];
+    alignas(8) int16_t chunkBuffer[kChunk * OpenMptMusicInterface::kNumChannels];
     size_t initialMem = music.GetAllocatedMemory();
 
     bool hasNonZeroSample = false;
@@ -138,7 +142,7 @@ static void test_chunk_streaming_2048_samples() {
         size_t rendered = music.RenderAudioChunk(chunkBuffer, kChunk);
         assert(rendered == kChunk);
 
-        for (size_t s = 0; s < kChunk * 2; ++s) {
+        for (size_t s = 0; s < kChunk * OpenMptMusicInterface::kNumChannels; ++s) {
             if (chunkBuffer[s] != 0) {
                 hasNonZeroSample = true;
                 break;
@@ -163,7 +167,8 @@ static void test_playback_controls() {
     assert(music.LoadMusicFromMemory(1, modData.data(), modData.size()));
 
     constexpr size_t kChunk = OpenMptMusicInterface::kChunkFrames;
-    alignas(8) int16_t buffer[kChunk * 2];
+    constexpr size_t kNumSamples = kChunk * OpenMptMusicInterface::kNumChannels;
+    alignas(8) int16_t buffer[kNumSamples];
 
     // 1. Play
     music.PlayMusic(1, 0, true);
@@ -174,7 +179,7 @@ static void test_playback_controls() {
     music.SetMusicVolume(1, 1.0);
     music.RenderAudioChunk(buffer, kChunk);
     int32_t maxAmpFull = 0;
-    for (size_t i = 0; i < kChunk * 2; ++i) {
+    for (size_t i = 0; i < kNumSamples; ++i) {
         int32_t a = std::abs(static_cast<int32_t>(buffer[i]));
         if (a > maxAmpFull) maxAmpFull = a;
     }
@@ -184,7 +189,7 @@ static void test_playback_controls() {
     music.SetMusicVolume(1, 0.5);
     music.RenderAudioChunk(buffer, kChunk);
     int32_t maxAmpHalf = 0;
-    for (size_t i = 0; i < kChunk * 2; ++i) {
+    for (size_t i = 0; i < kNumSamples; ++i) {
         int32_t a = std::abs(static_cast<int32_t>(buffer[i]));
         if (a > maxAmpHalf) maxAmpHalf = a;
     }
@@ -194,7 +199,7 @@ static void test_playback_controls() {
     // Zero volume -> silence
     music.SetMusicVolume(1, 0.0);
     music.RenderAudioChunk(buffer, kChunk);
-    for (size_t i = 0; i < kChunk * 2; ++i) {
+    for (size_t i = 0; i < kNumSamples; ++i) {
         assert(buffer[i] == 0);
     }
 
@@ -205,7 +210,7 @@ static void test_playback_controls() {
     assert(music.IsPaused(1));
     size_t renderedPaused = music.RenderAudioChunk(buffer, kChunk);
     assert(renderedPaused == kChunk);
-    for (size_t i = 0; i < kChunk * 2; ++i) {
+    for (size_t i = 0; i < kNumSamples; ++i) {
         assert(buffer[i] == 0);
     }
 
@@ -268,7 +273,7 @@ static void test_song_transitions_and_fades() {
     assert(std::fabs(music.GetMusicPosition(1) - 5.0) < 0.05);
 
     constexpr size_t kChunk = OpenMptMusicInterface::kChunkFrames;
-    alignas(8) int16_t buffer[kChunk * 2];
+    alignas(8) int16_t buffer[kChunk * OpenMptMusicInterface::kNumChannels];
     music.RenderAudioChunk(buffer, kChunk);
 
     // Fade in song 2 at offset 0
@@ -306,7 +311,7 @@ static void test_sound_manager_sfx_and_lru_cache() {
     // Lazy check: sound registered but not decoded into memory until first play
     assert(sfx.GetAllocatedMemory() == 0);
 
-    // Play sound 1 -> triggers on-demand decode with mono upmixed to stereo
+    // Play sound 1 -> triggers on-demand decode
     int ch1 = sfx.PlaySample(1, -50); // Test panning
     assert(ch1 >= 0 && ch1 < 32);
     size_t memAfterPlay1 = sfx.GetAllocatedMemory();
@@ -327,8 +332,8 @@ static void test_sound_manager_sfx_and_lru_cache() {
     sfx.StopSound(1);
 
     // Test LRU memory cap enforcement & sound stealing:
-    // Create large sounds (each ~1.5 MB uncompressed stereo) to force memory eviction past 8 MB
-    std::vector<uint8_t> wavLarge = CreateSyntheticWav(22050, 1, 375000); // ~1.5 MB stereo
+    // Create large sounds to force memory eviction past 8 MB
+    std::vector<uint8_t> wavLarge = CreateSyntheticWav(22050, 1, 375000);
     for (unsigned int id = 10; id <= 16; ++id) {
         assert(sfx.LoadSoundFromMemory(id, wavLarge.data(), wavLarge.size()));
     }

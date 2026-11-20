@@ -147,6 +147,8 @@ void OpenMptMusicInterface::TryLoadOpenMptSymbols() {
         DLSYM_LOOKUP(mLibHandle, "openmpt_module_destroy"));
     mFnReadStereo = reinterpret_cast<openmpt_module_read_interleaved_stereo_fn>(
         DLSYM_LOOKUP(mLibHandle, "openmpt_module_read_interleaved_stereo"));
+    mFnReadMono = reinterpret_cast<openmpt_module_read_mono_fn>(
+        DLSYM_LOOKUP(mLibHandle, "openmpt_module_read_mono"));
     mFnGetDuration = reinterpret_cast<openmpt_module_get_duration_seconds_fn>(
         DLSYM_LOOKUP(mLibHandle, "openmpt_module_get_duration_seconds"));
     mFnGetPosition = reinterpret_cast<openmpt_module_get_position_seconds_fn>(
@@ -156,7 +158,7 @@ void OpenMptMusicInterface::TryLoadOpenMptSymbols() {
     mFnSetRepeatCount = reinterpret_cast<openmpt_module_set_repeat_count_fn>(
         DLSYM_LOOKUP(mLibHandle, "openmpt_module_set_repeat_count"));
 
-    if (mFnCreateFromMemory && mFnDestroy && mFnReadStereo &&
+    if (mFnCreateFromMemory && mFnDestroy && (mFnReadMono || mFnReadStereo) &&
         mFnGetDuration && mFnGetPosition && mFnSetPosition) {
         mOpenMptAvailable = true;
     } else {
@@ -367,8 +369,12 @@ void OpenMptMusicInterface::RenderFallbackAudio(FallbackTrackerState& state, int
         finalL = std::clamp(finalL, -32767.0f, 32767.0f);
         finalR = std::clamp(finalR, -32767.0f, 32767.0f);
 
-        output[f * 2 + 0] = static_cast<int16_t>(finalL);
-        output[f * 2 + 1] = static_cast<int16_t>(finalR);
+        if constexpr (kNumChannels == 1) {
+            output[f] = static_cast<int16_t>((finalL + finalR) * 0.5f);
+        } else {
+            output[f * 2 + 0] = static_cast<int16_t>(finalL);
+            output[f * 2 + 1] = static_cast<int16_t>(finalR);
+        }
     }
 
     state.positionSeconds += static_cast<double>(frameCount) / static_cast<double>(kSampleRate);
@@ -631,9 +637,15 @@ size_t OpenMptMusicInterface::RenderAudioChunk(int16_t* interleavedStereoOutput,
         return frameCount;
     }
 
-    if (song.openmptMod && mFnReadStereo) {
-        size_t readFrames = mFnReadStereo(song.openmptMod, static_cast<int32_t>(kSampleRate),
-                                          frameCount, interleavedStereoOutput);
+    if (song.openmptMod && (mFnReadMono || mFnReadStereo)) {
+        size_t readFrames = 0;
+        if (mFnReadMono) {
+            readFrames = mFnReadMono(song.openmptMod, static_cast<int32_t>(kSampleRate),
+                                     frameCount, interleavedStereoOutput);
+        } else {
+            readFrames = mFnReadStereo(song.openmptMod, static_cast<int32_t>(kSampleRate),
+                                       frameCount, interleavedStereoOutput);
+        }
         if (readFrames < frameCount && !song.loop) {
             song.isPlaying = false;
         }
@@ -690,7 +702,7 @@ bool SoundManager::Initialize(int mixChannels) {
     }
 
 #if PVZ_HAVE_SDL_MIXER
-    if (Mix_OpenAudio(22050, AUDIO_S16SYS, 2, 1024) >= 0) {
+    if (Mix_OpenAudio(22050, AUDIO_S16SYS, 1, 1024) >= 0) {
         Mix_AllocateChannels(mNumChannels);
         mSdlMixerOpen = true;
     }
@@ -784,27 +796,11 @@ bool SoundManager::DecodeWav(const uint8_t* wavBytes, size_t size, SoundAsset& a
     }
 
     asset.sampleRate = sampleRate;
-
-    // Convert/store PCM samples:
-    // If input is mono (channels == 1), upmix to 2-channel stereo (duplicate L=R)
-    // so SDL_mixer's 2-channel device does not play mono audio at 2x speed / +1 octave pitch.
     size_t numInputSamples = pcmSizeBytes / sizeof(int16_t);
-    if (channels == 1) {
-        asset.channels = 2;
-        asset.pcmData.resize(numInputSamples * 2);
-        for (size_t i = 0; i < numInputSamples; ++i) {
-            int16_t s;
-            std::memcpy(&s, pcmSource + i * sizeof(int16_t), sizeof(int16_t));
-            asset.pcmData[i * 2 + 0] = s;
-            asset.pcmData[i * 2 + 1] = s;
-        }
-        asset.dataSizeBytes = numInputSamples * 2 * sizeof(int16_t);
-    } else {
-        asset.channels = channels;
-        asset.pcmData.resize(numInputSamples);
-        std::memcpy(asset.pcmData.data(), pcmSource, numInputSamples * sizeof(int16_t));
-        asset.dataSizeBytes = pcmSizeBytes;
-    }
+    asset.channels = channels;
+    asset.pcmData.resize(numInputSamples);
+    std::memcpy(asset.pcmData.data(), pcmSource, numInputSamples * sizeof(int16_t));
+    asset.dataSizeBytes = pcmSizeBytes;
 
 #if PVZ_HAVE_SDL_MIXER
     if (mSdlMixerOpen) {
@@ -853,9 +849,15 @@ void SoundManager::EvictLruUntilFits(size_t requiredBytes) {
         auto it = mSounds.find(lruId);
         if (it != mSounds.end()) {
 #if PVZ_HAVE_SDL_MIXER
+            if (mSdlMixerOpen) {
+                SDL_LockAudio();
+            }
             if (it->second.mixChunk) {
                 Mix_FreeChunk(static_cast<Mix_Chunk*>(it->second.mixChunk));
                 it->second.mixChunk = nullptr;
+            }
+            if (mSdlMixerOpen) {
+                SDL_UnlockAudio();
             }
 #endif
             if (mAllocatedSfxMemory >= it->second.dataSizeBytes) {
@@ -907,8 +909,8 @@ bool SoundManager::EnsureLoaded(unsigned int theSoundId) {
         return false;
     }
 
-    // Estimate uncompressed PCM size in stereo: if mono, 2x PCM bytes
-    uint32_t estimatedPcmBytes = static_cast<uint32_t>((wavSize - 44) * 2);
+    // Estimate uncompressed PCM size in mono
+    uint32_t estimatedPcmBytes = static_cast<uint32_t>(wavSize - 44);
 
     // Evict LRU sounds (stopping active channels if necessary) until it fits
     EvictLruUntilFits(estimatedPcmBytes);
@@ -1064,6 +1066,9 @@ void SoundManager::ReleaseSound(unsigned int theSoundId) {
 
 void SoundManager::ReleaseAllSounds() {
     StopAllSounds();
+#if PVZ_HAVE_SDL_MIXER
+    if (mSdlMixerOpen) SDL_LockAudio();
+#endif
     for (auto& pair : mSounds) {
 #if PVZ_HAVE_SDL_MIXER
         if (pair.second.mixChunk) {
@@ -1072,6 +1077,9 @@ void SoundManager::ReleaseAllSounds() {
         }
 #endif
     }
+#if PVZ_HAVE_SDL_MIXER
+    if (mSdlMixerOpen) SDL_UnlockAudio();
+#endif
     mSounds.clear();
     mAllocatedSfxMemory = 0;
 }
