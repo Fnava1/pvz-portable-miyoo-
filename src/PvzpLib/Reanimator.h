@@ -51,6 +51,21 @@ namespace Sexy
 constexpr const float DEFAULT_FIELD_PLACEHOLDER = -10000.0f;
 constexpr const double SECONDS_PER_UPDATE = 0.01f;
 
+constexpr uintptr_t REANIM_ATLAS_HANDLE_MAX = 1024;
+constexpr uintptr_t SYSTEM_POINTER_MIN       = 0x10000;
+
+inline bool IsAtlasEncodedHandle(const void* thePtr)
+{
+	const uintptr_t aVal = reinterpret_cast<uintptr_t>(thePtr);
+	return aVal > 0 && aVal <= REANIM_ATLAS_HANDLE_MAX;
+}
+
+inline bool IsValidMemoryPointer(const void* thePtr)
+{
+	const uintptr_t aVal = reinterpret_cast<uintptr_t>(thePtr);
+	return aVal >= SYSTEM_POINTER_MIN;
+}
+
 enum ReanimFlags : int32_t
 {
 	REANIM_NO_ATLAS,
@@ -212,6 +227,7 @@ public:
 	bool                            mEnableExtraOverlayDraw;
 	float                           mLastFrameTime;
 	FilterEffect                    mFilterEffect;
+	int                             mCacheIndex{-1};
 
 public:
 	Reanimation();
@@ -226,6 +242,7 @@ public:
 	void                            DrawAllRenderGroups(Graphics* g, PvzpTriangleGroup* theTriangleGroup = nullptr);
 	void                            DrawRenderGroup(Graphics* g, int theRenderGroup, PvzpTriangleGroup* theTriangleGroup = nullptr);
 	bool                            DrawTrack(Graphics* g, int theTrackIndex, int theRenderGroup, PvzpTriangleGroup* theTriangleGroup, ReanimatorFrameTime* theFrameTime = nullptr);
+	void                            CalculateModelMatrix(int theTrackIndex, float outM[2][3], float* outA, uint32_t* outC);
 	void                            GetCurrentTransform(int theTrackIndex, ReanimatorTransform* theTransformCurrent, ReanimatorFrameTime* theFrameTime = nullptr);
 	void                            GetTransformAtTime(int theTrackIndex, ReanimatorTransform* theTransform, ReanimatorFrameTime* theFrameTime);
 	void                            GetFrameTime(ReanimatorFrameTime* theFrameTime);

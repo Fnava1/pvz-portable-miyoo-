@@ -38,6 +38,10 @@
 #include <cstring>
 #include <mutex>
 #include <vector>
+#include <atomic>
+#if defined(PVZ_ENABLE_DUALCORE)
+#include "threading/ComputeWorker.h"
+#endif
 
 constexpr const int MAX_VERTICES = 16384;
 
@@ -1168,6 +1172,9 @@ static SDL_Texture* sVirtualCursorTex = nullptr;
 
 GLInterface::~GLInterface()
 {
+#if defined(PVZ_ENABLE_DUALCORE)
+	ComputeWorker::WaitForTask();
+#endif
 	mScreenImage.reset();
 	Flush();
 #if !PVZ_ENABLE_GLES
@@ -1314,11 +1321,15 @@ int GLInterface::Init(bool IsWindowed)
 		mSdlRenderer = (void*)ren;
 		if (ren)
 		{
+#if defined(PVZ_ENABLE_DUALCORE)
+			mIs16BitMode = true;
+#else
 			const char* env16 = getenv("PVZ_16BIT");
 			if (env16 && (strcmp(env16, "1") == 0 || strcmp(env16, "true") == 0 || strcmp(env16, "on") == 0))
 				mIs16BitMode = true;
 			else
 				mIs16BitMode = false;
+#endif
 
 			uint32_t texFormat = mIs16BitMode ? SDL_PIXELFORMAT_RGB565 : SDL_PIXELFORMAT_ARGB8888;
 			SDL_Texture* tex = SDL_CreateTexture(ren, texFormat, SDL_TEXTUREACCESS_STREAMING, winW, winH);
@@ -1643,7 +1654,52 @@ static inline void AverageAndDownscaleRow800To640(const uint32_t* src1, const ui
 	}
 }
 #endif
+
+void NeonBilinearDownscale5to4_RGB565(const uint32_t* src, uint16_t* dst, int srcW, int srcH, int dstW, int dstH)
+{
+	(void)srcW; (void)srcH; (void)dstW; (void)dstH;
+	if (!src || !dst) return;
+	uint32_t rowTemp[640];
+	uint16_t* dstRow = dst;
+	for (int block = 0; block < 120; ++block)
+	{
+		int sy = block * 5;
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+		if (block + 1 < 120)
+		{
+			__builtin_prefetch(src + (sy + 5) * 800, 0, 0);
+			__builtin_prefetch(dstRow + 4 * 640, 1, 0);
+		}
 #endif
+		DownscaleRow800To640(src + (sy + 0) * 800, rowTemp);
+		PvZ::Graphics::NeonBlit_RGB565_From_ARGB(dstRow + 0 * 640, rowTemp, 640);
+
+		DownscaleRow800To640(src + (sy + 1) * 800, rowTemp);
+		PvZ::Graphics::NeonBlit_RGB565_From_ARGB(dstRow + 1 * 640, rowTemp, 640);
+
+		DownscaleRow800To640(src + (sy + 2) * 800, rowTemp);
+		PvZ::Graphics::NeonBlit_RGB565_From_ARGB(dstRow + 2 * 640, rowTemp, 640);
+
+		AverageAndDownscaleRow800To640(src + (sy + 3) * 800, src + (sy + 4) * 800, rowTemp);
+		PvZ::Graphics::NeonBlit_RGB565_From_ARGB(dstRow + 3 * 640, rowTemp, 640);
+
+		dstRow += 4 * 640;
+	}
+}
+#endif
+#if PVZ_ENABLE_GLES
+void NeonBilinearDownscale5to4_RGB565(const uint32_t*, uint16_t*, int, int, int, int)
+{
+}
+#endif
+
+#if defined(PVZ_ENABLE_DUALCORE)
+alignas(64) static uint16_t gStagingFb[640 * 480];
+#endif
+
+void GLInterface::PresentStagedFrame()
+{
+}
 
 void GLInterface::Flush()
 {
@@ -1660,6 +1716,57 @@ void GLInterface::Flush()
 			mTexWidth = texW;
 			mTexHeight = texH;
 		}
+
+#if defined(PVZ_ENABLE_DUALCORE)
+		// Dual-core accelerated downscale (800x600 -> 640x480 RGB565)
+		if (texW == 640 && texH == 480 && mWidth == 800 && mHeight == 600)
+		{
+			// 1. Dispatch Frame N 5:4 bilinear downscale to Core 1:
+			ComputeWorker::DispatchTask(WORKER_TASK_DOWNSCALE, mScreenImage->GetBits(), gStagingFb, 800, 600);
+
+			// 2. Await downscale completion on Core 1 before presenting:
+			ComputeWorker::WaitForTask();
+
+			// 3. Present Frame N immediately on Core 0 (zero inter-frame lag, zero dirty-rect flicker):
+			SDL_UpdateTexture(tex, nullptr, gStagingFb, 640 * sizeof(uint16_t));
+			if (texW < 640 || texH < 480)
+			{
+				SDL_RenderClear(ren);
+			}
+			SDL_RenderCopy(ren, tex, nullptr, nullptr);
+
+			// Render virtual cursor overlay for handheld navigation (menus, dialogs, etc.)
+			if (SexyAppBase::sShowVirtualCursor || (mApp && mApp->GetDialogCount() > 0))
+			{
+				int cx = (int)(SexyAppBase::sVirtualCursorX * 640.0f / 800.0f);
+				int cy = (int)(SexyAppBase::sVirtualCursorY * 480.0f / 600.0f);
+
+				if (!sVirtualCursorTex)
+				{
+					SDL_Surface* cursorSurf = SDL_CreateRGBSurfaceWithFormatFrom(
+						(void*)sCursorPixels, sCursorW, sCursorH, 32, sCursorW * sizeof(uint32_t), SDL_PIXELFORMAT_ARGB8888);
+					if (cursorSurf)
+					{
+						sVirtualCursorTex = SDL_CreateTextureFromSurface(ren, cursorSurf);
+						SDL_FreeSurface(cursorSurf);
+					}
+				}
+
+				if (sVirtualCursorTex)
+				{
+					SDL_Rect dstRect;
+					dstRect.x = cx - sCursorHotspotX;
+					dstRect.y = cy - sCursorHotspotY;
+					dstRect.w = sCursorW;
+					dstRect.h = sCursorH;
+					SDL_RenderCopy(ren, sVirtualCursorTex, nullptr, &dstRect);
+				}
+			}
+
+			SDL_RenderPresent(ren);
+			return;
+		}
+#endif
 
 		void* texPixels = nullptr;
 		int texPitch = 0;
@@ -1729,29 +1836,37 @@ void GLInterface::Flush()
 					// Option A: Fused 1-pass edge-smoothing downscaler (800x600 -> 640x480)
 					if (mIs16BitMode)
 					{
-						uint32_t rowTemp[640];
-						for (int block = 0; block < 120; ++block)
+						if (texPitch == (int)(640 * sizeof(uint16_t)))
 						{
-							int sy = block * 5;
-							if (block + 1 < 120)
+							NeonBilinearDownscale5to4_RGB565(srcBits, (uint16_t*)dstRow, 800, 600, 640, 480);
+							dstRow += 480 * texPitch;
+						}
+						else
+						{
+							uint32_t rowTemp[640];
+							for (int block = 0; block < 120; ++block)
 							{
-								__builtin_prefetch(srcBits + (sy + 5) * 800, 0, 0);
-								__builtin_prefetch(dstRow + 4 * texPitch, 1, 0);
+								int sy = block * 5;
+								if (block + 1 < 120)
+								{
+									__builtin_prefetch(srcBits + (sy + 5) * 800, 0, 0);
+									__builtin_prefetch(dstRow + 4 * texPitch, 1, 0);
+								}
+
+								DownscaleRow800To640(srcBits + (sy + 0) * 800, rowTemp);
+								PvZ::Graphics::NeonBlit_RGB565_From_ARGB((uint16_t*)(dstRow + 0 * texPitch), rowTemp, 640);
+
+								DownscaleRow800To640(srcBits + (sy + 1) * 800, rowTemp);
+								PvZ::Graphics::NeonBlit_RGB565_From_ARGB((uint16_t*)(dstRow + 1 * texPitch), rowTemp, 640);
+
+								DownscaleRow800To640(srcBits + (sy + 2) * 800, rowTemp);
+								PvZ::Graphics::NeonBlit_RGB565_From_ARGB((uint16_t*)(dstRow + 2 * texPitch), rowTemp, 640);
+
+								AverageAndDownscaleRow800To640(srcBits + (sy + 3) * 800, srcBits + (sy + 4) * 800, rowTemp);
+								PvZ::Graphics::NeonBlit_RGB565_From_ARGB((uint16_t*)(dstRow + 3 * texPitch), rowTemp, 640);
+
+								dstRow += 4 * texPitch;
 							}
-
-							DownscaleRow800To640(srcBits + (sy + 0) * 800, rowTemp);
-							PvZ::Graphics::NeonBlit_RGB565_From_ARGB((uint16_t*)(dstRow + 0 * texPitch), rowTemp, 640);
-
-							DownscaleRow800To640(srcBits + (sy + 1) * 800, rowTemp);
-							PvZ::Graphics::NeonBlit_RGB565_From_ARGB((uint16_t*)(dstRow + 1 * texPitch), rowTemp, 640);
-
-							DownscaleRow800To640(srcBits + (sy + 2) * 800, rowTemp);
-							PvZ::Graphics::NeonBlit_RGB565_From_ARGB((uint16_t*)(dstRow + 2 * texPitch), rowTemp, 640);
-
-							AverageAndDownscaleRow800To640(srcBits + (sy + 3) * 800, srcBits + (sy + 4) * 800, rowTemp);
-							PvZ::Graphics::NeonBlit_RGB565_From_ARGB((uint16_t*)(dstRow + 3 * texPitch), rowTemp, 640);
-
-							dstRow += 4 * texPitch;
 						}
 					}
 					else

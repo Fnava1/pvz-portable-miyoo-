@@ -12,6 +12,7 @@ namespace Sexy {
 using namespace Sexy;
 
 class Board;
+class LawnApp;
 
 struct SpriteCacheSlot
 {
@@ -98,10 +99,10 @@ struct SpriteCacheTelemetry
 class SpriteCachePool
 {
 public:
-    static constexpr size_t POOL_MAX_BUDGET = 12 * 1024 * 1024;
+    static constexpr size_t POOL_MAX_BUDGET = 3670016; // 3.5 MB bounded in-RAM arena
     static constexpr size_t POOL_CAPACITY = POOL_MAX_BUDGET;
-    static constexpr size_t PLANT_ZONE_SIZE = 4 * 1024 * 1024;
-    static constexpr size_t ZOMBIE_ZONE_SIZE = 8 * 1024 * 1024;
+    static constexpr size_t PLANT_ZONE_SIZE = POOL_MAX_BUDGET;
+    static constexpr size_t ZOMBIE_ZONE_SIZE = 0;
 
     static void InitPool();
     static void FreePool();
@@ -124,6 +125,7 @@ public:
     static void ClearPlantSlots();
     static void ClearAllSlots();
     static void PreloadSynchronous(Board* theBoard);
+    static bool BakePlantInRam(LawnApp* theApp, SeedType theSeed);
 
     static void DrawFrame(Graphics* g, float thePosX, float thePosY, const SpriteCacheSlot* theSlot, int theFrame, bool theIsChilled = false);
     static bool DrawPlant(Graphics* g, float thePosX, float thePosY, SeedType theSeed, float theAnimTime);

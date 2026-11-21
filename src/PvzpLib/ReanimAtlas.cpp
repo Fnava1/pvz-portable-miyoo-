@@ -34,7 +34,7 @@ ReanimAtlas::~ReanimAtlas() = default;
 
 ReanimAtlasImage* ReanimAtlas::GetEncodedReanimAtlas(Image* theImage)
 {
-	if (theImage == nullptr || reinterpret_cast<uintptr_t>(theImage) > 1000)
+	if (!IsAtlasEncodedHandle(theImage))
 		return nullptr;
 
 	intptr_t aAtlasIndex = reinterpret_cast<intptr_t>(theImage) - 1;
@@ -48,16 +48,20 @@ MemoryImage* ReanimAtlasMakeBlankMemoryImage(int theWidth, int theHeight)
 	MemoryImage* aImage = new MemoryImage();
 
 	int aBitsCount = theWidth * theHeight;
-	aImage->mBits = std::make_unique<uint32_t[]>(aBitsCount + 1);
 	aImage->mWidth = theWidth;
 	aImage->mHeight = theHeight;
+	aImage->mPixelFormat = 2; // FMT_ARGB4444 (16-bit)
 	aImage->mHasTrans = true;
 	aImage->mHasAlpha = true;
 #ifdef LOW_MEMORY
 	aImage->mPurgeBits = true;
 #endif
-	memset(aImage->mBits.get(), 0, aBitsCount * 4);
-	aImage->mBits[aBitsCount] = Sexy::MEMORYCHECK_ID;
+
+	size_t aTotalBytes = static_cast<size_t>(aBitsCount) * sizeof(uint16_t);
+	size_t aWordsNeeded = (aTotalBytes + sizeof(uint32_t) - 1) / sizeof(uint32_t);
+	aImage->mBits = std::make_unique<uint32_t[]>(aWordsNeeded + 1);
+	memset(aImage->mBits.get(), 0, aTotalBytes);
+	aImage->mBits[aWordsNeeded] = Sexy::MEMORYCHECK_ID;
 	return aImage;
 }
 
@@ -207,6 +211,33 @@ int ReanimAtlas::FindImage(Image* theImage)
 
 void ReanimAtlas::ReanimAtlasCreate(ReanimatorDefinition* theReanimDef)
 {
+	if (!theReanimDef || theReanimDef->mTracks.tracks == nullptr)
+	{
+		return;
+	}
+
+	bool aAlreadyEncoded = false;
+	for (int aTrackIndex = 0; aTrackIndex < theReanimDef->mTracks.count; aTrackIndex++)
+	{
+		ReanimatorTrack* aTrack = &theReanimDef->mTracks.tracks[aTrackIndex];
+		for (int aKeyIndex = 0; aKeyIndex < aTrack->mTransforms.count; aKeyIndex++)
+		{
+			Image* aImage = aTrack->mTransforms.mTransforms[aKeyIndex].mImage;
+			if (IsAtlasEncodedHandle(aImage))
+			{
+				aAlreadyEncoded = true;
+				break;
+			}
+		}
+		if (aAlreadyEncoded)
+			break;
+	}
+	if (aAlreadyEncoded)
+	{
+		PvzpLogLn("[ATLAS] ReanimAtlasCreate: Definition already encoded; aborting re-encode.");
+		return;
+	}
+
 	PerfTimer aTimer;
 	aTimer.Start();
 
@@ -216,7 +247,7 @@ void ReanimAtlas::ReanimAtlasCreate(ReanimatorDefinition* theReanimDef)
 		for (int aKeyIndex = 0; aKeyIndex < aTrack->mTransforms.count; aKeyIndex++)
 		{
 			Image* aImage = aTrack->mTransforms.mTransforms[aKeyIndex].mImage;
-			if (aImage != nullptr && aImage->mWidth <= 254 && aImage->mHeight <= 254 && FindImage(aImage) < 0)
+			if (aImage != nullptr && !IsAtlasEncodedHandle(aImage) && IsValidMemoryPointer(aImage) && aImage->mWidth <= 254 && aImage->mHeight <= 254 && FindImage(aImage) < 0)
 				AddImage(aImage);  // add it now; its atlas position is decided later
 		}
 	}
@@ -230,7 +261,7 @@ void ReanimAtlas::ReanimAtlasCreate(ReanimatorDefinition* theReanimDef)
 		for (int aKeyIndex = 0; aKeyIndex < aTrack->mTransforms.count; aKeyIndex++)
 		{
 			Image*& aImage = aTrack->mTransforms.mTransforms[aKeyIndex].mImage;
-			if (aImage != nullptr && aImage->mWidth <= 254 && aImage->mHeight <= 254)
+			if (aImage != nullptr && !IsAtlasEncodedHandle(aImage) && IsValidMemoryPointer(aImage) && aImage->mWidth <= 254 && aImage->mHeight <= 254)
 			{
 				intptr_t aImageIndex = FindImage(aImage);
 				if (aImageIndex < 0)  // Image not in atlas (e.g. mNumCols>1)

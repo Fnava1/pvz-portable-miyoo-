@@ -27,24 +27,60 @@
 	unsigned int tex;
 	#if !defined(LINEAR_BLEND)
 	{
-		if (__builtin_expect(!is_tiled, 1))
+		unsigned int v_int = v >> 16;
+		if (__builtin_expect(v_int != current_v_int, 0))
 		{
-			unsigned int v_int = v >> 16;
-			if (__builtin_expect(v_int != current_v_int, 0))
+			current_v_int = v_int;
+			v_row_offset = v_int * tex_pitch;
+		}
+		unsigned int t_pos = v_row_offset + ((u) >> 16);
+
+		if (__builtin_expect(tex_format == 2, 0))
+		{
+			const uint16_t* pTex16 = reinterpret_cast<const uint16_t*>(pTexture);
+			if (pTex16 && t_pos < tex_endpos)
 			{
-				current_v_int = v_int;
-				v_row_offset = v_int * tex_pitch;
+				uint16_t c16 = pTex16[t_pos];
+				uint32_t a = (c16 >> 12) & 0x0F;
+				uint32_t r = (c16 >> 8)  & 0x0F;
+				uint32_t g = (c16 >> 4)  & 0x0F;
+				uint32_t b = c16         & 0x0F;
+				tex = ((a | (a << 4)) << 24) | ((r | (r << 4)) << 16) | ((g | (g << 4)) << 8) | (b | (b << 4));
 			}
-			unsigned int t_pos = v_row_offset + ((u) >> 16);
-			tex = t_pos < tex_endpos ? pTexture[t_pos] : 0;
+			else
+			{
+				tex = 0;
+			}
+		}
+		else if (__builtin_expect(tex_format == 1, 0))
+		{
+			const uint16_t* pTex16 = reinterpret_cast<const uint16_t*>(pTexture);
+			if (pTex16 && t_pos < tex_endpos)
+			{
+				uint16_t c16 = pTex16[t_pos];
+				uint32_t r = (c16 >> 11) & 0x1F;
+				uint32_t g = (c16 >> 5)  & 0x3F;
+				uint32_t b = c16         & 0x1F;
+				r = (r * 255 + 15) / 31;
+				g = (g * 255 + 31) / 63;
+				b = (b * 255 + 15) / 31;
+				tex = 0xFF000000 | (r << 16) | (g << 8) | b;
+			}
+			else
+			{
+				tex = 0;
+			}
+		}
+		else if (__builtin_expect(!is_tiled, 1))
+		{
+			tex = (pTexture && t_pos < tex_endpos) ? pTexture[t_pos] : 0;
 		}
 		else
 		{
 			unsigned int u_int = (u) >> 16;
-			unsigned int v_int = (v) >> 16;
 			unsigned int tiles_across = tex_pitch >> 3;
-			unsigned int t_pos = (((v_int >> 3) * tiles_across + (u_int >> 3)) << 6) | ((v_int & 7) << 3) | (u_int & 7);
-			tex = t_pos < tex_endpos ? pTexture[t_pos] : 0;
+			unsigned int tiled_pos = (((v_int >> 3) * tiles_across + (u_int >> 3)) << 6) | ((v_int & 7) << 3) | (u_int & 7);
+			tex = (pTexture && tiled_pos < tex_endpos) ? pTexture[tiled_pos] : 0;
 		}
 	}
 	#else
@@ -56,10 +92,46 @@
 
 		unsigned int	t_pos = (vmidfloor>>16)*tex_pitch + (umidfloor>>16);
 
-		unsigned int	t00 = t_pos<tex_endpos?pTexture[t_pos]:0;
-		unsigned int	t10 = t_pos+1<tex_endpos?pTexture[t_pos+1]:0;
-		unsigned int	t01 = t_pos+tex_pitch<tex_endpos?pTexture[t_pos+tex_pitch]:0;
-		unsigned int	t11 = t_pos+tex_pitch+1<tex_endpos?pTexture[t_pos+tex_pitch+1]:0;
+		unsigned int t00, t10, t01, t11;
+		if (__builtin_expect(tex_format == 2, 0))
+		{
+			const uint16_t* pTex16 = reinterpret_cast<const uint16_t*>(pTexture);
+			auto unpack4444 = [](uint16_t c16) -> uint32_t {
+				uint32_t a = (c16 >> 12) & 0x0F;
+				uint32_t r = (c16 >> 8)  & 0x0F;
+				uint32_t g = (c16 >> 4)  & 0x0F;
+				uint32_t b = c16         & 0x0F;
+				return ((a | (a << 4)) << 24) | ((r | (r << 4)) << 16) | ((g | (g << 4)) << 8) | (b | (b << 4));
+			};
+			t00 = (pTex16 && t_pos < tex_endpos) ? unpack4444(pTex16[t_pos]) : 0;
+			t10 = (pTex16 && t_pos + 1 < tex_endpos) ? unpack4444(pTex16[t_pos + 1]) : 0;
+			t01 = (pTex16 && t_pos + tex_pitch < tex_endpos) ? unpack4444(pTex16[t_pos + tex_pitch]) : 0;
+			t11 = (pTex16 && t_pos + tex_pitch + 1 < tex_endpos) ? unpack4444(pTex16[t_pos + tex_pitch + 1]) : 0;
+		}
+		else if (__builtin_expect(tex_format == 1, 0))
+		{
+			const uint16_t* pTex16 = reinterpret_cast<const uint16_t*>(pTexture);
+			auto unpack565 = [](uint16_t c16) -> uint32_t {
+				uint32_t r = (c16 >> 11) & 0x1F;
+				uint32_t g = (c16 >> 5)  & 0x3F;
+				uint32_t b = c16         & 0x1F;
+				r = (r * 255 + 15) / 31;
+				g = (g * 255 + 31) / 63;
+				b = (b * 255 + 15) / 31;
+				return 0xFF000000 | (r << 16) | (g << 8) | b;
+			};
+			t00 = (pTex16 && t_pos < tex_endpos) ? unpack565(pTex16[t_pos]) : 0;
+			t10 = (pTex16 && t_pos + 1 < tex_endpos) ? unpack565(pTex16[t_pos + 1]) : 0;
+			t01 = (pTex16 && t_pos + tex_pitch < tex_endpos) ? unpack565(pTex16[t_pos + tex_pitch]) : 0;
+			t11 = (pTex16 && t_pos + tex_pitch + 1 < tex_endpos) ? unpack565(pTex16[t_pos + tex_pitch + 1]) : 0;
+		}
+		else
+		{
+			t00 = (pTexture && t_pos < tex_endpos) ? pTexture[t_pos] : 0;
+			t10 = (pTexture && t_pos + 1 < tex_endpos) ? pTexture[t_pos + 1] : 0;
+			t01 = (pTexture && t_pos + tex_pitch < tex_endpos) ? pTexture[t_pos + tex_pitch] : 0;
+			t11 = (pTexture && t_pos + tex_pitch + 1 < tex_endpos) ? pTexture[t_pos + tex_pitch + 1] : 0;
+		}
 
 		unsigned int aUFactor = ((umid-umidfloor) & 0xFFFE) + 1; // aUFactor needs to be between 1 and 0xFFFF to avoid overflow
 		unsigned int aVFactor = ((vmid-vmidfloor) & 0xFFFE) + 1; // ditto for aVFactor

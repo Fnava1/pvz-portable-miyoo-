@@ -236,6 +236,7 @@ public:
 
 	bool					PreDraw();
 	void					Flush();
+	void					PresentStagedFrame();
 
 	bool					CreateImageTexture(MemoryImage* theImage);
 	bool					RecoverBits(MemoryImage* theImage);
@@ -256,5 +257,8 @@ public:
 };
 
 }
+
+// Fused 5:4 bilinear downscaler (800x600 ARGB -> 640x480 RGB565)
+void NeonBilinearDownscale5to4_RGB565(const uint32_t* src, uint16_t* dst, int srcW = 800, int srcH = 600, int dstW = 640, int dstH = 480);
 
 #endif // __GLINTERFACE_H__

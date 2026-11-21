@@ -82,6 +82,10 @@ void EffectSystem::EffectSystemFreeAll()
 
 void EffectSystem::ProcessDeleteQueue()
 {
+	for (Attachment* aAttachment : mAttachmentHolder->mAttachments)
+		if (aAttachment->mDead)
+			mAttachmentHolder->mAttachments.DataArrayFree(aAttachment);
+
 	for (PvzpParticleSystem* aParticle : mParticleHolder->mParticleSystems)
 		if (aParticle->mDead)
 			mParticleHolder->mParticleSystems.DataArrayFree(aParticle);
@@ -93,10 +97,6 @@ void EffectSystem::ProcessDeleteQueue()
 	for (Reanimation* aReanim : mReanimationHolder->mReanimations)
 		if (aReanim->mDead)
 			mReanimationHolder->mReanimations.DataArrayFree(aReanim);
-
-	for (Attachment* aAttachment : mAttachmentHolder->mAttachments)
-		if (aAttachment->mDead)
-			mAttachmentHolder->mAttachments.DataArrayFree(aAttachment);
 }
 
 void EffectSystem::Update()
@@ -114,8 +114,8 @@ void EffectSystem::Update()
 			aReanim->Update();
 }
 
-static TriVertex		gPvzpVertexReservoir[64];
-static unsigned int		gPvzpVertexReservoirUsed = 0;
+thread_local TriVertex		gPvzpVertexReservoir[128];
+thread_local unsigned int	gPvzpVertexReservoirUsed = 0;
 
 static int FixedFloor(int x)
 {
@@ -196,6 +196,7 @@ static inline unsigned int Pvzp_leClip(TriVertex** src, TriVertex** dst, const f
 			break;
 		case 1:
 		{
+			if (__builtin_expect(gPvzpVertexReservoirUsed >= 126, 0)) break;
 			TriVertex& tmp = gPvzpVertexReservoir[gPvzpVertexReservoirUsed++];
 			Pvzp_lClip(tmp, *nex, *cur, edge);
 			*dst = &tmp;
@@ -206,6 +207,7 @@ static inline unsigned int Pvzp_leClip(TriVertex** src, TriVertex** dst, const f
 		{
 			*dst = *v;
 			++dst;
+			if (__builtin_expect(gPvzpVertexReservoirUsed >= 126, 0)) break;
 			TriVertex& tmp = gPvzpVertexReservoir[gPvzpVertexReservoirUsed++];
 			Pvzp_lClip(tmp, *cur, *nex, edge);
 			*dst = &tmp;
@@ -235,6 +237,7 @@ static inline unsigned int Pvzp_reClip(TriVertex** src, TriVertex** dst, const f
 			break;
 		case 1:
 		{
+			if (__builtin_expect(gPvzpVertexReservoirUsed >= 126, 0)) break;
 			TriVertex& tmp = gPvzpVertexReservoir[gPvzpVertexReservoirUsed++];
 			rClip(tmp, *nex, *cur, edge);
 			*dst = &tmp;
@@ -245,6 +248,7 @@ static inline unsigned int Pvzp_reClip(TriVertex** src, TriVertex** dst, const f
 		{
 			*dst = *v;
 			++dst;
+			if (__builtin_expect(gPvzpVertexReservoirUsed >= 126, 0)) break;
 			TriVertex& tmp = gPvzpVertexReservoir[gPvzpVertexReservoirUsed++];
 			rClip(tmp, *cur, *nex, edge);
 			*dst = &tmp;
@@ -274,6 +278,7 @@ static inline unsigned int Pvzp_teClip(TriVertex** src, TriVertex** dst, const f
 			break;
 		case 1:
 		{
+			if (__builtin_expect(gPvzpVertexReservoirUsed >= 126, 0)) break;
 			TriVertex& tmp = gPvzpVertexReservoir[gPvzpVertexReservoirUsed++];
 			Pvzp_tClip(tmp, *nex, *cur, edge);
 			*dst = &tmp;
@@ -284,6 +289,7 @@ static inline unsigned int Pvzp_teClip(TriVertex** src, TriVertex** dst, const f
 		{
 			*dst = *v;
 			++dst;
+			if (__builtin_expect(gPvzpVertexReservoirUsed >= 126, 0)) break;
 			TriVertex& tmp = gPvzpVertexReservoir[gPvzpVertexReservoirUsed++];
 			Pvzp_tClip(tmp, *cur, *nex, edge);
 			*dst = &tmp;
@@ -313,6 +319,7 @@ static inline unsigned int Pvzp_beClip(TriVertex** src, TriVertex** dst, const f
 			break;
 		case 1:
 		{
+			if (__builtin_expect(gPvzpVertexReservoirUsed >= 126, 0)) break;
 			TriVertex& tmp = gPvzpVertexReservoir[gPvzpVertexReservoirUsed++];
 			Pvzp_bClip(tmp, *nex, *cur, edge);
 			*dst = &tmp;
@@ -323,6 +330,7 @@ static inline unsigned int Pvzp_beClip(TriVertex** src, TriVertex** dst, const f
 		{
 			*dst = *v;
 			++dst;
+			if (__builtin_expect(gPvzpVertexReservoirUsed >= 126, 0)) break;
 			TriVertex& tmp = gPvzpVertexReservoir[gPvzpVertexReservoirUsed++];
 			Pvzp_bClip(tmp, *cur, *nex, edge);
 			*dst = &tmp;

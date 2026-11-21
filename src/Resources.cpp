@@ -21,6 +21,7 @@
 
 #include <map>
 #include <cstring>
+#include <cassert>
 #include "Resources.h"
 #include "misc/ResourceManager.h"
 
@@ -88,31 +89,24 @@ bool Sexy::ExtractDelayLoad_AlmanacResources(ResourceManager* theManager)
 	gNeedRecalcVariableToIdMap = true;
 
 	ResourceManager& aMgr = *theManager;
-	try
-	{
-		IMAGE_ALMANAC_CLOSEBUTTON = aMgr.GetImageThrow("IMAGE_ALMANAC_CLOSEBUTTON");
-		IMAGE_ALMANAC_CLOSEBUTTONHIGHLIGHT = aMgr.GetImageThrow("IMAGE_ALMANAC_CLOSEBUTTONHIGHLIGHT");
-		IMAGE_ALMANAC_GROUNDDAY = aMgr.GetImageThrow("IMAGE_ALMANAC_GROUNDDAY");
-		IMAGE_ALMANAC_GROUNDICE = aMgr.GetImageThrow("IMAGE_ALMANAC_GROUNDICE");
-		IMAGE_ALMANAC_GROUNDNIGHT = aMgr.GetImageThrow("IMAGE_ALMANAC_GROUNDNIGHT");
-		IMAGE_ALMANAC_GROUNDNIGHTPOOL = aMgr.GetImageThrow("IMAGE_ALMANAC_GROUNDNIGHTPOOL");
-		IMAGE_ALMANAC_GROUNDPOOL = aMgr.GetImageThrow("IMAGE_ALMANAC_GROUNDPOOL");
-		IMAGE_ALMANAC_GROUNDROOF = aMgr.GetImageThrow("IMAGE_ALMANAC_GROUNDROOF");
-		IMAGE_ALMANAC_INDEXBACK = aMgr.GetImageThrow("IMAGE_ALMANAC_INDEXBACK");
-		IMAGE_ALMANAC_INDEXBUTTON = aMgr.GetImageThrow("IMAGE_ALMANAC_INDEXBUTTON");
-		IMAGE_ALMANAC_INDEXBUTTONHIGHLIGHT = aMgr.GetImageThrow("IMAGE_ALMANAC_INDEXBUTTONHIGHLIGHT");
-		IMAGE_ALMANAC_PLANTBACK = aMgr.GetImageThrow("IMAGE_ALMANAC_PLANTBACK");
-		IMAGE_ALMANAC_PLANTCARD = aMgr.GetImageThrow("IMAGE_ALMANAC_PLANTCARD");
-		IMAGE_ALMANAC_ZOMBIEBACK = aMgr.GetImageThrow("IMAGE_ALMANAC_ZOMBIEBACK");
-		IMAGE_ALMANAC_ZOMBIEBLANK = aMgr.GetImageThrow("IMAGE_ALMANAC_ZOMBIEBLANK");
-		IMAGE_ALMANAC_ZOMBIECARD = aMgr.GetImageThrow("IMAGE_ALMANAC_ZOMBIECARD");
-		IMAGE_ALMANAC_ZOMBIEWINDOW = aMgr.GetImageThrow("IMAGE_ALMANAC_ZOMBIEWINDOW");
-		IMAGE_ALMANAC_ZOMBIEWINDOW2 = aMgr.GetImageThrow("IMAGE_ALMANAC_ZOMBIEWINDOW2");
-	}
-	catch (ResourceManagerException&)
-	{
-		return false;
-	}
+	IMAGE_ALMANAC_CLOSEBUTTON = aMgr.GetImage("IMAGE_ALMANAC_CLOSEBUTTON");
+	IMAGE_ALMANAC_CLOSEBUTTONHIGHLIGHT = aMgr.GetImage("IMAGE_ALMANAC_CLOSEBUTTONHIGHLIGHT");
+	IMAGE_ALMANAC_GROUNDDAY = aMgr.GetImage("IMAGE_ALMANAC_GROUNDDAY");
+	IMAGE_ALMANAC_GROUNDICE = aMgr.GetImage("IMAGE_ALMANAC_GROUNDICE");
+	IMAGE_ALMANAC_GROUNDNIGHT = aMgr.GetImage("IMAGE_ALMANAC_GROUNDNIGHT");
+	IMAGE_ALMANAC_GROUNDNIGHTPOOL = aMgr.GetImage("IMAGE_ALMANAC_GROUNDNIGHTPOOL");
+	IMAGE_ALMANAC_GROUNDPOOL = aMgr.GetImage("IMAGE_ALMANAC_GROUNDPOOL");
+	IMAGE_ALMANAC_GROUNDROOF = aMgr.GetImage("IMAGE_ALMANAC_GROUNDROOF");
+	IMAGE_ALMANAC_INDEXBACK = aMgr.GetImage("IMAGE_ALMANAC_INDEXBACK");
+	IMAGE_ALMANAC_INDEXBUTTON = aMgr.GetImage("IMAGE_ALMANAC_INDEXBUTTON");
+	IMAGE_ALMANAC_INDEXBUTTONHIGHLIGHT = aMgr.GetImage("IMAGE_ALMANAC_INDEXBUTTONHIGHLIGHT");
+	IMAGE_ALMANAC_PLANTBACK = aMgr.GetImage("IMAGE_ALMANAC_PLANTBACK");
+	IMAGE_ALMANAC_PLANTCARD = aMgr.GetImage("IMAGE_ALMANAC_PLANTCARD");
+	IMAGE_ALMANAC_ZOMBIEBACK = aMgr.GetImage("IMAGE_ALMANAC_ZOMBIEBACK");
+	IMAGE_ALMANAC_ZOMBIEBLANK = aMgr.GetImage("IMAGE_ALMANAC_ZOMBIEBLANK");
+	IMAGE_ALMANAC_ZOMBIECARD = aMgr.GetImage("IMAGE_ALMANAC_ZOMBIECARD");
+	IMAGE_ALMANAC_ZOMBIEWINDOW = aMgr.GetImage("IMAGE_ALMANAC_ZOMBIEWINDOW");
+	IMAGE_ALMANAC_ZOMBIEWINDOW2 = aMgr.GetImage("IMAGE_ALMANAC_ZOMBIEWINDOW2");
 	return true;
 }
 
@@ -3212,32 +3206,61 @@ void* gResources[static_cast<int>(Sexy::ResourceId::RESOURCE_ID_MAX)] =
 
 Sexy::Image* Sexy::GetImageById(ResourceId theId)
 {
-	return *reinterpret_cast<Sexy::Image**>(gResources[static_cast<int>(theId)]);
+	int anId = static_cast<int>(theId);
+	if (anId < 0 || anId >= static_cast<int>(ResourceId::RESOURCE_ID_MAX))
+		return nullptr;
+	if (gResources[anId] == nullptr)
+		return nullptr;
+	Sexy::Image* anImage = *reinterpret_cast<Sexy::Image**>(gResources[anId]);
+	if (anImage == nullptr)
+		return nullptr;
+	uintptr_t aVal = reinterpret_cast<uintptr_t>(anImage);
+	if ((aVal % 4 != 0) || aVal < 0x10000)
+		return nullptr;
+	if (anImage->mWidth <= 0 || anImage->mWidth > 16384 || anImage->mHeight <= 0 || anImage->mHeight > 16384)
+		return nullptr;
+	return anImage;
 }
 
 Sexy::_Font* Sexy::GetFontById(ResourceId theId)
 {
-	return *reinterpret_cast<Sexy::_Font**>(gResources[static_cast<int>(theId)]);
+	int anId = static_cast<int>(theId);
+	if (anId < 0 || anId >= static_cast<int>(ResourceId::RESOURCE_ID_MAX))
+		return nullptr;
+	if (gResources[anId] == nullptr)
+		return nullptr;
+	return *reinterpret_cast<Sexy::_Font**>(gResources[anId]);
 }
 
 intptr_t Sexy::GetSoundById(ResourceId theId)
 {
-	return *reinterpret_cast<intptr_t*>(gResources[static_cast<int>(theId)]);
+	int anId = static_cast<int>(theId);
+	if (anId < 0 || anId >= static_cast<int>(ResourceId::RESOURCE_ID_MAX))
+		return 0;
+	if (gResources[anId] == nullptr)
+		return 0;
+	return *reinterpret_cast<intptr_t*>(gResources[anId]);
 }
 
 Image*& Sexy::GetImageRefById(ResourceId theId)
 {
-	return *reinterpret_cast<Image**>(gResources[static_cast<int>(theId)]);
+	int anId = static_cast<int>(theId);
+	assert(anId >= 0 && anId < static_cast<int>(ResourceId::RESOURCE_ID_MAX));
+	return *reinterpret_cast<Image**>(gResources[anId]);
 }
 
 _Font*& Sexy::GetFontRefById(ResourceId theId)
 {
-	return *reinterpret_cast<_Font**>(gResources[static_cast<int>(theId)]);
+	int anId = static_cast<int>(theId);
+	assert(anId >= 0 && anId < static_cast<int>(ResourceId::RESOURCE_ID_MAX));
+	return *reinterpret_cast<_Font**>(gResources[anId]);
 }
 
 intptr_t& Sexy::GetSoundRefById(ResourceId theId)
 {
-	return *reinterpret_cast<intptr_t*>(gResources[static_cast<int>(theId)]);
+	int anId = static_cast<int>(theId);
+	assert(anId >= 0 && anId < static_cast<int>(ResourceId::RESOURCE_ID_MAX));
+	return *reinterpret_cast<intptr_t*>(gResources[anId]);
 }
 
 Sexy::ResourceId Sexy::GetIdByImage(Image* theImage)
@@ -3257,17 +3280,25 @@ Sexy::ResourceId Sexy::GetIdBySound(intptr_t theSound)
 
 Sexy::ResourceId Sexy::GetIdByVariable(void* theVariable)
 {
+	if (theVariable == nullptr)
+		return ResourceId::RESOURCE_ID_MAX;
+
 	static std::map<void*, int> aMap;
 
-	if (gNeedRecalcVariableToIdMap)
+	if (gNeedRecalcVariableToIdMap || aMap.empty())
 	{
 		gNeedRecalcVariableToIdMap = false;
 		aMap.clear();
 		for (int i = 0; i < static_cast<int>(ResourceId::RESOURCE_ID_MAX); i++)
 		{
-			void* value;
+			if (gResources[i] == nullptr)
+				continue;
+			void* value = nullptr;
 			std::memcpy(&value, gResources[i], sizeof(void*));
-			aMap[value] = i;
+			if (value != nullptr)
+			{
+				aMap[value] = i;
+			}
 		}
 	}
 

@@ -98,7 +98,10 @@ Attachment::Attachment()
 
 Attachment::~Attachment()
 {
-	AttachmentDie();
+	if (!mDead && mNumEffects > 0)
+	{
+		AttachmentDie();
+	}
 }
 
 void Attachment::Update()
@@ -592,7 +595,7 @@ void Attachment::Detach()
 
 void Attachment::AttachmentDie()
 {
-	if (mNumEffects == 0)
+	if (mNumEffects == 0 || mDead)
 	{
 		mDead = true;
 		return;
@@ -605,6 +608,10 @@ void Attachment::AttachmentDie()
 		return;
 	}
 
+	mDead = true;
+	int aNumEffects = mNumEffects;
+	mNumEffects = 0;
+
 	DataArray<PvzpParticleSystem> *aParticleSystems = nullptr;
 	DataArray<Trail> *aTrails = nullptr;
 	DataArray<Reanimation> *aReanimations = nullptr;
@@ -614,7 +621,7 @@ void Attachment::AttachmentDie()
 	if (gEffectSystem->mReanimationHolder) aReanimations = &gEffectSystem->mReanimationHolder->mReanimations;
 	if (gEffectSystem->mAttachmentHolder) aAttachments = &gEffectSystem->mAttachmentHolder->mAttachments;
 
-	for (int i = 0; i < mNumEffects; i++)
+	for (int i = 0; i < aNumEffects; i++)
 	{
 		AttachEffect* aAttachEffect = &mEffectArray[i];
 		switch (aAttachEffect->mEffectType)
@@ -622,7 +629,7 @@ void Attachment::AttachmentDie()
 		case EffectType::EFFECT_PARTICLE:
 		{
 			PvzpParticleSystem* aParticleSystem = aParticleSystems?aParticleSystems->DataArrayTryToGet(aAttachEffect->mEffectID):nullptr;
-			if (aParticleSystem)
+			if (aParticleSystem && !aParticleSystem->mDead)
 			{
 				aParticleSystem->ParticleSystemDie();
 			}
@@ -642,7 +649,7 @@ void Attachment::AttachmentDie()
 		case EffectType::EFFECT_REANIM:
 		{
 			Reanimation* aReanimation = aReanimations?aReanimations->DataArrayTryToGet(aAttachEffect->mEffectID):nullptr;
-			if (aReanimation)
+			if (aReanimation && !aReanimation->mDead && aReanimation->mTrackInstances != nullptr)
 			{
 				aReanimation->ReanimationDie();
 			}
@@ -652,7 +659,7 @@ void Attachment::AttachmentDie()
 		case EffectType::EFFECT_ATTACHMENT:
 		{
 			Attachment* aAttachment = aAttachments?aAttachments->DataArrayTryToGet(aAttachEffect->mEffectID):nullptr;
-			if (aAttachment)
+			if (aAttachment && !aAttachment->mDead)
 			{
 				aAttachment->AttachmentDie();
 			}
@@ -665,9 +672,6 @@ void Attachment::AttachmentDie()
 
 		aAttachEffect->mEffectID = 0U;
 	}
-
-	mNumEffects = 0;
-	mDead = true;
 }
 
 AttachmentHolder::AttachmentHolder()

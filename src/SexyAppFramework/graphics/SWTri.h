@@ -56,6 +56,7 @@ public:
 		int pitch;
 		unsigned int endpos;
 		bool is_tiled = false;
+		uint8_t format = 0; // 0: ARGB8888, 1: RGB565, 2: ARGB4444
 	};
 	struct	SWDiffuse
 	{

@@ -6,12 +6,12 @@
 #include "../ConstEnums.h"
 
 #define SPC_MAGIC 0x53504331 // 'S', 'P', 'C', '1'
-#define SPC_VERSION 2
+#define SPC_VERSION 3
 #define SPC_FORMAT_ARGB4444 1
 #define SPC_TOTAL_FRAMES 24
 
 #define SPC_MAX_PLANT_SLOTS 12
-#define SPC_MAX_ZOMBIE_SLOTS 11
+#define SPC_MAX_ZOMBIE_SLOTS 12
 
 #define SPC_CACHE_DIR "cached_sprites"
 #define SPC_VERSION_FILE "cached_sprites/.version"
@@ -92,6 +92,7 @@ inline const SpriteCacheEntityInfo gZombieCacheEntities[] = {
     { ZombieType::ZOMBIE_DUCKY_TUBE,   "zombie_ducky_tube.spc",   140, 170, 0, 0 },
     { ZombieType::ZOMBIE_SNORKEL,      "zombie_snorkel.spc",      140, 170, 0, 0 },
     { ZombieType::ZOMBIE_POLEVAULTER,  "zombie_polevaulter.spc",  160, 170, 0, 0 },
+    { ZombieType::ZOMBIE_IMP,          "zombie_imp.spc",          80,  90, -10, -5 },
 };
 constexpr size_t gNumZombieCacheEntities = sizeof(gZombieCacheEntities) / sizeof(gZombieCacheEntities[0]);
 

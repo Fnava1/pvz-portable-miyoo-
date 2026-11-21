@@ -31,165 +31,18 @@ bool SpriteStreamer::IsStreamingItem(bool theIsPlant, int theId)
 
 bool SpriteStreamer::RequestPlant(SeedType theSeed)
 {
-    if (theSeed < 0 || theSeed >= SeedType::NUM_SEED_TYPES)
-        return false;
-
-    if (sFailedPlants[theSeed])
-        return false;
-
-    if (SpriteCachePool::IsPlantReady(theSeed))
-        return true;
-
-    if (IsStreamingItem(true, theSeed))
-        return true;
-
-    const SpriteCacheEntityInfo* info = SpriteCache_GetPlantEntityInfo(theSeed);
-    if (!info)
-    {
-        sFailedPlants[theSeed] = true;
-        return false;
-    }
-
-    std::string path = std::string(SPC_CACHE_DIR) + "/" + info->mFileName;
-    FILE* fp = fopen(path.c_str(), "rb");
-    if (!fp)
-    {
-        sFailedPlants[theSeed] = true;
-        return false;
-    }
-
-    SpcHeader header = {};
-    if (fread(&header, sizeof(header), 1, fp) != 1 || header.mMagic != SPC_MAGIC || header.mVersion != SPC_VERSION)
-    {
-        fclose(fp);
-        sFailedPlants[theSeed] = true;
-        return false;
-    }
-
-    SpriteCacheSlot* slot = SpriteCachePool::AllocatePlantSlot(theSeed, header);
-    if (!slot)
-    {
-        fclose(fp);
-        sFailedPlants[theSeed] = true;
-        return false;
-    }
-
-    StreamRequest req = {};
-    req.mIsPlant = true;
-    req.mId = theSeed;
-    req.mFile = fp;
-    req.mTotalFrames = header.mFrameCount;
-    req.mCurrentFrame = 0;
-    req.mFrameSizeBytes = header.mFrameSizeBytes;
-    req.mSlot = slot;
-
-    sQueue.push_back(req);
-    return true;
+    (void)theSeed;
+    return false;
 }
 
 bool SpriteStreamer::RequestZombie(ZombieType theZombie)
 {
-    if (theZombie < 0 || theZombie >= ZombieType::NUM_ZOMBIE_TYPES)
-        return false;
-
-    if (sFailedZombies[theZombie])
-        return false;
-
-    if (SpriteCachePool::IsZombieReady(theZombie))
-        return true;
-
-    if (IsStreamingItem(false, theZombie))
-        return true;
-
-    const SpriteCacheEntityInfo* info = SpriteCache_GetZombieEntityInfo(theZombie);
-    if (!info)
-    {
-        sFailedZombies[theZombie] = true;
-        return false;
-    }
-
-    std::string path = std::string(SPC_CACHE_DIR) + "/" + info->mFileName;
-    FILE* fp = fopen(path.c_str(), "rb");
-    if (!fp)
-    {
-        sFailedZombies[theZombie] = true;
-        return false;
-    }
-
-    SpcHeader header = {};
-    if (fread(&header, sizeof(header), 1, fp) != 1 || header.mMagic != SPC_MAGIC || header.mVersion != SPC_VERSION)
-    {
-        fclose(fp);
-        sFailedZombies[theZombie] = true;
-        return false;
-    }
-
-    SpriteCacheSlot* slot = SpriteCachePool::AllocateZombieSlot(theZombie, header);
-    if (!slot)
-    {
-        fclose(fp);
-        sFailedZombies[theZombie] = true;
-        // [SpriteStreamer] Pool budget of 14 MB saturated; Entity flagged uncacheable
-        PvzpLogLn("[SpriteStreamer] Pool budget of 14 MB saturated; Entity {} flagged uncacheable", (int)theZombie);
-        return false;
-    }
-
-    StreamRequest req = {};
-    req.mIsPlant = false;
-    req.mId = theZombie;
-    req.mFile = fp;
-    req.mTotalFrames = header.mFrameCount;
-    req.mCurrentFrame = 0;
-    req.mFrameSizeBytes = header.mFrameSizeBytes;
-    req.mSlot = slot;
-
-    sQueue.push_back(req);
-    return true;
+    (void)theZombie;
+    return false;
 }
 
 void SpriteStreamer::Update()
 {
-    if (sQueue.empty())
-        return;
-
-    StreamRequest& req = sQueue.front();
-    if (!req.mFile || !req.mSlot || !req.mSlot->mPixelData)
-    {
-        if (req.mFile)
-            fclose(req.mFile);
-        if (req.mSlot)
-            SpriteCachePool::FreeSlot(req.mSlot);
-        sQueue.pop_front();
-        return;
-    }
-
-    if (req.mCurrentFrame < req.mTotalFrames)
-    {
-        uint8_t* dst = req.mSlot->mPixelData + req.mCurrentFrame * req.mFrameSizeBytes;
-        size_t readBytes = fread(dst, 1, req.mFrameSizeBytes, req.mFile);
-        if (readBytes != req.mFrameSizeBytes)
-        {
-            fclose(req.mFile);
-            req.mFile = nullptr;
-            if (req.mIsPlant)
-                sFailedPlants[req.mId] = true;
-            else
-                sFailedZombies[req.mId] = true;
-            SpriteCachePool::FreeSlot(req.mSlot);
-            req.mSlot = nullptr;
-            sQueue.pop_front();
-            return;
-        }
-        req.mCurrentFrame++;
-    }
-
-    if (req.mCurrentFrame >= req.mTotalFrames)
-    {
-        fclose(req.mFile);
-        req.mFile = nullptr;
-        req.mSlot->mIsReady = true;
-        sQueue.pop_front();
-    }
 }
 
 void SpriteStreamer::CancelAll()

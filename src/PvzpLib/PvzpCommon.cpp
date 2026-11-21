@@ -115,12 +115,21 @@ void Pvzp_SWTri_AddAllDrawTriFuncs()
 
 intptr_t PvzpPickFromWeightedArray(const PvzpWeightedArray* theArray, int theCount)
 {
-	return PvzpPickArrayItemFromWeightedArray(theArray, theCount)->mItem;
+	const PvzpWeightedArray* aPicked = PvzpPickArrayItemFromWeightedArray(theArray, theCount);
+	if (aPicked != nullptr)
+	{
+		return aPicked->mItem;
+	}
+	if (theArray != nullptr && theCount > 0)
+	{
+		return theArray[0].mItem;
+	}
+	return 0;
 }
 
 PvzpWeightedArray* PvzpPickArrayItemFromWeightedArray(const PvzpWeightedArray* theArray, int theCount)
 {
-	if (theCount <= 0)
+	if (theCount <= 0 || theArray == nullptr)
 		return nullptr;
 
 	int aTotalWeight = 0;
@@ -128,7 +137,10 @@ PvzpWeightedArray* PvzpPickArrayItemFromWeightedArray(const PvzpWeightedArray* t
 	{
 		aTotalWeight += theArray[i].mWeight;
 	}
-	PVZP_ASSERT(aTotalWeight > 0);
+	if (aTotalWeight <= 0)
+	{
+		return (PvzpWeightedArray*)&theArray[0];
+	}
 
 	aTotalWeight = Sexy::Rand(aTotalWeight);
 
@@ -141,13 +153,12 @@ PvzpWeightedArray* PvzpPickArrayItemFromWeightedArray(const PvzpWeightedArray* t
 		}
 	}
 
-	PVZP_ASSERT(false);
-	return nullptr;
+	return (PvzpWeightedArray*)&theArray[theCount - 1];
 }
 
 PvzpWeightedGridArray* PvzpPickFromWeightedGridArray(const PvzpWeightedGridArray* theArray, int theCount)
 {
-	if (theCount <= 0)
+	if (theCount <= 0 || theArray == nullptr)
 		return nullptr;
 
 	int aTotalWeight = 0;
@@ -155,7 +166,10 @@ PvzpWeightedGridArray* PvzpPickFromWeightedGridArray(const PvzpWeightedGridArray
 	{
 		aTotalWeight += theArray[i].mWeight;
 	}
-	PVZP_ASSERT(aTotalWeight > 0);
+	if (aTotalWeight <= 0)
+	{
+		return (PvzpWeightedGridArray*)&theArray[0];
+	}
 
 	aTotalWeight = Sexy::Rand(aTotalWeight);
 
@@ -168,8 +182,7 @@ PvzpWeightedGridArray* PvzpPickFromWeightedGridArray(const PvzpWeightedGridArray
 		}
 	}
 
-	PVZP_ASSERT(false);
-	return nullptr;
+	return (PvzpWeightedGridArray*)&theArray[theCount - 1];
 }
 
 float PvzpCalcSmoothWeight(float aWeight, float aLastPicked, float aSecondLastPicked)
@@ -191,12 +204,18 @@ float PvzpCalcSmoothWeight(float aWeight, float aLastPicked, float aSecondLastPi
 
 int PvzpPickFromSmoothArray(PvzpSmoothArray* theArray, int theCount)
 {
+	if (theCount <= 0 || theArray == nullptr)
+		return 0;
+
 	float aTotalWeight = 0.0f;
 	for (int i = 0; i < theCount; i++)
 	{
 		aTotalWeight += theArray[i].mWeight;
 	}
-	PVZP_ASSERT(aTotalWeight > 0.0f);
+	if (aTotalWeight <= 0.0f)
+	{
+		return theArray[0].mItem;
+	}
 
 	float aNormalizeFactor = 1.0f / aTotalWeight;
 	float aTotalAdjustedWeight = 0.0f;
@@ -204,7 +223,10 @@ int PvzpPickFromSmoothArray(PvzpSmoothArray* theArray, int theCount)
 	{
 		aTotalAdjustedWeight += PvzpCalcSmoothWeight(theArray[j].mWeight * aNormalizeFactor, theArray[j].mLastPicked, theArray[j].mSecondLastPicked);
 	}
-	PVZP_ASSERT(aTotalAdjustedWeight > 0.0f);
+	if (aTotalAdjustedWeight <= 0.0f)
+	{
+		return theArray[0].mItem;
+	}
 
 	float aRandWeight = Rand(aTotalAdjustedWeight);
 	float aAccumulatedWeight = 0.0f;
@@ -676,6 +698,14 @@ void PvzpSandImageIfNeeded(Image* theImage)
 
 void PvzpBltMatrix(Graphics* g, Image* theImage, const SexyMatrix3& theTransform, const Rect& theClipRect, const Color& theColor, int theDrawMode, const Rect& theSrcRect)
 {
+	if (theImage == nullptr || g == nullptr || g->mDestImage == nullptr)
+		return;
+	uintptr_t aVal = reinterpret_cast<uintptr_t>(theImage);
+	if ((aVal % 4 != 0) || aVal < 0x10000)
+		return;
+	if (theImage->mWidth <= 0 || theImage->mWidth > 16384 || theImage->mHeight <= 0 || theImage->mHeight > 16384)
+		return;
+
 	float aOffsetX = 0.0f;
 	float aOffsetY = 0.0f;
 	if (gSexyAppBase->Is3DAccelerated())
@@ -691,7 +721,7 @@ void PvzpBltMatrix(Graphics* g, Image* theImage, const SexyMatrix3& theTransform
 	PvzpSandImageIfNeeded(theImage);
 
 	if (!gSexyAppBase->Is3DAccelerated() &&
-		FloatApproxEqual(theTransform.m01, 0.0f) && FloatApproxEqual(theTransform.m10, 0.0f) &&
+		std::abs(theTransform.m01) < 1e-4f && std::abs(theTransform.m10) < 1e-4f &&
 		theTransform.m00 > 0.0f && theTransform.m11 > 0.0f)
 	{
 		float aScaleX = theTransform.m00;
@@ -745,7 +775,7 @@ void PvzpBltMatrix(Graphics* g, Image* theImage, const SexyMatrix3& theTransform
 	{
 		MemoryImage* aDstImage = dynamic_cast<MemoryImage*>(g->mDestImage);
 		MemoryImage* aSrcImage = dynamic_cast<MemoryImage*>(theImage);
-		if (aDstImage && aSrcImage && aSrcImage->mColorTable == nullptr)
+		if (aDstImage && aSrcImage && aSrcImage->mColorTable == nullptr && aDstImage->mPixelFormat == 0 && aSrcImage->mPixelFormat == 0)
 		{
 			uint32_t* pDstBits = aDstImage->GetBits();
 			uint32_t* pSrcBits = aSrcImage->GetBits();
@@ -1018,6 +1048,9 @@ void PvzpDrawImageCelScaledF(Graphics* g, Image* theImageStrip, float thePosX, f
 
 void PvzpDrawImageScaledF(Graphics* g, Image* theImage, float thePosX, float thePosY, float theScaleX, float theScaleY)
 {
+	if (!theImage)
+		return;
+
 	if (theScaleX == 1.0f && theScaleY == 1.0f)
 	{
 		g->DrawImageF(theImage, thePosX, thePosY);
@@ -1045,6 +1078,9 @@ void PvzpDrawImageScaledF(Graphics* g, Image* theImage, float thePosX, float the
 
 void PvzpDrawImageCenterScaledF(Graphics* g, Image* theImage, float thePosX, float thePosY, float theScaleX, float theScaleY)
 {
+	if (!theImage)
+		return;
+
 	if (theScaleX == 1.0f && theScaleY == 1.0f)
 	{
 		g->DrawImageF(theImage, thePosX, thePosY);
@@ -1184,10 +1220,12 @@ uint32_t AverageNearByPixels(MemoryImage* theImage, uint32_t* thePixel, int x, i
 
 void FixPixelsOnAlphaEdgeForBlending(Image* theImage)
 {
-	if (!gSexyAppBase || !gSexyAppBase->Is3DAccelerated())
+	if (!gSexyAppBase || !gSexyAppBase->Is3DAccelerated() || !theImage)
 		return;
 
 	MemoryImage* aImage = (MemoryImage*)theImage;
+	if (aImage->mPixelFormat != 0)
+		return;
 
 	aImage->CommitBits();  // populate mHasTrans and mHasAlpha
 	if (!aImage->mHasTrans)
@@ -1439,6 +1477,18 @@ bool PvzpResourceManager::PvzpLoadNextResource()
 		{
 			mCurResGroupListItr++;
 			continue;
+		}
+
+		if (mCurResGroup == "DelayLoad_Almanac" && gLawnApp && gLawnApp->mBoard != nullptr)
+		{
+			if (aRes->mId == "IMAGE_ALMANAC_INDEXBACK" ||
+			    aRes->mId == "IMAGE_ALMANAC_PLANTBACK" ||
+			    aRes->mId == "IMAGE_ALMANAC_ZOMBIEBACK" ||
+			    aRes->mId == "IMAGE_ALMANAC_PLANTCARD")
+			{
+				mCurResGroupListItr++;
+				continue;
+			}
 		}
 
 		switch (aRes->mType)

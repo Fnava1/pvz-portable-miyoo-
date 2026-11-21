@@ -151,8 +151,20 @@ void GLImage::DrawLineAA(double theStartX, double theStartY, double theEndX, dou
 #endif
 }
 
+static inline bool IsValidGLImage(Image* theImage)
+{
+	if (theImage == nullptr)
+		return false;
+	uintptr_t aVal = reinterpret_cast<uintptr_t>(theImage);
+	if ((aVal % 4 != 0) || aVal < 0x10000)
+		return false;
+	return true;
+}
+
 void GLImage::Blt(Image* theImage, int theX, int theY, const Rect& theSrcRect, const Color& theColor, int theDrawMode, bool linearFilter)
 {
+	if (!IsValidGLImage(theImage))
+		return;
 	theImage->mDrawn = true;
 
 	DBG_ASSERTE((theColor.mRed >= 0) && (theColor.mRed <= 255));
@@ -170,6 +182,8 @@ void GLImage::Blt(Image* theImage, int theX, int theY, const Rect& theSrcRect, c
 
 void GLImage::BltF(Image* theImage, float theX, float theY, const Rect& theSrcRect, const Rect &theClipRect, const Color& theColor, int theDrawMode)
 {
+	if (!IsValidGLImage(theImage))
+		return;
 	theImage->mDrawn = true;
 
 #if PVZ_ENABLE_GLES
@@ -191,6 +205,8 @@ void GLImage::BltF(Image* theImage, float theX, float theY, const Rect& theSrcRe
 
 void GLImage::BltRotated(Image* theImage, float theX, float theY, const Rect &theSrcRect, const Rect& theClipRect, const Color& theColor, int theDrawMode, double theRot, float theRotCenterX, float theRotCenterY)
 {
+	if (!IsValidGLImage(theImage))
+		return;
 	theImage->mDrawn = true;
 
 #if PVZ_ENABLE_GLES
@@ -203,6 +219,8 @@ void GLImage::BltRotated(Image* theImage, float theX, float theY, const Rect &th
 
 void GLImage::StretchBlt(Image* theImage, const Rect& theDestRect, const Rect& theSrcRect, const Rect& theClipRect, const Color& theColor, int theDrawMode, bool fastStretch)
 {
+	if (!IsValidGLImage(theImage))
+		return;
 	theImage->mDrawn = true;
 
 #if PVZ_ENABLE_GLES
@@ -215,6 +233,8 @@ void GLImage::StretchBlt(Image* theImage, const Rect& theDestRect, const Rect& t
 
 void GLImage::BltMatrix(Image* theImage, float x, float y, const SexyMatrix3 &theMatrix, const Rect& theClipRect, const Color& theColor, int theDrawMode, const Rect &theSrcRect, bool blend)
 {
+	if (!IsValidGLImage(theImage))
+		return;
 	theImage->mDrawn = true;
 
 #if PVZ_ENABLE_GLES
@@ -226,6 +246,8 @@ void GLImage::BltMatrix(Image* theImage, float x, float y, const SexyMatrix3 &th
 
 void GLImage::BltTrianglesTex(Image *theTexture, const TriVertex theVertices[][3], int theNumTriangles, const Rect& theClipRect, const Color &theColor, int theDrawMode, float tx, float ty, bool blend)
 {
+	if (!IsValidGLImage(theTexture))
+		return;
 	theTexture->mDrawn = true;
 
 #if PVZ_ENABLE_GLES
@@ -237,6 +259,8 @@ void GLImage::BltTrianglesTex(Image *theTexture, const TriVertex theVertices[][3
 
 void GLImage::BltMirror(Image* theImage, int theX, int theY, const Rect& theSrcRect, const Color& theColor, int theDrawMode, bool linearFilter)
 {
+	if (!IsValidGLImage(theImage))
+		return;
 	DBG_ASSERTE((theColor.mRed >= 0) && (theColor.mRed <= 255));
 	DBG_ASSERTE((theColor.mGreen >= 0) && (theColor.mGreen <= 255));
 	DBG_ASSERTE((theColor.mBlue >= 0) && (theColor.mBlue <= 255));
@@ -252,6 +276,8 @@ void GLImage::BltMirror(Image* theImage, int theX, int theY, const Rect& theSrcR
 
 void GLImage::StretchBltMirror(Image* theImage, const Rect& theDestRectOrig, const Rect& theSrcRect, const Rect& theClipRect, const Color& theColor, int theDrawMode, bool fastStretch)
 {
+	if (!IsValidGLImage(theImage))
+		return;
 	theImage->mDrawn = true;
 
 #if PVZ_ENABLE_GLES

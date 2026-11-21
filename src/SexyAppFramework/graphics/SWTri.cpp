@@ -51,8 +51,8 @@ extern const uint32_t gInvAlphaTable[256] = {
 	273, 272, 271, 270, 269, 267, 266, 265, 264, 263, 262, 261, 260, 259, 258, 257
 };
 
-static SWHelper::XYZStruct	vertexReservoir[64];
-static unsigned int			vertexReservoirUsed = 0;
+thread_local SWHelper::XYZStruct	vertexReservoir[128];
+thread_local unsigned int			vertexReservoirUsed = 0;
 
 static int FixedFloor(int x)
 {
@@ -132,6 +132,7 @@ static inline unsigned int leClip(SWHelper::XYZStruct ** src, SWHelper::XYZStruc
 			break;
 		 case 1:
 		 {
+			if (__builtin_expect(vertexReservoirUsed >= 126, 0)) break;
 			SWHelper::XYZStruct &  tmp = vertexReservoir[vertexReservoirUsed++];
 			lClip(tmp, *nex, *cur, edge);
 			*dst = &tmp;
@@ -142,6 +143,7 @@ static inline unsigned int leClip(SWHelper::XYZStruct ** src, SWHelper::XYZStruc
 		 {
 			*dst = *v;
 			++dst;
+			if (__builtin_expect(vertexReservoirUsed >= 126, 0)) break;
 			SWHelper::XYZStruct &  tmp = vertexReservoir[vertexReservoirUsed++];
 			lClip(tmp, *cur, *nex, edge);
 			*dst = &tmp;
@@ -171,6 +173,7 @@ static inline unsigned int reClip(SWHelper::XYZStruct ** src, SWHelper::XYZStruc
 			break;
 		 case 1:
 		 {
+			if (__builtin_expect(vertexReservoirUsed >= 126, 0)) break;
 			SWHelper::XYZStruct &  tmp = vertexReservoir[vertexReservoirUsed++];
 			rClip(tmp, *nex, *cur, edge);
 			*dst = &tmp;
@@ -181,6 +184,7 @@ static inline unsigned int reClip(SWHelper::XYZStruct ** src, SWHelper::XYZStruc
 		 {
 			*dst = *v;
 			++dst;
+			if (__builtin_expect(vertexReservoirUsed >= 126, 0)) break;
 			SWHelper::XYZStruct &  tmp = vertexReservoir[vertexReservoirUsed++];
 			rClip(tmp, *cur, *nex, edge);
 			*dst = &tmp;
@@ -210,6 +214,7 @@ static inline unsigned int teClip(SWHelper::XYZStruct ** src, SWHelper::XYZStruc
 			break;
 		 case 1:
 		 {
+			if (__builtin_expect(vertexReservoirUsed >= 126, 0)) break;
 			SWHelper::XYZStruct &  tmp = vertexReservoir[vertexReservoirUsed++];
 			tClip(tmp, *nex, *cur, edge);
 			*dst = &tmp;
@@ -220,6 +225,7 @@ static inline unsigned int teClip(SWHelper::XYZStruct ** src, SWHelper::XYZStruc
 		 {
 			*dst = *v;
 			++dst;
+			if (__builtin_expect(vertexReservoirUsed >= 126, 0)) break;
 			SWHelper::XYZStruct &  tmp = vertexReservoir[vertexReservoirUsed++];
 			tClip(tmp, *cur, *nex, edge);
 			*dst = &tmp;
@@ -249,6 +255,7 @@ static inline unsigned int beClip(SWHelper::XYZStruct ** src, SWHelper::XYZStruc
 			break;
 		 case 1:
 		 {
+			if (__builtin_expect(vertexReservoirUsed >= 126, 0)) break;
 			SWHelper::XYZStruct &  tmp = vertexReservoir[vertexReservoirUsed++];
 			bClip(tmp, *nex, *cur, edge);
 			*dst = &tmp;
@@ -259,6 +266,7 @@ static inline unsigned int beClip(SWHelper::XYZStruct ** src, SWHelper::XYZStruc
 		 {
 			*dst = *v;
 			++dst;
+			if (__builtin_expect(vertexReservoirUsed >= 126, 0)) break;
 			SWHelper::XYZStruct &  tmp = vertexReservoir[vertexReservoirUsed++];
 			bClip(tmp, *cur, *nex, edge);
 			*dst = &tmp;
@@ -489,10 +497,12 @@ void SWHelper::SWDrawShape(XYZStruct *theVerts, int theNumVerts, MemoryImage *th
 					pVerts[i].v = static_cast<int>(clipped[i]->mV * aTexHeightFixed);
 				}
 
-				textureInfo.pTexture = reinterpret_cast<unsigned int *>(theImage->GetBits());
+				unsigned int* pBits = reinterpret_cast<unsigned int *>(theImage->GetBits());
+				textureInfo.pTexture = pBits;
 				textureInfo.pitch = theImage->mWidth;
-				textureInfo.endpos = theImage->mWidth*theImage->mHeight;
+				textureInfo.endpos = pBits ? (theImage->mWidth * theImage->mHeight) : 0;
 				textureInfo.is_tiled = theImage ? theImage->mTiled8x8 : false;
+				textureInfo.format = theImage ? theImage->mPixelFormat : 0;
 			}
 
 			if (vertexColor)
@@ -577,10 +587,12 @@ void SWHelper::SWDrawTriangleBatchDirect(
 	float aTexHeightFixed = 0.0f;
 	if (textured)
 	{
-		textureInfo.pTexture = reinterpret_cast<unsigned int *>(theImage->GetBits());
+		unsigned int* pBits = reinterpret_cast<unsigned int *>(theImage->GetBits());
+		textureInfo.pTexture = pBits;
 		textureInfo.pitch = theImage->mWidth;
-		textureInfo.endpos = theImage->mWidth * theImage->mHeight;
+		textureInfo.endpos = pBits ? (theImage->mWidth * theImage->mHeight) : 0;
 		textureInfo.is_tiled = theImage ? theImage->mTiled8x8 : false;
+		textureInfo.format = theImage ? theImage->mPixelFormat : 0;
 		aTexWidthFixed = static_cast<float>(theImage->mWidth) * 65536.0f;
 		aTexHeightFixed = static_cast<float>(theImage->mHeight) * 65536.0f;
 	}

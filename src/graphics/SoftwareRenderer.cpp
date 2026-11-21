@@ -641,6 +641,83 @@ void SoftwareRenderer::DrawImageColor(SoftwareSurface* image, int x, int y, cons
     mColorizeImages = old_col;
 }
 
+void SoftwareRenderer::DrawImageAxisAligned_NEON(SoftwareSurface* image, const Rect& dst_rect, const Rect& src_rect, const Color& tint) {
+    if (!mCurrentTarget || !image || dst_rect.IsEmpty() || src_rect.IsEmpty() || mPhysClipRect.IsEmpty()) return;
+
+    Rect clipped = dst_rect.Intersection(mPhysClipRect);
+    if (clipped.IsEmpty()) return;
+
+    uint32_t tint_argb = tint.ToARGB();
+    BlitMode mode = (mDrawMode == DRAWMODE_ADDITIVE) ? BLIT_ADDITIVE : BLIT_ALPHA;
+
+    // Fast path: 1:1 physical pixel match
+    if (dst_rect.w == src_rect.w && dst_rect.h == src_rect.h) {
+        int src_offset_x = src_rect.x + (clipped.x - dst_rect.x);
+        int src_offset_y = src_rect.y + (clipped.y - dst_rect.y);
+
+        for (int row = 0; row < clipped.h; ++row) {
+            int sy = src_offset_y + row;
+            int dy = clipped.y + row;
+            if (sy < 0 || sy >= image->mHeight || dy < 0 || dy >= mCurrentTarget->mHeight) continue;
+
+            uint32_t* dst_ptr = reinterpret_cast<uint32_t*>(
+                mCurrentTarget->mPixels + dy * mCurrentTarget->mPitch
+            ) + clipped.x;
+
+            if (image->mFormat == PixelFormat::FMT_ARGB4444) {
+                const uint16_t* src_ptr = reinterpret_cast<const uint16_t*>(
+                    image->mPixels + sy * image->mPitch
+                ) + src_offset_x;
+                NeonBlit_Span_ARGB4444_PreMul(dst_ptr, src_ptr, clipped.w);
+            } else if (image->mFormat == PixelFormat::FMT_RGB565) {
+                const uint16_t* src_ptr = reinterpret_cast<const uint16_t*>(
+                    image->mPixels + sy * image->mPitch
+                ) + src_offset_x;
+                NeonBlit_Span_RGB565_to_ARGB8888(dst_ptr, src_ptr, clipped.w);
+            } else {
+                const uint32_t* src_ptr = reinterpret_cast<const uint32_t*>(
+                    image->mPixels + sy * image->mPitch
+                ) + src_offset_x;
+                NeonBlit_Span(dst_ptr, src_ptr, clipped.w, mode, tint_argb);
+            }
+        }
+        return;
+    }
+
+    // Scaled path with stack buffer
+    alignas(8) uint32_t span_buf[640];
+    int span_len = std::min(clipped.w, 640);
+    float u_scale = static_cast<float>(src_rect.w) / static_cast<float>(dst_rect.w);
+    float v_scale = static_cast<float>(src_rect.h) / static_cast<float>(dst_rect.h);
+
+    for (int row = 0; row < clipped.h; ++row) {
+        int dy = clipped.y + row;
+        float v_sample = src_rect.y + (clipped.y + row - dst_rect.y) * v_scale;
+        int sy = std::clamp(static_cast<int>(v_sample), 0, image->mHeight - 1);
+
+        if (image->mBytesPerPixel == 2) {
+            for (int col = 0; col < span_len; ++col) {
+                float u_sample = src_rect.x + (clipped.x + col - dst_rect.x) * u_scale;
+                int sx = std::clamp(static_cast<int>(u_sample), 0, image->mWidth - 1);
+                span_buf[col] = image->GetPixel(sx, sy);
+            }
+        } else {
+            const uint32_t* src_row = reinterpret_cast<const uint32_t*>(image->mPixels + sy * image->mPitch);
+            for (int col = 0; col < span_len; ++col) {
+                float u_sample = src_rect.x + (clipped.x + col - dst_rect.x) * u_scale;
+                int sx = std::clamp(static_cast<int>(u_sample), 0, image->mWidth - 1);
+                span_buf[col] = src_row[sx];
+            }
+        }
+
+        uint32_t* dst_ptr = reinterpret_cast<uint32_t*>(
+            mCurrentTarget->mPixels + dy * mCurrentTarget->mPitch
+        ) + clipped.x;
+
+        NeonBlit_Span(dst_ptr, span_buf, span_len, mode, tint_argb);
+    }
+}
+
 void SoftwareRenderer::DrawQuad(SoftwareSurface* texture,
                                 const Vertex2D& v0, const Vertex2D& v1,
                                 const Vertex2D& v2, const Vertex2D& v3) {

@@ -376,6 +376,7 @@ public:
     void DrawImage(SoftwareSurface* image, int x, int y, const Rect& src_rect);
     void DrawImage(SoftwareSurface* image, const Rect& dst_rect, const Rect& src_rect);
     void DrawImageColor(SoftwareSurface* image, int x, int y, const Color& tint);
+    void DrawImageAxisAligned_NEON(SoftwareSurface* image, const Rect& dst_rect, const Rect& src_rect, const Color& tint);
 
     // Reanim & particle quads
     void DrawQuad(SoftwareSurface* texture,

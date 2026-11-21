@@ -391,7 +391,7 @@ void Graphics::PolyFillAA(const Point *theVertexList, int theNumVertices, bool c
 	Span aSpans[MAX_TEMP_SPANS];
 	int aSpanPos = 0;
 
-	static uint8_t aCoverageBuffer[256*256];
+	static thread_local uint8_t aCoverageBuffer[256*256];
 	int aCoverWidth = 256, aCoverHeight = 256;
 	int aCoverLeft, aCoverRight, aCoverTop, aCoverBottom;
 

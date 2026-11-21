@@ -9,6 +9,8 @@
 #include "../Lawn/Zombie.h"
 #include "../Lawn/GridItem.h"
 #include "../Lawn/Challenge.h"
+#include "../Lawn/System/ReanimationLawn.h"
+#include "../graphics/SoftwareRenderer.hpp"
 #include "../LawnApp.h"
 #include <vector>
 #include <cmath>
@@ -42,6 +44,7 @@ static inline uint16_t vmaxvq_u16(uint16x8_t v)
 #endif
 
 static uint8_t* sArenaBase = nullptr;
+static bool sArenaFromHeap = false;
 static size_t sPlantArenaOffset = 0;
 static size_t sZombieArenaOffset = 0;
 static size_t sTotalAllocatedBytes = 0;
@@ -50,12 +53,13 @@ static uint32_t sCacheHitCount = 0;
 static uint32_t sReanimFallbackCount = 0;
 static SpriteCacheTelemetry sTelemetry;
 static SpriteCacheSlot sPlantSlots[SPC_MAX_PLANT_SLOTS];
-static SpriteCacheSlot sZombieSlots[SPC_MAX_ZOMBIE_SLOTS];
 
 void SpriteCachePool::InitLevelArena()
 {
-    // Static 12 MB SpriteCachePool arena eliminated in favor of DmaTexturePool (10 MB).
-    sArenaBase = nullptr;
+    if (sArenaBase)
+        return;
+
+    ClearAllSlots();
     sPlantArenaOffset = 0;
     sZombieArenaOffset = 0;
     sTotalAllocatedBytes = 0;
@@ -63,25 +67,45 @@ void SpriteCachePool::InitLevelArena()
     sCacheHitCount = 0;
     sReanimFallbackCount = 0;
     sTelemetry = SpriteCacheTelemetry();
-    ClearAllSlots();
+
+    if (!PvZ::Graphics::DmaTexturePool::Instance().IsActive())
+    {
+        PvZ::Graphics::DmaTexturePool::Instance().Initialize(PvZ::Graphics::DmaTexturePool::DEFAULT_POOL_SIZE);
+    }
+
+    void* ptr = PvZ::Graphics::DmaTexturePool::Instance().Allocate(POOL_MAX_BUDGET, 64);
+    if (ptr)
+    {
+        sArenaBase = static_cast<uint8_t*>(ptr);
+        sArenaFromHeap = false;
+    }
+    else
+    {
+        sArenaBase = static_cast<uint8_t*>(std::malloc(POOL_MAX_BUDGET));
+        sArenaFromHeap = true;
+    }
+
+    if (sArenaBase)
+    {
+        std::memset(sArenaBase, 0, POOL_MAX_BUDGET);
+        PvzpLogLn("[SpriteCachePool] Level arena initialized ({} bytes, from {})",
+                  (uint32_t)POOL_MAX_BUDGET, sArenaFromHeap ? "Heap" : "DmaTexturePool");
+    }
+    else
+    {
+        PvzpLogLn("[SpriteCachePool] ERROR: Failed to allocate level arena ({} bytes)", (uint32_t)POOL_MAX_BUDGET);
+    }
 }
 
 void SpriteCachePool::FreeLevelArena()
 {
     ClearAllSlots();
-#if defined(__linux__)
-    if (sArenaBase)
+    if (sArenaFromHeap && sArenaBase)
     {
-        munmap(sArenaBase, POOL_MAX_BUDGET);
-        sArenaBase = nullptr;
+        std::free(sArenaBase);
     }
-#else
-    if (sArenaBase)
-    {
-        delete[] sArenaBase;
-        sArenaBase = nullptr;
-    }
-#endif
+    sArenaBase = nullptr;
+    sArenaFromHeap = false;
     sPlantArenaOffset = 0;
     sZombieArenaOffset = 0;
     sTotalAllocatedBytes = 0;
@@ -135,11 +159,6 @@ void SpriteCachePool::GetActiveSlotCounts(int& thePlants, int& theZombies)
         if (sPlantSlots[i].mId != -1)
             thePlants++;
     }
-    for (int i = 0; i < SPC_MAX_ZOMBIE_SLOTS; i++)
-    {
-        if (sZombieSlots[i].mId != -1)
-            theZombies++;
-    }
 }
 
 uint32_t SpriteCachePool::GetCacheHitCount()
@@ -169,11 +188,7 @@ SpriteCacheSlot* SpriteCachePool::GetPlantSlot(SeedType theSeed)
 
 SpriteCacheSlot* SpriteCachePool::GetZombieSlot(ZombieType theZombie)
 {
-    for (int i = 0; i < SPC_MAX_ZOMBIE_SLOTS; i++)
-    {
-        if (sZombieSlots[i].mId == theZombie)
-            return &sZombieSlots[i];
-    }
+    (void)theZombie;
     return nullptr;
 }
 
@@ -185,8 +200,8 @@ bool SpriteCachePool::IsPlantReady(SeedType theSeed)
 
 bool SpriteCachePool::IsZombieReady(ZombieType theZombie)
 {
-    SpriteCacheSlot* slot = GetZombieSlot(theZombie);
-    return slot && slot->mIsReady;
+    (void)theZombie;
+    return false;
 }
 
 SpriteCacheSlot* SpriteCachePool::AllocatePlantSlot(SeedType theSeed, const SpcHeader& theHeader)
@@ -247,79 +262,14 @@ SpriteCacheSlot* SpriteCachePool::AllocatePlantSlot(SeedType theSeed, const SpcH
 
 SpriteCacheSlot* SpriteCachePool::AllocateZombieSlot(ZombieType theZombie, const SpcHeader& theHeader)
 {
-    if (!sArenaBase)
-    {
-        InitLevelArena();
-        if (!sArenaBase)
-            return nullptr;
-    }
-
-    SpriteCacheSlot* existing = GetZombieSlot(theZombie);
-    if (existing)
-        return existing;
-
-    int freeIdx = -1;
-    for (int i = 0; i < SPC_MAX_ZOMBIE_SLOTS; i++)
-    {
-        if (sZombieSlots[i].mId == -1)
-        {
-            freeIdx = i;
-            break;
-        }
-    }
-
-    if (freeIdx == -1)
-        return nullptr;
-
-    size_t reqBytes = theHeader.mTotalDataBytes;
-    if (sZombieArenaOffset + reqBytes > ZOMBIE_ZONE_SIZE)
-    {
-        PvzpLogLn("[SpriteCachePool] WARNING: Zombie zone budget exceeded (offset {} + req {} > {}). Allocation rejected.",
-                  (uint32_t)sZombieArenaOffset, (uint32_t)reqBytes, (uint32_t)ZOMBIE_ZONE_SIZE);
-        return nullptr;
-    }
-
-    SpriteCacheSlot& slot = sZombieSlots[freeIdx];
-    slot.mId = theZombie;
-    slot.mIsReady = false;
-    slot.mWidth = theHeader.mWidth;
-    slot.mHeight = theHeader.mHeight;
-    slot.mOffsetX = theHeader.mOffsetX;
-    slot.mOffsetY = theHeader.mOffsetY;
-    slot.mFrameCount = theHeader.mFrameCount;
-    slot.mFrameSizeBytes = theHeader.mFrameSizeBytes;
-    slot.mPixelData = sArenaBase + PLANT_ZONE_SIZE + sZombieArenaOffset;
-    slot.mAllocatedBytes = reqBytes;
-
-    sZombieArenaOffset += reqBytes;
-    sTotalAllocatedBytes = sPlantArenaOffset + sZombieArenaOffset;
-    if (sTotalAllocatedBytes > sPeakAllocatedBytes)
-        sPeakAllocatedBytes = sTotalAllocatedBytes;
-
-    return &slot;
+    (void)theZombie;
+    (void)theHeader;
+    return nullptr;
 }
 
 void SpriteCachePool::ClearZombieSlots()
 {
-    SpriteStreamer::CancelZombies();
-
-    for (int i = 0; i < SPC_MAX_ZOMBIE_SLOTS; i++)
-    {
-        sZombieSlots[i].Reset();
-    }
-
     sZombieArenaOffset = 0;
-    sTotalAllocatedBytes = sPlantArenaOffset;
-
-#if defined(__linux__)
-    if (sArenaBase)
-    {
-        madvise(sArenaBase + PLANT_ZONE_SIZE, ZOMBIE_ZONE_SIZE, MADV_DONTNEED);
-    }
-#endif
-
-    PvzpLogLn("[SpriteCachePool] Cleared zombie slots. Physical pages purged via madvise. Active pool: {} / {} bytes",
-              (uint32_t)sTotalAllocatedBytes, (uint32_t)POOL_MAX_BUDGET);
 }
 
 void SpriteCachePool::ClearPlantSlots()
@@ -330,14 +280,15 @@ void SpriteCachePool::ClearPlantSlots()
     }
 
     sPlantArenaOffset = 0;
-    sTotalAllocatedBytes = sZombieArenaOffset;
+    sTotalAllocatedBytes = 0;
 
-#if defined(__linux__)
     if (sArenaBase)
     {
+        std::memset(sArenaBase, 0, PLANT_ZONE_SIZE);
+#if defined(__linux__)
         madvise(sArenaBase, PLANT_ZONE_SIZE, MADV_DONTNEED);
-    }
 #endif
+    }
 }
 
 void SpriteCachePool::ClearAllSlots()
@@ -600,33 +551,138 @@ bool SpriteCachePool::DrawPlant(Graphics* g, float thePosX, float thePosY, SeedT
 
 bool SpriteCachePool::DrawZombie(Graphics* g, float thePosX, float thePosY, ZombieType theZombie, float theAnimTime, bool theIsChilled)
 {
-    SpriteCacheSlot* slot = GetZombieSlot(theZombie);
-    if (!slot || !slot->mIsReady)
+    (void)g;
+    (void)thePosX;
+    (void)thePosY;
+    (void)theZombie;
+    (void)theAnimTime;
+    (void)theIsChilled;
+    sReanimFallbackCount++;
+    return false;
+}
+
+bool SpriteCachePool::BakePlantInRam(LawnApp* theApp, SeedType theSeed)
+{
+    if (!theApp || !theApp->mReanimatorCache)
+        return false;
+
+    if (theSeed == SeedType::SEED_LEFTPEATER)
+        return false;
+
+    if (IsPlantReady(theSeed))
+        return true;
+
+    int aDefOffsetX = -20, aDefOffsetY = -20, aDefWidth = 120, aDefHeight = 120;
+    theApp->mReanimatorCache->GetPlantImageSize(theSeed, aDefOffsetX, aDefOffsetY, aDefWidth, aDefHeight);
+
+    std::vector<std::unique_ptr<MemoryImage>> frames;
+    frames.reserve(SPC_TOTAL_FRAMES);
+
+    for (int i = 0; i < SPC_TOTAL_FRAMES; i++)
     {
-        sReanimFallbackCount++;
+        float animTime = (float)i / (float)SPC_TOTAL_FRAMES;
+        auto img = theApp->mReanimatorCache->MakeCachedPlantIdleFrame(theSeed, animTime);
+        if (!img)
+            return false;
+        frames.push_back(std::move(img));
+    }
+
+    int canvasW = aDefWidth;
+    int canvasH = aDefHeight;
+
+    // Compute union bounding box of non-zero pixels
+    int minX = canvasW, minY = canvasH, maxX = -1, maxY = -1;
+    for (int f = 0; f < SPC_TOTAL_FRAMES; f++)
+    {
+        const uint32_t* bits = frames[f]->GetBits();
+        if (!bits)
+            continue;
+        for (int y = 0; y < canvasH; y++)
+        {
+            for (int x = 0; x < canvasW; x++)
+            {
+                uint32_t p = bits[y * canvasW + x];
+                if ((p >> 24) > 0)
+                {
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                }
+            }
+        }
+    }
+
+    if (maxX < minX || maxY < minY)
+    {
+        minX = 0;
+        minY = 0;
+        maxX = canvasW - 1;
+        maxY = canvasH - 1;
+    }
+
+    // Add 1 pixel margin, clamped
+    minX = std::max(0, minX - 1);
+    minY = std::max(0, minY - 1);
+    maxX = std::min(canvasW - 1, maxX + 1);
+    maxY = std::min(canvasH - 1, maxY + 1);
+
+    // Keep even width for 32-bit/SIMD alignment
+    int cropW = maxX - minX + 1;
+    if (cropW % 2 != 0)
+    {
+        if (maxX + 1 < canvasW) maxX++;
+        else if (minX > 0) minX--;
+        cropW = maxX - minX + 1;
+    }
+    int cropH = maxY - minY + 1;
+
+    SpcHeader header = {};
+    header.mMagic = SPC_MAGIC;
+    header.mVersion = SPC_VERSION;
+    header.mFormat = SPC_FORMAT_ARGB4444;
+    header.mWidth = (uint16_t)cropW;
+    header.mHeight = (uint16_t)cropH;
+    header.mOffsetX = (int16_t)(aDefOffsetX + minX);
+    header.mOffsetY = (int16_t)(aDefOffsetY + minY);
+    header.mFrameCount = SPC_TOTAL_FRAMES;
+    header.mFrameSizeBytes = cropW * cropH * sizeof(uint16_t);
+    header.mTotalDataBytes = header.mFrameSizeBytes * SPC_TOTAL_FRAMES;
+
+    SpriteCacheSlot* slot = AllocatePlantSlot(theSeed, header);
+    if (!slot || !slot->mPixelData)
+    {
+        PvzpLogLn("[SpriteCachePool] Failed to allocate plant slot for seed {}", (int)theSeed);
         return false;
     }
 
-    sCacheHitCount++;
-    if (theIsChilled)
-        sTelemetry.mHitsChilled++;
-    else
-        sTelemetry.mHitsNormal++;
-    sTelemetry.mHitsTotal++;
+    uint16_t* dest16 = reinterpret_cast<uint16_t*>(slot->mPixelData);
+    for (int f = 0; f < SPC_TOTAL_FRAMES; f++)
+    {
+        const uint32_t* srcBits = frames[f]->GetBits();
+        uint16_t* dstFrame = &dest16[f * cropW * cropH];
 
-    float norm = theAnimTime - std::floor(theAnimTime);
-    int frame = std::clamp((int)(norm * slot->mFrameCount), 0, (int)slot->mFrameCount - 1);
-    DrawFrame(g, thePosX, thePosY, slot, frame, theIsChilled);
+        for (int y = 0; y < cropH; y++)
+        {
+            for (int x = 0; x < cropW; x++)
+            {
+                uint32_t p = srcBits[(minY + y) * canvasW + (minX + x)];
+                dstFrame[y * cropW + x] = ARGB8888_To_ARGB4444(p);
+            }
+        }
+    }
+
+    slot->mIsReady = true;
+    PvzpLogLn("[SpriteCachePool] Baked plant {} in RAM: {}x{} ({} bytes, active: {} / {} bytes)",
+              (int)theSeed, cropW, cropH, header.mTotalDataBytes,
+              (uint32_t)sPlantArenaOffset, (uint32_t)POOL_MAX_BUDGET);
     return true;
 }
 
 void SpriteCachePool::PreloadSynchronous(Board* theBoard)
 {
-    if (!theBoard)
+    if (!theBoard || !theBoard->mApp)
         return;
-
-    SpriteStreamer::CancelAll();
-    SpriteStreamer::ResetFailedRequests();
 
     if (!sArenaBase)
     {
@@ -636,14 +692,16 @@ void SpriteCachePool::PreloadSynchronous(Board* theBoard)
     }
 
     bool aPlantNeeded[SeedType::NUM_SEED_TYPES] = {};
-    bool aZombieNeeded[ZombieType::NUM_ZOMBIE_TYPES] = {};
 
     for (Plant* aPlant : theBoard->mPlants)
     {
         if (aPlant && !aPlant->mDead && aPlant->mSeedType >= 0 && aPlant->mSeedType < SeedType::NUM_SEED_TYPES)
         {
-            aPlantNeeded[aPlant->mSeedType] = true;
-            if (aPlant->mImitaterType >= 0 && aPlant->mImitaterType < SeedType::NUM_SEED_TYPES)
+            if (aPlant->mSeedType != SeedType::SEED_LEFTPEATER)
+            {
+                aPlantNeeded[aPlant->mSeedType] = true;
+            }
+            if (aPlant->mImitaterType >= 0 && aPlant->mImitaterType < SeedType::NUM_SEED_TYPES && aPlant->mImitaterType != SeedType::SEED_LEFTPEATER)
             {
                 aPlantNeeded[aPlant->mImitaterType] = true;
             }
@@ -654,19 +712,14 @@ void SpriteCachePool::PreloadSynchronous(Board* theBoard)
         for (int i = 0; i < theBoard->mSeedBank->mNumPackets && i < SEEDBANK_MAX; ++i)
         {
             SeedPacket* aPacket = &theBoard->mSeedBank->mSeedPackets[i];
-            if (Challenge::IsZombieSeedType(aPacket->mPacketType))
+            if (!Challenge::IsZombieSeedType(aPacket->mPacketType))
             {
-                ZombieType aZombieType = Challenge::IZombieSeedTypeToZombieType(aPacket->mPacketType);
-                if (aZombieType >= 0 && aZombieType < ZombieType::NUM_ZOMBIE_TYPES)
+                if (aPacket->mPacketType >= 0 && aPacket->mPacketType < SeedType::NUM_SEED_TYPES && aPacket->mPacketType != SeedType::SEED_LEFTPEATER)
                 {
-                    aZombieNeeded[aZombieType] = true;
+                    aPlantNeeded[aPacket->mPacketType] = true;
                 }
             }
-            else if (aPacket->mPacketType >= 0 && aPacket->mPacketType < SeedType::NUM_SEED_TYPES)
-            {
-                aPlantNeeded[aPacket->mPacketType] = true;
-            }
-            if (aPacket->mImitaterType >= 0 && aPacket->mImitaterType < SeedType::NUM_SEED_TYPES)
+            if (aPacket->mImitaterType >= 0 && aPacket->mImitaterType < SeedType::NUM_SEED_TYPES && aPacket->mImitaterType != SeedType::SEED_LEFTPEATER)
             {
                 aPlantNeeded[aPacket->mImitaterType] = true;
             }
@@ -683,20 +736,11 @@ void SpriteCachePool::PreloadSynchronous(Board* theBoard)
             if (aGridItem->mScaryPotType == SCARYPOT_SEED && 
                 aGridItem->mSeedType >= 0 && aGridItem->mSeedType < SeedType::NUM_SEED_TYPES)
             {
-                aPlantNeeded[aGridItem->mSeedType] = true;
-                Plant::PreloadPlantResources(aGridItem->mSeedType);
-            }
-            else if (aGridItem->mScaryPotType == SCARYPOT_ZOMBIE && 
-                     aGridItem->mZombieType >= 0 && aGridItem->mZombieType < ZombieType::NUM_ZOMBIE_TYPES)
-            {
-                aZombieNeeded[aGridItem->mZombieType] = true;
-                Zombie::PreloadZombieResources(aGridItem->mZombieType);
-
-                if (aGridItem->mZombieType == ZombieType::ZOMBIE_GARGANTUAR)
+                if (aGridItem->mSeedType != SeedType::SEED_LEFTPEATER)
                 {
-                    aZombieNeeded[ZombieType::ZOMBIE_IMP] = true;
-                    Zombie::PreloadZombieResources(ZombieType::ZOMBIE_IMP);
+                    aPlantNeeded[aGridItem->mSeedType] = true;
                 }
+                Plant::PreloadPlantResources(aGridItem->mSeedType);
             }
         }
     }
@@ -707,114 +751,12 @@ void SpriteCachePool::PreloadSynchronous(Board* theBoard)
             continue;
 
         SeedType st = static_cast<SeedType>(i);
-        const SpriteCacheEntityInfo* info = SpriteCache_GetPlantEntityInfo(st);
-        if (!info)
-            continue;
-
         if (IsPlantReady(st))
             continue;
 
-        std::string path = std::string(SPC_CACHE_DIR) + "/" + info->mFileName;
-        FILE* fp = fopen(path.c_str(), "rb");
-        if (!fp)
-            continue;
-
-        SpcHeader header = {};
-        if (fread(&header, sizeof(header), 1, fp) != 1 || header.mMagic != SPC_MAGIC || header.mVersion != SPC_VERSION)
-        {
-            fclose(fp);
-            continue;
-        }
-
-        SpriteCacheSlot* slot = AllocatePlantSlot(st, header);
-        if (!slot)
-        {
-            fclose(fp);
-            continue;
-        }
-
-        if (fread(slot->mPixelData, 1, header.mTotalDataBytes, fp) == header.mTotalDataBytes)
-        {
-            slot->mIsReady = true;
-        }
-        else
-        {
-            slot->mIsReady = false;
-        }
-        fclose(fp);
+        BakePlantInRam(theBoard->mApp, st);
     }
 
-    for (int z = 0; z < ZombieType::NUM_ZOMBIE_TYPES; ++z)
-    {
-        if (theBoard->mZombieAllowed[z])
-        {
-            aZombieNeeded[z] = true;
-        }
-    }
-    if (theBoard->mApp->IsFinalBossLevel())
-    {
-        aZombieNeeded[ZombieType::ZOMBIE_TRAFFIC_CONE] = true;
-        aZombieNeeded[ZombieType::ZOMBIE_PAIL] = true;
-        aZombieNeeded[ZombieType::ZOMBIE_FOOTBALL] = true;
-        aZombieNeeded[ZombieType::ZOMBIE_POLEVAULTER] = true;
-        aZombieNeeded[ZombieType::ZOMBIE_NEWSPAPER] = true;
-        aZombieNeeded[ZombieType::ZOMBIE_DOOR] = true;
-    }
-    if (aZombieNeeded[ZombieType::ZOMBIE_GARGANTUAR])
-    {
-        aZombieNeeded[ZombieType::ZOMBIE_IMP] = true;
-    }
-    for (Zombie* aZombie : theBoard->mZombies)
-    {
-        if (aZombie && !aZombie->mDead && aZombie->mZombieType >= 0 && aZombie->mZombieType < ZombieType::NUM_ZOMBIE_TYPES)
-        {
-            aZombieNeeded[aZombie->mZombieType] = true;
-        }
-    }
-
-    for (int z = 0; z < ZombieType::NUM_ZOMBIE_TYPES; ++z)
-    {
-        if (!aZombieNeeded[z])
-            continue;
-
-        ZombieType zt = static_cast<ZombieType>(z);
-        const SpriteCacheEntityInfo* info = SpriteCache_GetZombieEntityInfo(zt);
-        if (!info)
-            continue;
-
-        if (IsZombieReady(zt))
-            continue;
-
-        std::string path = std::string(SPC_CACHE_DIR) + "/" + info->mFileName;
-        FILE* fp = fopen(path.c_str(), "rb");
-        if (!fp)
-            continue;
-
-        SpcHeader header = {};
-        if (fread(&header, sizeof(header), 1, fp) != 1 || header.mMagic != SPC_MAGIC || header.mVersion != SPC_VERSION)
-        {
-            fclose(fp);
-            continue;
-        }
-
-        SpriteCacheSlot* slot = AllocateZombieSlot(zt, header);
-        if (!slot)
-        {
-            fclose(fp);
-            continue;
-        }
-
-        if (fread(slot->mPixelData, 1, header.mTotalDataBytes, fp) == header.mTotalDataBytes)
-        {
-            slot->mIsReady = true;
-        }
-        else
-        {
-            slot->mIsReady = false;
-        }
-        fclose(fp);
-    }
-
-    PvzpLogLn("[SpriteCachePool] PreloadSynchronous complete. Plant offset: {}, Zombie offset: {}",
-              (uint32_t)sPlantArenaOffset, (uint32_t)sZombieArenaOffset);
+    PvzpLogLn("[SpriteCachePool] PreloadSynchronous complete. Active plant cache: {} / {} bytes",
+              (uint32_t)sPlantArenaOffset, (uint32_t)POOL_MAX_BUDGET);
 }

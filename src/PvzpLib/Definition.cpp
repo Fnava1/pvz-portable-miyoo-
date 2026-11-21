@@ -606,6 +606,20 @@ static bool DefinitionGetFileModTime(const std::string& theFilePath, std::filesy
 	return !ec;
 }
 
+static bool DefinitionReadFromPakDirect(const std::string& theCompiledFilePath, std::vector<char>& theBuffer)
+{
+	PFILE* aPakFile = p_fopen(theCompiledFilePath.c_str(), "rb");
+	if (!aPakFile)
+		return false;
+	p_fseek(aPakFile, 0, SEEK_END);
+	size_t aCompressedSize = (size_t)p_ftell(aPakFile);
+	p_fseek(aPakFile, 0, SEEK_SET);
+	theBuffer.resize(aCompressedSize);
+	size_t aReadBytes = p_fread(theBuffer.data(), 1, aCompressedSize, aPakFile);
+	p_fclose(aPakFile);
+	return (aReadBytes == aCompressedSize);
+}
+
 bool DefinitionReadCompiledFile(const std::string& theCompiledFilePath, const DefMap* theDefMap, void* theDefinition)
 {
 	PerfTimer aTimer;
@@ -613,8 +627,13 @@ bool DefinitionReadCompiledFile(const std::string& theCompiledFilePath, const De
 
 	std::vector<char> aCompressedBuffer;
 	std::string aFullCompiledPath = DefinitionGetCompiledCacheFullPath(theCompiledFilePath);
+	bool aLoadedFromDiskCache = false;
 	std::ifstream aFileStream(Sexy::PathFromU8(aFullCompiledPath), std::ios::binary);
-	if (!aFileStream)
+	if (aFileStream)
+	{
+		aLoadedFromDiskCache = true;
+	}
+	else
 	{
 		aFileStream.open(Sexy::PathFromU8(theCompiledFilePath), std::ios::binary);
 	}
@@ -635,20 +654,8 @@ bool DefinitionReadCompiledFile(const std::string& theCompiledFilePath, const De
 	else
 	{
 		// Fallback: load compiled definition directly from PAK archive
-		PFILE* aPakFile = p_fopen(theCompiledFilePath.c_str(), "rb");
-		if (!aPakFile)
+		if (!DefinitionReadFromPakDirect(theCompiledFilePath, aCompressedBuffer))
 		{
-			return false;
-		}
-		p_fseek(aPakFile, 0, SEEK_END);
-		size_t aCompressedSize = (size_t)p_ftell(aPakFile);
-		p_fseek(aPakFile, 0, SEEK_SET);
-		aCompressedBuffer.resize(aCompressedSize);
-		size_t aReadBytes = p_fread(aCompressedBuffer.data(), 1, aCompressedSize, aPakFile);
-		p_fclose(aPakFile);
-		if (aReadBytes != aCompressedSize)
-		{
-			PvzpLogLn("Failed to read compiled file from PAK: {}", theCompiledFilePath);
 			return false;
 		}
 	}
@@ -679,7 +686,32 @@ bool DefinitionReadCompiledFile(const std::string& theCompiledFilePath, const De
 	}
 	if (!aHashMatch) {
 		PvzpLogLn("Compiled file schema wrong: 0x{:x} != 0x{:x} for {}", aCashHash, aDefHash, theCompiledFilePath);
-		return false;
+		if (aLoadedFromDiskCache)
+		{
+			std::error_code ec;
+			std::filesystem::remove(Sexy::PathFromU8(aFullCompiledPath), ec);
+			// Retry reading pristine precompiled definition directly from PAK archive:
+			if (DefinitionReadFromPakDirect(theCompiledFilePath, aCompressedBuffer))
+			{
+				aCompressedSize = aCompressedBuffer.size();
+				aUncompressedBuffer.reset(static_cast<char*>(DefinitionUncompressCompiledBuffer(aCompressedBuffer.data(), aCompressedSize, aUncompressedSize, theCompiledFilePath)));
+				if (aUncompressedBuffer && aUncompressedSize >= theDefMap->mDefSize + sizeof(uint))
+				{
+					aBufferPtr = aUncompressedBuffer.get();
+					SMemR(aBufferPtr, &aCashHash, sizeof(uint));
+					if (aCashHash == aDefHash ||
+						(theDefMap == &gReanimatorDefMap && aCashHash == 0xb393b4c0) ||
+						(theDefMap == &gParticleDefMap && aCashHash == 0x411f994d) ||
+						(theDefMap == &gTrailDefMap && aCashHash == 0xab8b62b3))
+					{
+						PvzpLogLn("Recovered compiled definition from PAK: {}", theCompiledFilePath);
+						aHashMatch = true;
+					}
+				}
+			}
+		}
+		if (!aHashMatch)
+			return false;
 	} // a hash mismatch means the cached data is stale
 
 	// Bulk-read the raw definition data: non-pointer members are read correctly,

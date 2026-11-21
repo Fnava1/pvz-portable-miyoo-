@@ -1,5 +1,6 @@
 #include "SpriteCacheBaker.h"
 #include "SpriteCacheDef.h"
+#include "EffectSystem.h"
 #include "../LawnApp.h"
 #include "../Lawn/System/ReanimationLawn.h"
 #include <filesystem>
@@ -293,6 +294,7 @@ bool SpriteCacheBaker::BakeAll(LawnApp* theApp)
         const char* fn = gPlantCacheEntities[i].mFileName;
         if (!BakePlant(theApp, st, fn))
         {
+            if (theApp->mEffectSystem) theApp->mEffectSystem->ProcessDeleteQueue();
             theApp->mIsBakingSpriteCache.store(false);
             return false;
         }
@@ -306,6 +308,7 @@ bool SpriteCacheBaker::BakeAll(LawnApp* theApp)
         const char* fn = gZombieCacheEntities[i].mFileName;
         if (!BakeZombie(theApp, zt, fn))
         {
+            if (theApp->mEffectSystem) theApp->mEffectSystem->ProcessDeleteQueue();
             theApp->mIsBakingSpriteCache.store(false);
             return false;
         }
@@ -322,6 +325,10 @@ bool SpriteCacheBaker::BakeAll(LawnApp* theApp)
     vfile << SPC_VERSION << "\n";
     vfile.close();
 
+    if (theApp->mEffectSystem)
+    {
+        theApp->mEffectSystem->ProcessDeleteQueue();
+    }
     theApp->mIsBakingSpriteCache.store(false);
     return true;
 }
