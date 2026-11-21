@@ -21,6 +21,9 @@
 
 #include <cstdint>
 #include <time.h>
+#if defined(__linux__) && !defined(__ANDROID__)
+#include <malloc.h>
+#endif
 #include "../Coin.h"
 #include "../Board.h"
 #include "../Plant.h"
@@ -82,6 +85,10 @@ void StoreScreenOverlay::Draw(Graphics* g)
 StoreScreen::StoreScreen(LawnApp* theApp) : Dialog(nullptr, nullptr, DIALOG_STORE, true, theApp->GetString("STORE", "Store"), "", "", BUTTONS_NONE)
 {
 	mApp = theApp;
+	if (mApp->mBoard)
+	{
+		mApp->mBoard->Pause(true);
+	}
 	mClip = false;
 	mStoreTime = 0;
 	mBubbleCountDown = 0;
@@ -169,6 +176,10 @@ StoreScreen::StoreScreen(LawnApp* theApp) : Dialog(nullptr, nullptr, DIALOG_STOR
 
 StoreScreen::~StoreScreen()
 {
+	if (mApp && mApp->mBoard)
+	{
+		mApp->mBoard->Pause(false);
+	}
 	if (mApp && mApp->mResourceManager)
 	{
 		mApp->mResourceManager->DeleteResources("DelayLoad_Store");
@@ -181,6 +192,9 @@ StoreScreen::~StoreScreen()
 	{
 		mApp->CleanSharedImages();
 	}
+#if defined(__linux__) && !defined(__ANDROID__)
+	malloc_trim(0);
+#endif
 }
 
 StoreItem StoreScreen::GetStoreItemType(int theSpotIndex)
@@ -642,22 +656,46 @@ void StoreScreen::UpdateMouse()
 
 void StoreScreen::StorePreload()
 {
+	if (mStoreLoaded)
+		return;
+	mStoreLoaded = true;
+
 	ReanimatorEnsureDefinitionLoaded(REANIM_CRAZY_DAVE, true);
 	ReanimatorEnsureDefinitionLoaded(REANIM_ZENGARDEN_FERTILIZER, true);
 	mApp->CrazyDaveEnter();
 
-	Plant::PreloadPlantResources(SeedType::SEED_GARLIC);
-	Plant::PreloadPlantResources(SeedType::SEED_TWINSUNFLOWER);
+	Plant::PreloadPlantResources(SeedType::SEED_GARLIC, false);
+	Plant::PreloadPlantResources(SeedType::SEED_TWINSUNFLOWER, false);
 
 	if (mApp->HasFinishedAdventure())
 	{
-		Plant::PreloadPlantResources(SeedType::SEED_GLOOMSHROOM);
-		Plant::PreloadPlantResources(SeedType::SEED_CATTAIL);
-		Plant::PreloadPlantResources(SeedType::SEED_WINTERMELON);
-		Plant::PreloadPlantResources(SeedType::SEED_GOLD_MAGNET);
-		Plant::PreloadPlantResources(SeedType::SEED_SPIKEROCK);
-		Plant::PreloadPlantResources(SeedType::SEED_COBCANNON);
-		Plant::PreloadPlantResources(SeedType::SEED_IMITATER);
+		Plant::PreloadPlantResources(SeedType::SEED_GLOOMSHROOM, false);
+		Plant::PreloadPlantResources(SeedType::SEED_CATTAIL, false);
+		Plant::PreloadPlantResources(SeedType::SEED_WINTERMELON, false);
+		Plant::PreloadPlantResources(SeedType::SEED_GOLD_MAGNET, false);
+		Plant::PreloadPlantResources(SeedType::SEED_SPIKEROCK, false);
+		Plant::PreloadPlantResources(SeedType::SEED_COBCANNON, false);
+		Plant::PreloadPlantResources(SeedType::SEED_IMITATER, false);
+	}
+
+	PvzpLoadResources("DelayLoad_Store");
+	bool aIsNight = mApp->mBoard && mApp->mBoard->StageIsNight();
+	if (mApp && mApp->mResourceManager)
+	{
+		if (aIsNight)
+		{
+			mApp->mResourceManager->DeleteImage("IMAGE_STORE_BACKGROUND");
+			Sexy::IMAGE_STORE_BACKGROUND = nullptr;
+		}
+		else
+		{
+			mApp->mResourceManager->DeleteImage("IMAGE_STORE_BACKGROUNDNIGHT");
+			mApp->mResourceManager->DeleteImage("IMAGE_STORE_CAR_NIGHT");
+			mApp->mResourceManager->DeleteImage("IMAGE_STORE_CARCLOSED_NIGHT");
+			Sexy::IMAGE_STORE_BACKGROUNDNIGHT = nullptr;
+			Sexy::IMAGE_STORE_CAR_NIGHT = nullptr;
+			Sexy::IMAGE_STORE_CARCLOSED_NIGHT = nullptr;
+		}
 	}
 }
 

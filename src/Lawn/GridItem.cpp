@@ -37,6 +37,8 @@
 
 using namespace Sexy;
 
+Reanimation* GridItem::sSharedSunReanim = nullptr;
+
 GridItem::GridItem()
 {
 	mApp = (LawnApp*)gSexyAppBase;
@@ -356,10 +358,12 @@ void GridItem::DrawScaryPot(Graphics* g)
 		else if (mScaryPotType == ScaryPotType::SCARYPOT_SUN)
 		{
 			int aSuns = mBoard->mChallenge->ScaryPotterCountSunInPot(this);
-
-			Reanimation aReanim;
-			aReanim.ReanimationInitializeType(0.0f, 0.0f, ReanimationType::REANIM_SUN);
-			aReanim.OverrideScale(0.5f, 0.5f);
+			if (!sSharedSunReanim)
+			{
+				sSharedSunReanim = new Reanimation();
+				sSharedSunReanim->ReanimationInitializeType(0.0f, 0.0f, ReanimationType::REANIM_SUN);
+				sSharedSunReanim->OverrideScale(0.5f, 0.5f);
+			}
 
 			for (int i = 0; i < aSuns; i++)
 			{
@@ -373,8 +377,8 @@ void GridItem::DrawScaryPot(Graphics* g)
 				case 4:     aOffsetX += 5.0f;       aOffsetY -= 15.0f;          break;
 				}
 
-				aReanim.SetPosition(aXPos + aOffsetX, aYPos + aOffsetY);
-				aReanim.Draw(g);
+				sSharedSunReanim->SetPosition(aXPos + aOffsetX, aYPos + aOffsetY);
+				sSharedSunReanim->Draw(g);
 			}
 		}
 

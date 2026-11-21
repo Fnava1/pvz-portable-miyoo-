@@ -274,9 +274,21 @@ std::unique_ptr<MemoryImage> ReanimatorCache::MakeCachedPlantFrame(SeedType theS
 
 std::unique_ptr<MemoryImage> ReanimatorCache::MakeCachedZombieFrame(ZombieType theZombieType)
 {
-	auto aMemoryImage = MakeBlankMemoryImage(200, 210);
+	bool aIsLowMem = false;
+#if defined(LOW_MEMORY)
+	aIsLowMem = true;
+#endif
+
+	int aWidth = aIsLowMem ? 100 : 200;
+	int aHeight = aIsLowMem ? 105 : 210;
+	auto aMemoryImage = MakeBlankMemoryImage(aWidth, aHeight);
 	Graphics aMemoryGraphics(aMemoryImage.get());
 	aMemoryGraphics.SetLinearBlend(true);
+	if (aIsLowMem)
+	{
+		aMemoryGraphics.mScaleX = 0.5f;
+		aMemoryGraphics.mScaleY = 0.5f;
+	}
 
 	ZombieType aUseZombieType = theZombieType;
 	if (theZombieType == ZombieType::ZOMBIE_CACHED_POLEVAULTER_WITH_POLE)
@@ -286,7 +298,18 @@ std::unique_ptr<MemoryImage> ReanimatorCache::MakeCachedZombieFrame(ZombieType t
 	const ZombieDefinition& aZombieDef = GetZombieDefinition(aUseZombieType);
 	PVZP_ASSERT(aZombieDef.mReanimationType != ReanimationType::REANIM_NONE);
 
-	float aPosX = 40.0f, aPosY = 40.0f;
+	ReanimatorEnsureDefinitionLoaded(aZombieDef.mReanimationType, true);
+	if (theZombieType == ZombieType::ZOMBIE_FLAG)
+	{
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_FLAG, true);
+	}
+	else if (theZombieType == ZombieType::ZOMBIE_BOSS)
+	{
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_BOSS_DRIVER, true);
+	}
+
+	float aScaleFactor = aIsLowMem ? 0.5f : 1.0f;
+	float aPosX = 40.0f * aScaleFactor, aPosY = 40.0f * aScaleFactor;
 	if (aZombieDef.mReanimationType == ReanimationType::REANIM_ZOMBIE)
 	{
 		Reanimation aReanim;
@@ -301,19 +324,23 @@ std::unique_ptr<MemoryImage> ReanimatorCache::MakeCachedZombieFrame(ZombieType t
 			Reanimation aReanimFlag;
 			aReanimFlag.ReanimationInitializeType(aPosX, aPosY, ReanimationType::REANIM_FLAG);
 			aReanimFlag.SetFramesForLayer("Zombie_flag");
+			aReanimFlag.OverrideScale(aMemoryGraphics.mScaleX, aMemoryGraphics.mScaleY);
 			aReanimFlag.Draw(&aMemoryGraphics);
 		}
+		aReanim.OverrideScale(aMemoryGraphics.mScaleX, aMemoryGraphics.mScaleY);
 		aReanim.Draw(&aMemoryGraphics);
 	}
 	else if (aZombieDef.mReanimationType == ReanimationType::REANIM_BOSS)
 	{
 		Reanimation aReanim;
-		aReanim.ReanimationInitializeType(-524.0f, -88.0f, aZombieDef.mReanimationType);
+		aReanim.ReanimationInitializeType(-524.0f * aScaleFactor, -88.0f * aScaleFactor, aZombieDef.mReanimationType);
 		aReanim.SetFramesForLayer("anim_head_idle");
 		Reanimation aReanimDriver;
-		aReanimDriver.ReanimationInitializeType(46.0f, 22.0f, ReanimationType::REANIM_BOSS_DRIVER);
+		aReanimDriver.ReanimationInitializeType(46.0f * aScaleFactor, 22.0f * aScaleFactor, ReanimationType::REANIM_BOSS_DRIVER);
 		aReanimDriver.SetFramesForLayer("anim_idle");
 
+		aReanim.OverrideScale(aMemoryGraphics.mScaleX, aMemoryGraphics.mScaleY);
+		aReanimDriver.OverrideScale(aMemoryGraphics.mScaleX, aMemoryGraphics.mScaleY);
 		aReanim.Draw(&aMemoryGraphics);
 		aReanimDriver.Draw(&aMemoryGraphics);
 		aReanim.AssignRenderGroupToTrack("boss_body1", RENDER_GROUP_HIDDEN);
@@ -338,7 +365,7 @@ std::unique_ptr<MemoryImage> ReanimatorCache::MakeCachedZombieFrame(ZombieType t
 		}
 		else if (theZombieType == ZombieType::ZOMBIE_GARGANTUAR)
 		{
-			aPosY = 60.0f;
+			aPosY = 60.0f * aScaleFactor;
 		}
 
 		DrawReanimatorFrame(&aMemoryGraphics, aPosX, aPosY, aZombieDef.mReanimationType, aTrackName, DrawVariation::VARIATION_NORMAL);
@@ -354,7 +381,20 @@ ReanimatorCache::~ReanimatorCache()
 void ReanimatorCache::ReanimatorCacheInitialize()
 {
 	mApp = (LawnApp*)gSexyAppBase;
-	PrecachePumpkinSurfaces();
+	// Pumpkin surfaces are precached lazily on demand on the main thread when first drawn
+}
+
+void ReanimatorCache::ClearZenVariationCaches()
+{
+	while (mImageVariationList.mSize != 0)
+	{
+		ReanimCacheImageVariation aImageVariation = mImageVariationList.RemoveHead();
+		if (aImageVariation.mImage != nullptr)
+		{
+			delete aImageVariation.mImage;
+			aImageVariation.mImage = nullptr;
+		}
+	}
 }
 
 void ReanimatorCache::ClearLevelTransientCaches()
@@ -364,6 +404,14 @@ void ReanimatorCache::ClearLevelTransientCaches()
 		mZombieWalkFrames[i].clear();
 		mZombieWalkFrames[i].shrink_to_fit();
 	}
+	ClearZenVariationCaches();
+}
+
+void ReanimatorCache::ClearAlmanacTransientCaches()
+{
+	// Keep mZombieImages persistent (~1.1 MB in LOW_MEMORY mode)
+	// just like mPlantImages (~600 KB), ensuring Almanac thumbnails are always available
+	// and never require synchronous re-baking during gameplay.
 }
 
 void ReanimatorCache::ReanimatorCacheDispose()
@@ -414,13 +462,21 @@ void ReanimatorCache::PrecacheAll()
 	for (int i = 0; i < ZombieType::NUM_CACHED_ZOMBIE_TYPES; i++)
 	{
 		ZombieType aZombie = static_cast<ZombieType>(i);
-		if (aZombie == ZombieType::ZOMBIE_INVALID)
+		if (aZombie == ZombieType::ZOMBIE_INVALID || aZombie == ZombieType::NUM_ZOMBIE_TYPES)
 			continue;
 		ZombieType aUseZombieType = (aZombie == ZombieType::ZOMBIE_CACHED_POLEVAULTER_WITH_POLE) ? ZombieType::ZOMBIE_POLEVAULTER : aZombie;
 		const ZombieDefinition& aDef = GetZombieDefinition(aUseZombieType);
 		if (aDef.mReanimationType != ReanimationType::REANIM_NONE)
 		{
 			ReanimatorEnsureDefinitionLoaded(aDef.mReanimationType, true);
+			if (aZombie == ZombieType::ZOMBIE_FLAG)
+			{
+				ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_FLAG, true);
+			}
+			else if (aZombie == ZombieType::ZOMBIE_BOSS)
+			{
+				ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_BOSS_DRIVER, true);
+			}
 			if (mZombieImages[aZombie] == nullptr)
 			{
 				mZombieImages[aZombie] = MakeCachedZombieFrame(aZombie);
@@ -469,6 +525,9 @@ void ReanimatorCache::DrawCachedPlant(Graphics* g, float thePosX, float thePosY,
 
 	int aOffsetX, aOffsetY, aWidth, aHeight;
 	GetPlantImageSize(theSeedType, aOffsetX, aOffsetY, aWidth, aHeight);
+	if (aImage == nullptr)
+		return;
+
 	if (!mApp->Is3DAccelerated() && g->mScaleX == 1.0f && g->mScaleY == 1.0f)
 	{
 		g->DrawImage(aImage, thePosX + aOffsetX, thePosY + aOffsetY);
@@ -493,9 +552,32 @@ void ReanimatorCache::DrawCachedZombie(Graphics* g, float thePosX, float thePosY
 	PVZP_ASSERT(theZombieType >= 0 && theZombieType < ZombieType::NUM_CACHED_ZOMBIE_TYPES);
 
 	if (mZombieImages[theZombieType] == nullptr)
+	{
 		mZombieImages[theZombieType] = MakeCachedZombieFrame(theZombieType);
+	}
 
-	PvzpDrawImageScaledF(g, mZombieImages[theZombieType].get(), thePosX, thePosY, g->mScaleX, g->mScaleY);
+	if (!mZombieImages[theZombieType])
+		return;
+
+	MemoryImage* aImage = mZombieImages[theZombieType].get();
+	float aScaleFactor = (aImage->mWidth == 100) ? 2.0f : 1.0f;
+	float effectiveScaleX = g->mScaleX * aScaleFactor;
+	float effectiveScaleY = g->mScaleY * aScaleFactor;
+
+	if (!mApp->Is3DAccelerated() && FloatApproxEqual(effectiveScaleX, 1.0f) && FloatApproxEqual(effectiveScaleY, 1.0f))
+	{
+		float oldScaleX = g->mScaleX;
+		float oldScaleY = g->mScaleY;
+		g->mScaleX = 1.0f;
+		g->mScaleY = 1.0f;
+		g->DrawImageF(aImage, thePosX, thePosY);
+		g->mScaleX = oldScaleX;
+		g->mScaleY = oldScaleY;
+	}
+	else
+	{
+		PvzpDrawImageScaledF(g, aImage, thePosX, thePosY, effectiveScaleX, effectiveScaleY);
+	}
 }
 
 bool ReanimatorCache::HasCachedIdle(SeedType theSeedType)
@@ -512,7 +594,7 @@ bool ReanimatorCache::HasCachedIdle(SeedType theSeedType)
 
 void ReanimatorCache::PrecachePlantIdle(SeedType theSeedType)
 {
-	if (theSeedType < 0 || theSeedType >= SeedType::NUM_SEED_TYPES)
+	if (theSeedType < 0 || theSeedType >= SeedType::NUM_SEED_TYPES || theSeedType == SeedType::SEED_LEFTPEATER)
 		return;
 
 	const PlantDefinition& aDef = GetPlantDefinition(theSeedType);
@@ -665,6 +747,9 @@ void ReanimatorCache::DrawCachedPlantIdle(Graphics* g, float thePosX, float theP
 
 	int aOffsetX, aOffsetY, aWidth, aHeight;
 	GetPlantImageSize(theSeedType, aOffsetX, aOffsetY, aWidth, aHeight);
+	if (aImage == nullptr)
+		return;
+
 	if (!mApp->Is3DAccelerated() && g->mScaleX == 1.0f && g->mScaleY == 1.0f)
 	{
 		g->DrawImage(aImage, thePosX + aOffsetX, thePosY + aOffsetY);
@@ -850,6 +935,10 @@ void ReanimatorCache::PrecachePumpkinSurfaces()
 
 void ReanimatorCache::DrawCachedPumpkinBack(Graphics* g, float thePosX, float thePosY)
 {
+	if (!mPumpkinBackImage)
+	{
+		PrecachePumpkinSurfaces();
+	}
 	if (mPumpkinBackImage)
 	{
 		g->DrawImage(mPumpkinBackImage.get(), thePosX - 20.0f, thePosY - 20.0f);
@@ -858,6 +947,10 @@ void ReanimatorCache::DrawCachedPumpkinBack(Graphics* g, float thePosX, float th
 
 void ReanimatorCache::DrawCachedPumpkinFront(Graphics* g, float thePosX, float thePosY, int theDamageState)
 {
+	if (!mPumpkinFrontImages[0])
+	{
+		PrecachePumpkinSurfaces();
+	}
 	if (theDamageState < 0)
 		theDamageState = 0;
 	else if (theDamageState > 2)

@@ -30,6 +30,7 @@
 #include "../../GameConstants.h"
 #include "../../PvzpLib/PvzpStringFile.h"
 #include "../../PvzpLib/PvzpCommon.h"
+#include "../../PvzpLib/Reanimator.h"
 #include "graphics/Graphics.h"
 #include "graphics/Font.h"
 #include "misc/KeyCodes.h"
@@ -909,6 +910,8 @@ void ZombatarWidget::CreatePreviewZombie()
 {
 	if (mPreviewZombie)
 		return;
+
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBATAR_HEAD, true);
 
 	mPreviewZombie = std::make_unique<Zombie>();
 	mPreviewZombie->mApp = mApp;

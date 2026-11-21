@@ -334,6 +334,9 @@ public:
 	int32_t							mGridCursorCol;
 	int32_t							mGridCursorRow;
 	bool							mGridCursorActive;
+	std::vector<SeedType>			mPuzzlePreloadedSeeds;
+	bool							mWorkerEngaged{false};
+	int								mWorkerHysteresisCounter{0};
 
 public:
 	Board(LawnApp* theApp);
@@ -342,6 +345,7 @@ public:
 	void							DisposeBoard();
 	int								CountSunBeingCollected();
 	void							DrawGameObjects(Graphics* g);
+	bool							ShouldEngageComputeWorker(int theUncachedRigs = 0);
 	void							ClearCursor();
 	bool					AreEnemyZombiesOnScreen();
 	LawnMower*						FindLawnMowerInRow(int theRow);

@@ -75,6 +75,7 @@ public:
 	bool                        mGoToTreeNow;
 	bool                        mPurchasedFullVersion;
 	bool                        mTrialLockedWhenStoreOpened;
+	bool                        mStoreLoaded = false;
 
 public:
 	StoreScreen(LawnApp* theApp);

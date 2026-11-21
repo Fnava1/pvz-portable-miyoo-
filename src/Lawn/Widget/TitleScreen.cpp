@@ -220,9 +220,15 @@ void TitleScreen::Draw(Graphics* g)
 		PvzpBltMatrix(g, IMAGE_REANIM_SODROLLCAP, aTransform, g->mClipRect, Color::White, g->mDrawMode, aSrcRect);
 	}
 
-	for (Reanimation* aReanim : mApp->mEffectSystem->mReanimationHolder->mReanimations)
+	if (!mApp->mIsBakingSpriteCache.load())
 	{
-		aReanim->Draw(g);
+		for (Reanimation* aReanim : mApp->mEffectSystem->mReanimationHolder->mReanimations)
+		{
+			if (aReanim && !aReanim->mDead && !aReanim->mIsAttachment && aReanim->mDefinition != nullptr)
+			{
+				aReanim->Draw(g);
+			}
+		}
 	}
 }
 
@@ -349,32 +355,39 @@ void TitleScreen::Update()
 		return;
 	}
 
-	mApp->mEffectSystem->Update();
+	if (!mApp->mIsBakingSpriteCache.load())
+	{
+		mApp->mEffectSystem->Update();
+	}
 
 	float aPrevWidth = mCurBarWidth;
-	mCurBarWidth += mBarVel;
-	if (!mLoadingThreadComplete)
+	if (mApp->mIsBakingSpriteCache.load())
 	{
-		if (mApp->mIsBakingSpriteCache.load())
+		int cur = mApp->mBakingCurrentIndex.load();
+		int tot = mApp->mBakingTotalEntities.load();
+		mStartButton->mLabel = std::format("Optimizando sprites ({}/{})...", cur, tot);
+		if (tot > 0)
 		{
-			int cur = mApp->mBakingCurrentIndex.load();
-			int tot = mApp->mBakingTotalEntities.load();
-			mStartButton->mLabel = std::format("Optimizando sprites ({}/{})...", cur, tot);
-		}
-		else
-		{
-			mStartButton->mLabel = PvzpStringTranslate("[LOADING]");
-		}
-
-		if (mCurBarWidth > mTotalBarWidth * 0.99f)
-		{
-			mCurBarWidth = mTotalBarWidth * 0.99f;
+			mCurBarWidth = (static_cast<float>(cur) / static_cast<float>(tot)) * (mTotalBarWidth * 0.5f);
 		}
 	}
-	else if (mCurBarWidth > mTotalBarWidth)
+	else
 	{
-		mStartButton->mLabel = PvzpStringTranslate("[CLICK_TO_START]");
-		mCurBarWidth = mTotalBarWidth;
+		mCurBarWidth += mBarVel;
+		if (!mLoadingThreadComplete)
+		{
+			mStartButton->mLabel = PvzpStringTranslate("[LOADING]");
+
+			if (mCurBarWidth > mTotalBarWidth * 0.99f)
+			{
+				mCurBarWidth = mTotalBarWidth * 0.99f;
+			}
+		}
+		else if (mCurBarWidth > mTotalBarWidth)
+		{
+			mStartButton->mLabel = PvzpStringTranslate("[CLICK_TO_START]");
+			mCurBarWidth = mTotalBarWidth;
+		}
 	}
 
 	if (aLoadingPercent > mPrevLoadingPercent + 0.01f || mLoadingThreadComplete)
@@ -475,43 +488,46 @@ void TitleScreen::Update()
 		mTotalBarWidth * 0.91f
 	};
 
-	for (size_t i = 0; i < LENGTH(aTriggerPoint); i++)
+	if (!mApp->mIsBakingSpriteCache.load())
 	{
-		if (aPrevWidth < aTriggerPoint[i] && mCurBarWidth >= aTriggerPoint[i])
+		for (size_t i = 0; i < LENGTH(aTriggerPoint); i++)
 		{
-			ReanimationType aReanimType = ReanimationType::REANIM_LOADBAR_SPROUT;
-			if (i == 4)
+			if (aPrevWidth < aTriggerPoint[i] && mCurBarWidth >= aTriggerPoint[i])
 			{
-				aReanimType = ReanimationType::REANIM_LOADBAR_ZOMBIEHEAD;
-			}
-			float aPosX = aTriggerPoint[i] + 225.0f;
-			float aPosY = 511.0f;
-			Reanimation* aSproutReanim = mApp->AddReanimation(aPosX, aPosY, 0, aReanimType);
-			aSproutReanim->mAnimRate = 18.0f;
-			aSproutReanim->mLoopType = ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD;
+				ReanimationType aReanimType = ReanimationType::REANIM_LOADBAR_SPROUT;
+				if (i == 4)
+				{
+					aReanimType = ReanimationType::REANIM_LOADBAR_ZOMBIEHEAD;
+				}
+				float aPosX = aTriggerPoint[i] + 225.0f;
+				float aPosY = 511.0f;
+				Reanimation* aSproutReanim = mApp->AddReanimation(aPosX, aPosY, 0, aReanimType);
+				aSproutReanim->mAnimRate = 18.0f;
+				aSproutReanim->mLoopType = ReanimLoopType::REANIM_PLAY_ONCE_AND_HOLD;
 
-			if (i == 1 || i == 3)
-			{
-				aSproutReanim->OverrideScale(-1.0f, 1.0f);
-			}
-			else if (i == 2)
-			{
-				aSproutReanim->SetPosition(aPosX, aPosY - 5.0f);
-				aSproutReanim->OverrideScale(1.1f, 1.3f);
-			}
-			else if (i == 4)
-			{
-				aSproutReanim->SetPosition(aPosX - 20.0f, aPosY);
-			}
+				if (i == 1 || i == 3)
+				{
+					aSproutReanim->OverrideScale(-1.0f, 1.0f);
+				}
+				else if (i == 2)
+				{
+					aSproutReanim->SetPosition(aPosX, aPosY - 5.0f);
+					aSproutReanim->OverrideScale(1.1f, 1.3f);
+				}
+				else if (i == 4)
+				{
+					aSproutReanim->SetPosition(aPosX - 20.0f, aPosY);
+				}
 
-			if (i == 4)
-			{
-				mApp->PlaySample(SOUND_LOADINGBAR_FLOWER);
-				mApp->PlaySample(SOUND_LOADINGBAR_ZOMBIE);
-			}
-			else
-			{
-				mApp->PlaySample(SOUND_LOADINGBAR_FLOWER);
+				if (i == 4)
+				{
+					mApp->PlaySample(SOUND_LOADINGBAR_FLOWER);
+					mApp->PlaySample(SOUND_LOADINGBAR_ZOMBIE);
+				}
+				else
+				{
+					mApp->PlaySample(SOUND_LOADINGBAR_FLOWER);
+				}
 			}
 		}
 	}

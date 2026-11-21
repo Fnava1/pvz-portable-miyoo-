@@ -202,6 +202,7 @@ public:
 	MagnetItem              mMagnetItems[MAX_MAGNET_ITEMS];
 	ZombieID                mTargetZombieID;
 	int32_t                 mWakeUpCounter;
+	int32_t                 mWarmupCounter;
 	PlantOnBungeeState      mOnBungeeState;
 	SeedType                mImitaterType;
 	int32_t                 mPottedPlantIndex;
@@ -309,7 +310,7 @@ public:
 	bool                    CanUseSpriteCache() const;
 	void                    SpikeRockTakeDamage();
 	bool                    IsSpiky();
-	static void  PreloadPlantResources(SeedType theSeedType);
+	static void  PreloadPlantResources(SeedType theSeedType, bool theForCombat = true);
 	bool         IsInPlay();
 	void                    UpdateNeedsFood() { ; }
 	void                    PlayIdleAnim(float theRate);

@@ -68,6 +68,8 @@ public:
 	void                    ReanimatorCacheInitialize();
 	void                    ReanimatorCacheDispose();
 	void                    ClearLevelTransientCaches();
+	void                    ClearAlmanacTransientCaches();
+	void                    ClearZenVariationCaches();
 	void                    PrecacheAll();
 	void                    PrecachePumpkinSurfaces();
 	void                    DrawCachedPumpkinBack(Graphics* g, float thePosX, float thePosY);

@@ -14,6 +14,7 @@
 #include <linux/input.h>
 #include <poll.h>
 #include <pthread.h>
+#include <execinfo.h>
 #endif
 
 #include <SDL.h>
@@ -28,6 +29,10 @@
 #include "PvzpLib/PvzpStringFile.h"
 
 using namespace Sexy;
+#endif
+
+#if defined(PVZ_ENABLE_DUALCORE) && !defined(PVZ_UNIT_TEST)
+#include "threading/ComputeWorker.h"
 #endif
 
 // Global shutdown request indicator (set by signals or quit events)
@@ -137,6 +142,14 @@ static void CrashSignalHandler(int sig, siginfo_t* info, void* context) {
         (void)write(STDERR_FILENO, buf, static_cast<size_t>(len));
     }
 
+#ifndef _WIN32
+    void* callstack[64];
+    int frames = backtrace(callstack, 64);
+    if (frames > 0) {
+        backtrace_symbols_fd(callstack, frames, STDERR_FILENO);
+    }
+#endif
+
     const char endmsg[] = "========================================\n";
     (void)write(STDERR_FILENO, endmsg, sizeof(endmsg) - 1);
 
@@ -147,6 +160,15 @@ static void CrashSignalHandler(int sig, siginfo_t* info, void* context) {
         if (len > 0) {
             (void)write(fd, buf, static_cast<size_t>(len));
         }
+        if (frames > 0) {
+            const char bt_hdr[] = "\n--- CALL STACK ---\n";
+            (void)write(fd, bt_hdr, sizeof(bt_hdr) - 1);
+            backtrace_symbols_fd(callstack, frames, fd);
+        }
+        const char log_hdr[] = "\n--- RECENT APPLICATION LOGS ---\n";
+        (void)write(fd, log_hdr, sizeof(log_hdr) - 1);
+        Sexy::DumpLogRingBufferToCrashFd(fd);
+
         (void)write(fd, endmsg, sizeof(endmsg) - 1);
         close(fd);
     }
@@ -421,10 +443,19 @@ int main(int argc, char* argv[]) {
     gLawnApp->SetArgs(argc, argv);
     gLawnApp->Init();
 
+#if defined(PVZ_ENABLE_DUALCORE) && !defined(PVZ_UNIT_TEST)
+    ComputeWorker::Init();
+#endif
+
     InstallSignalHandlers();
     StartHardwareWatchdog();
     gLawnApp->Start();
     StopHardwareWatchdog();
+
+#if defined(PVZ_ENABLE_DUALCORE) && !defined(PVZ_UNIT_TEST)
+    ComputeWorker::Shutdown();
+#endif
+
     gLawnApp->Shutdown();
     delete gLawnApp;
     gLawnApp = nullptr;

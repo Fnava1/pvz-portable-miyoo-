@@ -469,7 +469,7 @@ static void SyncImagePortable(PortableSaveContext& theContext, Image*& theImage)
 	{
 		ResourceId aResID;
 		theContext.SyncInt32(reinterpret_cast<int32_t&>(aResID));
-		if (aResID == Sexy::ResourceId::RESOURCE_ID_MAX)
+		if (aResID == Sexy::ResourceId::RESOURCE_ID_MAX || static_cast<int>(aResID) < 0 || static_cast<int>(aResID) >= static_cast<int>(Sexy::ResourceId::RESOURCE_ID_MAX))
 		{
 			theImage = nullptr;
 		}
@@ -1129,7 +1129,7 @@ static void SyncReanimTransformPortable(PortableSaveContext& theContext, Reanima
 	{
 		theTransform.mImage = nullptr;
 		theTransform.mFont = nullptr;
-		theTransform.mText = "";
+		theTransform.mText = nullptr;
 	}
 }
 
@@ -1143,6 +1143,14 @@ static void SyncReanimTrackInstancePortable(PortableSaveContext& theContext, Rea
 	theContext.SyncFloat(theTrackInstance.mShakeY);
 	theContext.SyncInt32(reinterpret_cast<int32_t&>(theTrackInstance.mAttachmentID));
 	SyncImagePortable(theContext, theTrackInstance.mImageOverride);
+	if (theContext.mReading && theTrackInstance.mImageOverride != nullptr)
+	{
+		uintptr_t aPtrVal = reinterpret_cast<uintptr_t>(theTrackInstance.mImageOverride);
+		if ((aPtrVal % 4 != 0) || aPtrVal < 0x10000 || IsAtlasEncodedHandle(theTrackInstance.mImageOverride))
+		{
+			theTrackInstance.mImageOverride = nullptr;
+		}
+	}
 	theContext.SyncInt32(theTrackInstance.mRenderGroup);
 	SyncColorPortable(theContext, theTrackInstance.mTrackColor);
 	theContext.SyncBool(theTrackInstance.mIgnoreClipRect);
@@ -1238,6 +1246,11 @@ static void SyncReanimationPortable(Board* theBoard, Reanimation* theReanimation
 			for (int aTrackIndex = 0; aTrackIndex < aCount; aTrackIndex++)
 			{
 				SyncReanimTrackInstancePortable(theContext, theReanimation->mTrackInstances[aTrackIndex]);
+				if (theContext.mReading)
+				{
+					theReanimation->mTrackInstances[aTrackIndex].mBlendTransform.mText = nullptr;
+					theReanimation->mTrackInstances[aTrackIndex].mBlendTransform.mFont = nullptr;
+				}
 			}
 		}
 	}
@@ -2087,6 +2100,7 @@ static void FixBoardAfterLoad(Board* theBoard)
 		{
 			aPlant->mApp = theBoard->mApp;
 			aPlant->mBoard = theBoard;
+			aPlant->mWarmupCounter = 2;
 		}
 	}
 	{
@@ -2243,6 +2257,7 @@ static void FixBoardAfterLoad(Board* theBoard)
 
 	// Scan active plants on board and in seedbank, preload plant resources
 	bool aPlantNeeded[SeedType::NUM_SEED_TYPES] = {};
+	bool aZombieNeeded[ZombieType::NUM_ZOMBIE_TYPES] = {};
 	for (Plant* aPlant : theBoard->mPlants)
 	{
 		if (aPlant && !aPlant->mDead && aPlant->mSeedType >= 0 && aPlant->mSeedType < SeedType::NUM_SEED_TYPES)
@@ -2259,7 +2274,15 @@ static void FixBoardAfterLoad(Board* theBoard)
 		for (int i = 0; i < theBoard->mSeedBank->mNumPackets && i < SEEDBANK_MAX; ++i)
 		{
 			SeedPacket* aPacket = &theBoard->mSeedBank->mSeedPackets[i];
-			if (aPacket->mPacketType >= 0 && aPacket->mPacketType < SeedType::NUM_SEED_TYPES)
+			if (Challenge::IsZombieSeedType(aPacket->mPacketType))
+			{
+				ZombieType aZombieType = Challenge::IZombieSeedTypeToZombieType(aPacket->mPacketType);
+				if (aZombieType >= 0 && aZombieType < ZombieType::NUM_ZOMBIE_TYPES)
+				{
+					aZombieNeeded[aZombieType] = true;
+				}
+			}
+			else if (aPacket->mPacketType >= 0 && aPacket->mPacketType < SeedType::NUM_SEED_TYPES)
 			{
 				aPlantNeeded[aPacket->mPacketType] = true;
 			}
@@ -2278,7 +2301,6 @@ static void FixBoardAfterLoad(Board* theBoard)
 	}
 
 	// Scan zombies and allowed zombies, preload zombie resources
-	bool aZombieNeeded[ZombieType::NUM_ZOMBIE_TYPES] = {};
 	for (int z = 0; z < ZombieType::NUM_ZOMBIE_TYPES; ++z)
 	{
 		if (theBoard->mZombieAllowed[z])
@@ -2313,6 +2335,77 @@ static void FixBoardAfterLoad(Board* theBoard)
 
 	// Synchronously preload sprite cache pool for all active plants and allowed zombies
 	SpriteCachePool::PreloadSynchronous(theBoard);
+
+	// Prime sprite cache for all ready plants to skip fragile fallback on frame 0
+	for (Plant* aPlant : theBoard->mPlants)
+	{
+		if (aPlant && !aPlant->mDead && SpriteCachePool::IsPlantReady(aPlant->mSeedType))
+		{
+			aPlant->mWarmupCounter = 0;
+		}
+	}
+
+	if (GridItem::sSharedSunReanim)
+	{
+		delete GridItem::sSharedSunReanim;
+		GridItem::sSharedSunReanim = nullptr;
+	}
+
+	// Sanitize and ensure atlases for all reanimations on board
+	auto SanitizeReanimation = [](Reanimation* theReanim) {
+		if (!theReanim) return;
+		if (theReanim->mDefinition == nullptr || theReanim->mTrackInstances == nullptr) {
+			theReanim->mDead = true;
+			return;
+		}
+		int aType = static_cast<int>(theReanim->mReanimationType);
+		if (theReanim->mDefinition->mReanimAtlas == nullptr && aType >= 0 && aType < static_cast<int>(gReanimatorDefCount)) {
+			ReanimationCreateAtlas(theReanim->mDefinition, theReanim->mReanimationType);
+		}
+		for (int t = 0; t < theReanim->mDefinition->mTracks.count; ++t) {
+			ReanimatorTrackInstance& aTrack = theReanim->mTrackInstances[t];
+			if (aTrack.mImageOverride != nullptr) {
+				uintptr_t aPtrVal = reinterpret_cast<uintptr_t>(aTrack.mImageOverride);
+				if ((aPtrVal % 4 != 0) || aPtrVal < 0x10000 || IsAtlasEncodedHandle(aTrack.mImageOverride))
+				{
+					aTrack.mImageOverride = nullptr;
+				}
+			}
+			aTrack.mBlendTransform.mImage = nullptr;
+			aTrack.mBlendTransform.mFont = nullptr;
+			aTrack.mBlendTransform.mText = nullptr;
+		}
+	};
+
+	if (theBoard->mApp && theBoard->mApp->mEffectSystem && theBoard->mApp->mEffectSystem->mReanimationHolder)
+	{
+		for (Reanimation* aReanim : theBoard->mApp->mEffectSystem->mReanimationHolder->mReanimations)
+		{
+			if (aReanim && !aReanim->mDead)
+			{
+				SanitizeReanimation(aReanim);
+			}
+		}
+	}
+	for (Zombie* aZombie : theBoard->mZombies)
+	{
+		if (aZombie && !aZombie->mDead)
+			SanitizeReanimation(theBoard->mApp->ReanimationTryToGet(aZombie->mBodyReanimID));
+	}
+	for (Plant* aPlant : theBoard->mPlants)
+	{
+		if (aPlant && !aPlant->mDead)
+			SanitizeReanimation(theBoard->mApp->ReanimationTryToGet(aPlant->mBodyReanimID));
+	}
+	for (GridItem* aGridItem : theBoard->mGridItems)
+	{
+		if (aGridItem && !aGridItem->mDead)
+			SanitizeReanimation(theBoard->mApp->ReanimationTryToGet(aGridItem->mGridItemReanimID));
+	}
+	if (theBoard->mCursorObject)
+	{
+		SanitizeReanimation(theBoard->mApp->ReanimationTryToGet(theBoard->mCursorObject->mReanimCursorID));
+	}
 }
 
 static bool LawnLoadGameV4(Board* theBoard, const std::string& theFilePath)
@@ -2577,7 +2670,7 @@ void SaveGameContext::SyncImage(Image*& theImage)
 	{
 		ResourceId aResID;
 		SyncInt((int&)aResID);
-		if (aResID == Sexy::ResourceId::RESOURCE_ID_MAX)
+		if (aResID == Sexy::ResourceId::RESOURCE_ID_MAX || static_cast<int>(aResID) < 0 || static_cast<int>(aResID) >= static_cast<int>(Sexy::ResourceId::RESOURCE_ID_MAX))
 		{
 			theImage = nullptr;
 		}
@@ -2709,9 +2802,17 @@ static void SyncReanimation(Board* theBoard, Reanimation* theReanimation, SaveGa
 
 			if (theContext.mReading)
 			{
-				aTrackInstance.mBlendTransform.mText = "";
-				PVZP_ASSERT(aTrackInstance.mBlendTransform.mFont == nullptr);
-				PVZP_ASSERT(aTrackInstance.mBlendTransform.mImage == nullptr);
+				aTrackInstance.mBlendTransform.mText = nullptr;
+				aTrackInstance.mBlendTransform.mFont = nullptr;
+				aTrackInstance.mBlendTransform.mImage = nullptr;
+				if (aTrackInstance.mImageOverride != nullptr)
+				{
+					uintptr_t aPtrVal = reinterpret_cast<uintptr_t>(aTrackInstance.mImageOverride);
+					if ((aPtrVal % 4 != 0) || aPtrVal < 0x10000 || IsAtlasEncodedHandle(aTrackInstance.mImageOverride))
+					{
+						aTrackInstance.mImageOverride = nullptr;
+					}
+				}
 			}
 			else
 			{

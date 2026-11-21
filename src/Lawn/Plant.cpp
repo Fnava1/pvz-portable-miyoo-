@@ -105,6 +105,7 @@ constinit const PlantDefinition gPlantDefs[SeedType::NUM_SEED_TYPES] = {
 
 Plant::Plant()
 {
+	mWarmupCounter = 0;
 }
 
 void Plant::PlantInitialize(int theGridX, int theGridY, SeedType theSeedType, SeedType theImitaterType)
@@ -2772,6 +2773,12 @@ bool Plant::IsInPlay()
 
 bool Plant::CanUseSpriteCache() const
 {
+	if (mWarmupCounter > 0)
+		return false;
+
+	if (mSeedType == SeedType::SEED_LEFTPEATER)
+		return false;
+
 	if (mApp->Is3DAccelerated() || !IsOnBoard() || mPottedPlantIndex != -1 ||
 		mIsAsleep || mShootingCounter != 0 || mState == PlantState::STATE_DOINGSPECIAL ||
 		mRecentlyEatenCountdown != 0 || mEatenFlashCountdown != 0 ||
@@ -2780,7 +2787,9 @@ bool Plant::CanUseSpriteCache() const
 		return false;
 
 	Reanimation* aBodyReanim = mApp->ReanimationTryToGet(mBodyReanimID);
-	if (!aBodyReanim || aBodyReanim->mFilterEffect != FilterEffect::FILTER_EFFECT_NONE ||
+	if (!aBodyReanim || !aBodyReanim->mDefinition || !aBodyReanim->mDefinition->mTracks.tracks ||
+		aBodyReanim->mDefinition->mTracks.count <= 0 ||
+		aBodyReanim->mFilterEffect != FilterEffect::FILTER_EFFECT_NONE ||
 		aBodyReanim->mEnableExtraAdditiveDraw || aBodyReanim->mColorOverride != Color::White ||
 		!aBodyReanim->IsAnimPlaying("anim_idle"))
 		return false;
@@ -2982,6 +2991,11 @@ void Plant::Update()
 
 	if (doUpdate)
 	{
+		if (mWarmupCounter > 0)
+		{
+			mWarmupCounter--;
+		}
+
 		UpdateAbilities();
 		Animate();
 
@@ -4191,23 +4205,19 @@ void Plant::Draw(Graphics* g)
 			if (aBodyReanim)
 			{
 				bool canUseIdleCache = !g->GetColorizeImages() && CanUseSpriteCache();
-				if (!canUseIdleCache && !SpriteCachePool::IsPlantReady(mSeedType) && SpriteCache_GetPlantEntityInfo(mSeedType) != nullptr)
-				{
-					SpriteStreamer::RequestPlant(mSeedType);
-				}
 
 				if (canUseIdleCache)
 				{
-					if (SpriteCache_GetPlantEntityInfo(mSeedType) != nullptr)
+					if (!SpriteCachePool::DrawPlant(g, aOffsetX, aOffsetY, mSeedType, aBodyReanim->mAnimTime))
 					{
-						if (!SpriteCachePool::DrawPlant(g, aOffsetX, aOffsetY, mSeedType, aBodyReanim->mAnimTime))
+						if (mApp->mReanimatorCache)
+						{
+							mApp->mReanimatorCache->DrawCachedPlantIdle(g, aOffsetX, aOffsetY, mSeedType, aBodyReanim->mAnimTime);
+						}
+						else
 						{
 							aBodyReanim->Draw(g);
 						}
-					}
-					else if (!SpriteCachePool::DrawPlant(g, aOffsetX, aOffsetY, mSeedType, aBodyReanim->mAnimTime))
-					{
-						mApp->mReanimatorCache->DrawCachedPlantIdle(g, aOffsetX, aOffsetY, mSeedType, aBodyReanim->mAnimTime);
 					}
 				}
 				else if (!mApp->Is3DAccelerated() && mSeedType == SeedType::SEED_PUMPKINSHELL &&
@@ -5461,8 +5471,13 @@ Rect Plant::GetPlantAttackRect(PlantWeapon thePlantWeapon)
 	return aRect;
 }
 
-void Plant::PreloadPlantResources(SeedType theSeedType)
+void Plant::PreloadPlantResources(SeedType theSeedType, bool theForCombat)
 {
+	if (theSeedType < 0 || theSeedType >= SeedType::NUM_SEED_TYPES)
+	{
+		return;
+	}
+
 	const PlantDefinition& aPlantDef = GetPlantDefinition(theSeedType);
 	if (aPlantDef.mReanimationType != ReanimationType::REANIM_NONE)
 	{
@@ -5471,33 +5486,51 @@ void Plant::PreloadPlantResources(SeedType theSeedType)
 
 	if (theSeedType == SeedType::SEED_CHERRYBOMB)
 	{
-		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);
+		if (theForCombat)
+		{
+			ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);
+		}
 	}
 	else if (theSeedType == SeedType::SEED_JALAPENO)
 	{
-		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_JALAPENO_FIRE, true);
-		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);
+		if (theForCombat)
+		{
+			ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_JALAPENO_FIRE, true);
+			ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);
+		}
 	}
 	else if (theSeedType == SeedType::SEED_DOOMSHROOM)
 	{
-		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);
+		if (theForCombat)
+		{
+			ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);
+		}
 	}
 	else if (theSeedType == SeedType::SEED_COBCANNON)
 	{
-		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);
-		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_IMP, true);
-		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_GARGANTUAR, true);
+		if (theForCombat)
+		{
+			ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);
+			ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_IMP, true);
+			ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED_GARGANTUAR, true);
+		}
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_PUFF, true);
 	}
 	else if (theSeedType == SeedType::SEED_POTATOMINE)
 	{
-		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);
+		if (theForCombat)
+		{
+			ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBIE_CHARRED, true);
+		}
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_PUFF, true);
 	}
 	else if (theSeedType == SeedType::SEED_TORCHWOOD)
 	{
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_FIRE_PEA, true);
-		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_JALAPENO_FIRE, true);
+		if (theForCombat)
+		{
+			ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_JALAPENO_FIRE, true);
+		}
 	}
 	else if (Plant::IsNocturnal(theSeedType))
 	{

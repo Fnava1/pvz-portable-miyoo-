@@ -35,6 +35,9 @@
 #include <SDL.h>
 #include <algorithm>
 #include <format>
+#if defined(__linux__) && !defined(__ANDROID__)
+#include <malloc.h>
+#endif
 
 constinit const ChallengeDefinition gChallengeDefs[NUM_CHALLENGE_MODES] = {
 	{ .mChallengeMode = GameMode::GAMEMODE_SURVIVAL_NORMAL_STAGE_1, .mChallengeIconIndex = 0, .mPage = ChallengePage::CHALLENGE_PAGE_SURVIVAL, .mRow = 0, .mCol = 0, .mChallengeName = "[SURVIVAL_DAY_NORMAL]" },
@@ -216,9 +219,12 @@ ChallengeScreen::~ChallengeScreen()
 	{
 		mApp->mResourceManager->DeleteResources("DelayLoad_ChallengeScreen");
 	}
-	if (mApp)
+	if (mApp && mApp->mBoard == nullptr)
 	{
 		mApp->CleanSharedImages();
+#if defined(__linux__) && !defined(__ANDROID__)
+		malloc_trim(0);
+#endif
 	}
 }
 

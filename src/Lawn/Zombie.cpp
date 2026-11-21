@@ -170,7 +170,9 @@ bool Zombie::CanAttachHitSplat()
 
 bool Zombie::CanUseWalkCache() const
 {
-	if (mApp->Is3DAccelerated() || mFromWave == -2 || mIsEating || IsWalkingBackwards() || mScaleZombie != 1.0f || mZombieFade != -1)
+	if (mApp->Is3DAccelerated() || mFromWave == -2 || mFromWave == Zombie::ZOMBIE_WAVE_UI ||
+		mZombatarHeadReanimID != ReanimationID::REANIMATIONID_NULL ||
+		mIsEating || IsWalkingBackwards() || mScaleZombie != 1.0f || mZombieFade != -1)
 		return false;
 
 	if (mZombieType == ZombieType::ZOMBIE_BOSS || mZombieType == ZombieType::ZOMBIE_GARGANTUAR ||
@@ -2728,22 +2730,27 @@ void Zombie::BobsledCrash()
 	mPhaseCounter = BOBSLED_CRASH_TIME;
 	StartWalkAnim(0);
 
-	Reanimation* aLeaderReanim = mApp->ReanimationGet(mBodyReanimID);
+	Reanimation* aLeaderReanim = mApp->ReanimationTryToGet(mBodyReanimID);
 	for (int i = 0; i < NUM_BOBSLED_FOLLOWERS; i++)
 	{
-		Zombie* aFollowerZombie = mBoard->ZombieGet(mFollowerZombieID[i]);
+		Zombie* aFollowerZombie = mBoard->ZombieTryToGet(mFollowerZombieID[i]);
+		if (aFollowerZombie == nullptr || aFollowerZombie->mDead)
+			continue;
 		aFollowerZombie->mZombiePhase = ZombiePhase::PHASE_BOBSLED_CRASHING;
 		aFollowerZombie->mPhaseCounter = BOBSLED_CRASH_TIME;
 		aFollowerZombie->mPosY = GetPosYBasedOnRow(mRow);
 		aFollowerZombie->mAltitude = 0.0f;
 		aFollowerZombie->StartWalkAnim(0);
 
-		Reanimation* aFollowerReanim = mApp->ReanimationGet(aFollowerZombie->mBodyReanimID);
+		Reanimation* aFollowerReanim = mApp->ReanimationTryToGet(aFollowerZombie->mBodyReanimID);
 		if (aFollowerReanim)
 		{
 			aFollowerZombie->mVelX = mVelX;
 			aFollowerReanim->mAnimTime = RandRangeFloat(0.0f, 1.0f);
-			aFollowerReanim->mAnimRate = aLeaderReanim->mAnimRate;
+			if (aLeaderReanim)
+			{
+				aFollowerReanim->mAnimRate = aLeaderReanim->mAnimRate;
+			}
 		}
 	}
 }
@@ -2759,10 +2766,13 @@ void Zombie::UpdateZombieBobsled()
 			{
 				for (int i = 0; i < NUM_BOBSLED_FOLLOWERS; i++)
 				{
-					Zombie* aZombie = mBoard->ZombieGet(mFollowerZombieID[i]);
-					aZombie->mRelatedZombieID = ZombieID::ZOMBIEID_NULL;
+					Zombie* aZombie = mBoard->ZombieTryToGet(mFollowerZombieID[i]);
+					if (aZombie)
+					{
+						aZombie->mRelatedZombieID = ZombieID::ZOMBIEID_NULL;
+						aZombie->PickRandomSpeed();
+					}
 					mFollowerZombieID[i] = ZombieID::ZOMBIEID_NULL;
-					aZombie->PickRandomSpeed();
 				}
 				PickRandomSpeed();
 			}
@@ -3510,7 +3520,10 @@ void Zombie::ApplyZombatarHead(const unsigned char* theRecord)
 	if (!aHeadReanim)
 	{
 		aHeadReanim = mApp->AddReanimation(0.0f, 0.0f, 0, ReanimationType::REANIM_ZOMBATAR_HEAD);
-		aHeadReanim->PlayReanim("anim_head_idle", ReanimLoopType::REANIM_LOOP, 0, 15.0f);
+		if (aHeadReanim->TrackExists("anim_head_idle"))
+			aHeadReanim->PlayReanim("anim_head_idle", ReanimLoopType::REANIM_LOOP, 0, 15.0f);
+		else if (aHeadReanim->TrackExists("anim_head1"))
+			aHeadReanim->PlayReanim("anim_head1", ReanimLoopType::REANIM_LOOP, 0, 15.0f);
 		mZombatarHeadReanimID = mApp->ReanimationGetID(aHeadReanim);
 		AttachEffect* aAttachEffect = AttachReanim(aTrackInstance->mAttachmentID, aHeadReanim, 0.0f, 0.0f);
 		PvzpScaleRotateTransformMatrix(aAttachEffect->mOffset, -20.0f, -1.0f, 0.2f, 1.0f, 1.0f);
@@ -4660,9 +4673,13 @@ void Zombie::UpdateActions()
 
 void Zombie::CheckForBoardEdge()
 {
-	if (IsWalkingBackwards() && mPosX > 850.0f)
+	if (mMindControlled && mPosX > 780.0f)
 	{
 		DieNoLoot();
+		if (mBoard && mBoard->mChallenge && mApp->IsScaryPotterLevel())
+		{
+			mBoard->mChallenge->ScaryPotterCheckLevelComplete();
+		}
 		return;
 	}
 
@@ -4680,16 +4697,24 @@ void Zombie::CheckForBoardEdge()
 		aEdgeX = -130;
 	}
 
-	if (mX <= aEdgeX && mHasHead)
+	if (mX <= aEdgeX || mPosX < -160.0f)
 	{
-		if (mApp->IsIZombieLevel())
+		if (mHasHead)
 		{
-			DieNoLoot();
+			if (mApp->IsIZombieLevel())
+			{
+				DieNoLoot();
+			}
+			else
+			{
+				mBoard->ZombiesWon(this);
+			}
 		}
 		else
 		{
-			mBoard->ZombiesWon(this);
+			DieNoLoot();
 		}
+		return;
 	}
 	if (mX <= aEdgeX + 70 && !mHasHead)
 	{
@@ -5524,12 +5549,14 @@ void Zombie::UpdateReanim()
 	else
 	{
 		bool skipHordeBoneUpdate = false;
-		if (!mIsHordeVanguard && mZombiePhase == ZombiePhase::PHASE_ZOMBIE_NORMAL &&
+		if (mBoard && mApp->mGameScene == GameScenes::SCENE_PLAYING && mFromWave != Zombie::ZOMBIE_WAVE_CUTSCENE &&
+		    !mIsHordeVanguard && mZombiePhase == ZombiePhase::PHASE_ZOMBIE_NORMAL &&
 		    mZombieType != ZombieType::ZOMBIE_BOSS && mZombieType != ZombieType::ZOMBIE_GARGANTUAR &&
 		    mZombieType != ZombieType::ZOMBIE_REDEYE_GARGANTUAR && mZombieType != ZombieType::ZOMBIE_BUNGEE &&
 		    mZombieType != ZombieType::ZOMBIE_POGO && mZombieType != ZombieType::ZOMBIE_POLEVAULTER &&
 		    mZombieType != ZombieType::ZOMBIE_BALLOON && mZombieType != ZombieType::ZOMBIE_CATAPULT &&
-		    mZombieType != ZombieType::ZOMBIE_ZAMBONI && mBoard)
+		    mZombieType != ZombieType::ZOMBIE_ZAMBONI && mAttachmentID == AttachmentID::ATTACHMENTID_NULL &&
+		    mSpecialHeadReanimID == ReanimationID::REANIMATIONID_NULL)
 		{
 			if (mBoard->mZombies.mSize > 40)
 			{
@@ -5538,7 +5565,7 @@ void Zombie::UpdateReanim()
 					skipHordeBoneUpdate = true;
 				}
 			}
-			else
+			else if (mBoard->mZombies.mSize > 20)
 			{
 				if (((mBoard->mBoardUpdateCounter + static_cast<unsigned int>(mBoard->ZombieGetID(this))) & 1) != 0)
 				{
@@ -5583,7 +5610,11 @@ void Zombie::DrawBobsledReanim(Graphics* g, const ZombieDrawPosition& theDrawPos
 		}
 		else
 		{
-			aZombieLeader = mBoard->ZombieGet(mRelatedZombieID);
+			aZombieLeader = mBoard->ZombieTryToGet(mRelatedZombieID);
+			if (aZombieLeader == nullptr)
+			{
+				return;
+			}
 		}
 	}
 
@@ -7446,7 +7477,7 @@ void Zombie::EatZombie(Zombie* theZombie)
 
 bool Zombie::TrySpawnLevelAward()
 {
-	if (!IsOnBoard() || mBoard->HasLevelAwardDropped() || mBoard->mLevelComplete)
+	if (!IsOnBoard() || mBoard->HasLevelAwardDropped() || mBoard->mLevelComplete || mMindControlled)
 	{
 		return false;
 	}
@@ -7481,6 +7512,11 @@ bool Zombie::TrySpawnLevelAward()
 	Rect aZombieRect = GetZombieRect();
 	int aCenterX = aZombieRect.mX + aZombieRect.mWidth / 2;
 	int aCenterY = aZombieRect.mY + aZombieRect.mHeight / 2;
+	if (mApp->IsScaryPotterLevel())
+	{
+		aCenterX = BOARD_WIDTH / 2;
+		aCenterY = BOARD_HEIGHT / 2;
+	}
 
 	if (!mBoard->IsSurvivalStageWithRepick())
 	{
@@ -7577,7 +7613,7 @@ bool Zombie::TrySpawnLevelAward()
 	if (aCoinType != CoinType::COIN_NONE)
 	{
 		mApp->PlayFoley(FoleyType::FOLEY_SPAWN_SUN);
-		mBoard->AddCoin(aCenterX, aCenterY, aCoinType, aCoinMotion);
+		Coin* aCoin = mBoard->AddCoin(aCenterX, aCenterY, aCoinType, aCoinMotion);
 	}
 
 	mDroppedLoot = true;
@@ -7638,15 +7674,9 @@ void Zombie::BobsledDie()
 	if (!IsBobsledTeamWithSled() || !IsOnBoard())
 		return;
 
-	Zombie* aLeaderZombie;
-	if (mRelatedZombieID == ZombieID::ZOMBIEID_NULL)
-	{
-		aLeaderZombie = this;
-	}
-	else
-	{
-		aLeaderZombie = mBoard->ZombieGet(mRelatedZombieID);
-	}
+	Zombie* aLeaderZombie = (mRelatedZombieID == ZombieID::ZOMBIEID_NULL) ? this : mBoard->ZombieTryToGet(mRelatedZombieID);
+	if (aLeaderZombie == nullptr)
+		return;
 
 	if (!aLeaderZombie->mDead)
 	{
@@ -7654,8 +7684,8 @@ void Zombie::BobsledDie()
 	}
 	for (int i = 0; i < NUM_BOBSLED_FOLLOWERS; i++)
 	{
-		Zombie* aZombie = mBoard->ZombieGet(aLeaderZombie->mFollowerZombieID[i]);
-		if (!aZombie->mDead)
+		Zombie* aZombie = mBoard->ZombieTryToGet(aLeaderZombie->mFollowerZombieID[i]);
+		if (aZombie && !aZombie->mDead)
 		{
 			aZombie->DieNoLoot();
 		}
@@ -7667,20 +7697,18 @@ void Zombie::BobsledBurn()
 	if (!IsBobsledTeamWithSled())
 		return;
 
-	Zombie* aLeaderZombie;
-	if (mRelatedZombieID == ZombieID::ZOMBIEID_NULL)
-	{
-		aLeaderZombie = this;
-	}
-	else
-	{
-		aLeaderZombie = mBoard->ZombieGet(mRelatedZombieID);
-	}
+	Zombie* aLeaderZombie = (mRelatedZombieID == ZombieID::ZOMBIEID_NULL) ? this : mBoard->ZombieTryToGet(mRelatedZombieID);
+	if (aLeaderZombie == nullptr)
+		return;
 
 	aLeaderZombie->ApplyBurn();
 	for (int i = 0; i < NUM_BOBSLED_FOLLOWERS; i++)
 	{
-		mBoard->ZombieGet(aLeaderZombie->mFollowerZombieID[i])->DieNoLoot();
+		Zombie* aFollower = mBoard->ZombieTryToGet(aLeaderZombie->mFollowerZombieID[i]);
+		if (aFollower && !aFollower->mDead)
+		{
+			aFollower->DieNoLoot();
+		}
 	}
 }
 
@@ -7739,6 +7767,10 @@ void Zombie::DieNoLoot()
 	mApp->RemoveReanimation(mZombatarHeadReanimID);
 
 	mDead = true;
+	if (mBoard && mBoard->mChallenge && mApp->IsScaryPotterLevel())
+	{
+		mBoard->mChallenge->ScaryPotterCheckLevelComplete();
+	}
 	TrySpawnLevelAward();
 	if (mZombieType == ZombieType::ZOMBIE_BOBSLED)
 	{
@@ -9963,7 +9995,11 @@ int Zombie::GetBobsledPosition()
 	}
 
 	ZombieID anId = mBoard->ZombieGetID(this);
-	Zombie* aLeaderZombie = mBoard->ZombieGet(mRelatedZombieID);
+	Zombie* aLeaderZombie = mBoard->ZombieTryToGet(mRelatedZombieID);
+	if (aLeaderZombie == nullptr)
+	{
+		return -1;
+	}
 	for (int i = 0; i < NUM_BOBSLED_FOLLOWERS; i++)
 	{
 		if (aLeaderZombie->mFollowerZombieID[i] == anId)

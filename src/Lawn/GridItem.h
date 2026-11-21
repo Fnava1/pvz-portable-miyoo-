@@ -25,6 +25,8 @@
 #include <cstdint>
 #include "../ConstEnums.h"
 
+class Reanimation;
+
 constexpr const int NUM_MOTION_TRAIL_FRAMES = 12;
 
 class LawnApp;
@@ -92,6 +94,8 @@ public:
 	void					UpdateBrain();
 	void					DrawStinky(Sexy::Graphics* g);
 	bool			IsOpenPortal();
+
+	static Reanimation*				sSharedSunReanim;
 };
 
 #endif

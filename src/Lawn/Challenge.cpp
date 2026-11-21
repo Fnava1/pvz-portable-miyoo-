@@ -2023,6 +2023,11 @@ void Challenge::SpawnLevelAward(int theGridX, int theGridY)
 
 	float aPosX = mBoard->GridToPixelX(theGridX, theGridY) + 40;
 	float aPosY = mBoard->GridToPixelY(theGridX, theGridY) + 40;
+	if (mApp->IsScaryPotterLevel())
+	{
+		aPosX = BOARD_WIDTH / 2.0f;
+		aPosY = BOARD_HEIGHT / 2.0f;
+	}
 	CoinType aCoinType =
 		mApp->IsFirstTimeAdventureMode() ? COIN_FINAL_SEED_PACKET :
 		mApp->IsAdventureMode() || mApp->HasBeatenChallenge(mApp->mGameMode) ? COIN_AWARD_MONEY_BAG : COIN_TROPHY;
@@ -2033,21 +2038,14 @@ void Challenge::SpawnLevelAward(int theGridX, int theGridY)
 	Coin* aCoin = mBoard->AddCoin(aPosX, aPosY, aCoinType, COIN_MOTION_COIN);
 	mApp->AddPvzpParticle(BOARD_WIDTH / 2, BOARD_HEIGHT / 2, RENDER_LAYER_TOP, PARTICLE_SCREEN_FLASH);
 
+	if (!mApp->IsIZombieLevel())
+	{
+		mBoard->RemoveAllZombies();
+	}
+
 	if (mApp->mGameMode == GAMEMODE_CHALLENGE_ZOMBIQUARIUM)
 	{
 		aCoin->Collect();
-	}
-	else if (!mApp->IsIZombieLevel())
-	{
-		for (Zombie* aZombie : mBoard->mZombies)
-		{
-			if (aZombie->mDead)
-				continue;
-			if (!aZombie->IsDeadOrDying())
-			{
-				aZombie->TakeDamage(1800, 0U);
-			}
-		}
 	}
 }
 
@@ -3838,7 +3836,8 @@ int Challenge::ScaryPotterIsCompleted()
 	{
 		if (aGridItem->mDead)
 			continue;
-		if (aGridItem->mGridItemType == GRIDITEM_SCARY_POT)
+		if (aGridItem->mGridItemType == GRIDITEM_SCARY_POT &&
+			(aGridItem->mScaryPotType == SCARYPOT_ZOMBIE || aGridItem->mZombieType != ZOMBIE_INVALID))
 		{
 			return false;
 		}
@@ -3873,8 +3872,21 @@ void Challenge::ScaryPotterUpdate()
 		}
 	}
 
+	ScaryPotterCheckLevelComplete();
+}
+
+void Challenge::ScaryPotterCheckLevelComplete()
+{
 	if (!mBoard->HasLevelAwardDropped() && !mBoard->mLevelComplete && ScaryPotterIsCompleted())
 	{
+		for (GridItem* aGridItem : mBoard->mGridItems)
+		{
+			if (!aGridItem->mDead && aGridItem->mGridItemType == GRIDITEM_SCARY_POT)
+			{
+				aGridItem->GridItemDie();
+			}
+		}
+
 		if (mApp->IsScaryPotterLevel() && !mBoard->IsFinalScaryPotterStage())
 		{
 			PuzzlePhaseComplete(4, 2);

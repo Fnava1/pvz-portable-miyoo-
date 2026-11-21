@@ -20,6 +20,9 @@
  */
 
 #include "../Board.h"
+#if defined(__linux__) && !defined(__ANDROID__)
+#include <malloc.h>
+#endif
 #include "../Zombie.h"
 #include "GameButton.h"
 #include "StoreScreen.h"
@@ -757,7 +760,17 @@ void SeedChooserScreen::ButtonDepress(int theId)
 	}
 	else if (theId == SeedChooserScreen::SeedChooserScreen_Almanac)
 	{
+		int aBoardX = mBoard ? mBoard->mX : 0;
+		int aBoardY = mBoard ? mBoard->mY : 0;
+		int aChooserX = mX;
+		int aChooserY = mY;
 		mApp->DoAlmanacDialog()->WaitForResult(true);
+		mApp->mWidgetManager->SetFocus(this);
+		Move(aChooserX, aChooserY);
+		if (mBoard)
+		{
+			mBoard->Move(aBoardX, aBoardY);
+		}
 		mApp->mMusic->MakeSureMusicIsPlaying(MUSIC_TUNE_CHOOSE_YOUR_SEEDS);
 	}
 	else if (theId == SeedChooserScreen::SeedChooserScreen_Store)
@@ -1074,8 +1087,27 @@ void SeedChooserScreen::MouseDown(int x, int y, int theClickCount)
 			if (aZombie && aZombie->mFromWave == Zombie::ZOMBIE_WAVE_CUTSCENE && aZombie->mZombieType != ZOMBIE_REDEYE_GARGANTUAR)
 			{
 				mApp->PlaySample(Sexy::SOUND_TAP);
+				int aBoardX = mBoard->mX;
+				int aBoardY = mBoard->mY;
+				int aChooserX = mX;
+				int aChooserY = mY;
 				mApp->DoAlmanacDialog(SEED_NONE, aZombie->mZombieType)->WaitForResult(true);
+				mApp->mWidgetManager->SetFocus(this);
+				Move(aChooserX, aChooserY);
+				if (mBoard)
+				{
+					mBoard->Move(aBoardX, aBoardY);
+				}
 				mApp->mMusic->MakeSureMusicIsPlaying(MUSIC_TUNE_CHOOSE_YOUR_SEEDS);
+				mIsDown = false;
+				if (mApp->mWidgetManager)
+				{
+					mApp->mWidgetManager->mDownButtons = 0;
+					if (mApp->mWidgetManager->mLastDownWidget == this)
+					{
+						mApp->mWidgetManager->mLastDownWidget = nullptr;
+					}
+				}
 				return;
 			}
 		}
@@ -1154,6 +1186,9 @@ void SeedChooserScreen::CloseSeedChooser()
 			aSeedPacket.mActive = false;
 		}
 	}
+#if defined(__linux__) && !defined(__ANDROID__)
+	malloc_trim(0);
+#endif
 	mBoard->PreloadSpriteCache();
 	mBoard->mCutScene->EndSeedChooser();
 }

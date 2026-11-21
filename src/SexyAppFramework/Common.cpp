@@ -220,6 +220,32 @@ void Sexy::DumpLogRingBufferToCrashFile(const char* theFilePath)
 #endif
 }
 
+void Sexy::DumpLogRingBufferToCrashFd(int theFd)
+{
+	if (theFd < 0)
+		return;
+
+	// In crash / signal handler context, do NOT acquire sLogRingMutex to avoid deadlock
+	// if the signal was raised inside DispatchLogLn while holding sLogRingMutex.
+#ifndef _WIN32
+	if (sLogRingWrapped)
+	{
+		size_t aFirstPart = LOG_RING_BUFFER_SIZE - sLogRingHead;
+		if (aFirstPart > 0)
+			(void)write(theFd, sLogRingBuffer + sLogRingHead, aFirstPart);
+		if (sLogRingHead > 0)
+			(void)write(theFd, sLogRingBuffer, sLogRingHead);
+	}
+	else
+	{
+		if (sLogRingHead > 0)
+			(void)write(theFd, sLogRingBuffer, sLogRingHead);
+	}
+#else
+	(void)theFd;
+#endif
+}
+
 int Sexy::Rand()
 {
 	return gMTRand.Next();

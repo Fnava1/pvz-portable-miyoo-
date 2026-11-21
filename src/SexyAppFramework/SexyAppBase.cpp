@@ -1729,47 +1729,72 @@ void SexyAppBase::UpdateVirtualCursor()
 {
 #if !PVZ_ENABLE_GLES
 	const Uint8* state = SDL_GetKeyboardState(nullptr);
-	if (state)
+	if (!state)
+		return;
+
+	int dirX = (state[SDL_SCANCODE_RIGHT] ? 1 : 0) - (state[SDL_SCANCODE_LEFT] ? 1 : 0);
+	int dirY = (state[SDL_SCANCODE_DOWN] ? 1 : 0) - (state[SDL_SCANCODE_UP] ? 1 : 0);
+
+	static int sLastDirX = 0;
+	static int sLastDirY = 0;
+	static int sHoldTicks = 0;
+
+	if (dirX != 0 || dirY != 0)
 	{
-		float speed = 6.0f;
-		if (GetDialogCount() > 0 || state[SDL_SCANCODE_LSHIFT] || state[SDL_SCANCODE_TAB] || state[SDL_SCANCODE_BACKSPACE])
-			speed = 12.0f;
+		// Reset acceleration ramp on direction change to allow immediate precision micro-stepping
+		if (dirX != sLastDirX || dirY != sLastDirY)
+		{
+			sHoldTicks = 0;
+			sLastDirX = dirX;
+			sLastDirY = dirY;
+		}
+		sHoldTicks++;
 
-		bool moved = false;
-		if (state[SDL_SCANCODE_LEFT])
+		bool isTurbo = state[SDL_SCANCODE_LSHIFT] || state[SDL_SCANCODE_TAB] || state[SDL_SCANCODE_BACKSPACE];
+
+		// Responsive fast speed curve:
+		// Starts immediately snappy at base speed (5.5 px/frame = 550 px/sec)
+		// Ramps up when held to fast cruising speed (8.5 px/frame = 850 px/sec, or 11.5 px/frame with turbo)
+		float baseSpeed = 5.5f;
+		float maxSpeed = isTurbo ? 11.5f : 8.5f;
+		float speed = baseSpeed;
+
+		if (sHoldTicks > 6)
 		{
-			sVirtualCursorX -= speed;
-			moved = true;
-		}
-		if (state[SDL_SCANCODE_RIGHT])
-		{
-			sVirtualCursorX += speed;
-			moved = true;
-		}
-		if (state[SDL_SCANCODE_UP])
-		{
-			sVirtualCursorY -= speed;
-			moved = true;
-		}
-		if (state[SDL_SCANCODE_DOWN])
-		{
-			sVirtualCursorY += speed;
-			moved = true;
+			float rampProgress = std::min(1.0f, (sHoldTicks - 6) / 20.0f);
+			speed = baseSpeed + (maxSpeed - baseSpeed) * (rampProgress * rampProgress);
 		}
 
-		if (moved)
+		// Normalize diagonal movement vector so diagonal travel isn't 41.4% faster
+		float moveX = (float)dirX * speed;
+		float moveY = (float)dirY * speed;
+		if (dirX != 0 && dirY != 0)
 		{
-			if (sVirtualCursorX < 0.0f) sVirtualCursorX = 0.0f;
-			if (sVirtualCursorX > 799.0f) sVirtualCursorX = 799.0f;
-			if (sVirtualCursorY < 0.0f) sVirtualCursorY = 0.0f;
-			if (sVirtualCursorY > 599.0f) sVirtualCursorY = 599.0f;
-
-			if (mWidgetManager)
-			{
-				mWidgetManager->MouseMove((int)sVirtualCursorX, (int)sVirtualCursorY);
-				mCustomCursorDirty = true;
-			}
+			constexpr float INV_SQRT2 = 0.70710678f;
+			moveX *= INV_SQRT2;
+			moveY *= INV_SQRT2;
 		}
+
+		sVirtualCursorX += moveX;
+		sVirtualCursorY += moveY;
+
+		// Clamp within logical display dimensions
+		if (sVirtualCursorX < 0.0f) sVirtualCursorX = 0.0f;
+		if (sVirtualCursorX > 799.0f) sVirtualCursorX = 799.0f;
+		if (sVirtualCursorY < 0.0f) sVirtualCursorY = 0.0f;
+		if (sVirtualCursorY > 599.0f) sVirtualCursorY = 599.0f;
+
+		if (mWidgetManager)
+		{
+			mWidgetManager->MouseMove((int)sVirtualCursorX, (int)sVirtualCursorY);
+			mCustomCursorDirty = true;
+		}
+	}
+	else
+	{
+		sHoldTicks = 0;
+		sLastDirX = 0;
+		sLastDirY = 0;
 	}
 #endif
 }

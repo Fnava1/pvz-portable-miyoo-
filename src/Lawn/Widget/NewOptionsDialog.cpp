@@ -32,10 +32,74 @@
 #include "../../PvzpLib/PvzpFoley.h"
 #include "widget/Slider.h"
 #include "widget/Checkbox.h"
+#include "graphics/Font.h"
 #include "../../PvzpLib/PvzpStringFile.h"
 #include "widget/WidgetManager.h"
 
 using namespace Sexy;
+
+class FastSpeedButton : public LawnStoneButton
+{
+public:
+	FastSpeedButton(int theId, ButtonListener* theListener) :
+		LawnStoneButton(nullptr, theId, theListener)
+	{
+		mHasAlpha = true;
+		mHasTransparencies = true;
+		mWidth = 74;
+		mHeight = 39;
+	}
+
+	void Draw(Graphics* g) override
+	{
+		if (mBtnNoDraw)
+			return;
+
+		bool isDown = (mIsDown && mIsOver && !mDisabled) ^ mInverted;
+		bool isHighlighted = mIsOver && !mDisabled;
+
+		if (Sexy::IMAGE_OPTIONS_CHECKBOX0)
+		{
+			if (isDown)
+			{
+				g->SetColorizeImages(true);
+				g->SetColor(Color(200, 200, 200));
+			}
+
+			// Left border cap (width 18)
+			g->DrawImage(Sexy::IMAGE_OPTIONS_CHECKBOX0, 0, 0, Rect(0, 0, 18, 39));
+
+			// Middle recessed area (stretched horizontally across center)
+			int aMidWidth = mWidth - 18 - 14;
+			if (aMidWidth > 0)
+			{
+				g->DrawImage(Sexy::IMAGE_OPTIONS_CHECKBOX0, Rect(18, 0, aMidWidth, 39), Rect(18, 0, 6, 39));
+			}
+
+			// Right border cap (width 14, source x=24..38 to avoid texture bleed at x=39)
+			g->DrawImage(Sexy::IMAGE_OPTIONS_CHECKBOX0, mWidth - 14, 0, Rect(24, 0, 14, 39));
+
+			if (isDown)
+			{
+				g->SetColorizeImages(false);
+			}
+		}
+
+		_Font* aFont = isHighlighted ? Sexy::FONT_DWARVENTODCRAFT18BRIGHTGREENINSET : Sexy::FONT_DWARVENTODCRAFT18GREENINSET;
+		g->SetFont(aFont);
+
+		int aFontX = (mWidth - aFont->StringWidth(mLabel)) / 2;
+		int aFontY = (mHeight - aFont->GetAscent() / 6 - 1 + aFont->GetAscent()) / 2 - 4;
+		if (isDown)
+		{
+			aFontX++;
+			aFontY++;
+		}
+
+		g->SetColor(Color::White);
+		g->DrawString(mLabel, aFontX, aFontY);
+	}
+};
 
 NewOptionsDialog::NewOptionsDialog(LawnApp* theApp, bool theFromGameSelector) :
 	Dialog(nullptr, nullptr, Dialogs::DIALOG_NEWOPTIONS, true, "Options", "", "", Dialog::BUTTONS_NONE)
@@ -77,7 +141,9 @@ NewOptionsDialog::NewOptionsDialog(LawnApp* theApp, bool theFromGameSelector) :
 
 	mFullscreenCheckbox = MakeNewCheckbox(NewOptionsDialog::NewOptionsDialog_Fullscreen, this, !theApp->mIsWindowed);
 	mHardwareAccelerationCheckbox = MakeNewCheckbox(NewOptionsDialog::NewOptionsDialog_HardwareAcceleration, this, theApp->Is3DAccelerated());
-	mFastSpeedButton = MakeButton(NewOptionsDialog::NewOptionsDialog_FastSpeed, this, (theApp->mFastSpeedPreference == GameSpeedMode::SPEED_1_5X) ? "1.5X" : "2.0X");
+	auto aFastSpeedBtn = std::make_unique<FastSpeedButton>(NewOptionsDialog::NewOptionsDialog_FastSpeed, this);
+	aFastSpeedBtn->SetLabel((theApp->mFastSpeedPreference == GameSpeedMode::SPEED_1_5X) ? "1.5X" : "2.0X");
+	mFastSpeedButton = std::move(aFastSpeedBtn);
 
 	if (mFromGameSelector)
 	{
@@ -169,7 +235,7 @@ void NewOptionsDialog::Resize(int theX, int theY, int theWidth, int theHeight)
 	Dialog::Resize(theX, theY, theWidth, theHeight);
 	mMusicVolumeSlider->Resize(199, 116, 135, 40);
 	mSfxVolumeSlider->Resize(199, 143, 135, 40);
-	mFastSpeedButton->Resize(245, 172, 80, 32);
+	mFastSpeedButton->Resize(252, 175, 74, 39);
 	mFullscreenCheckbox->Resize(284, 206, 46, 45);
 	mAlmanacButton->Resize(107, 241, 209, 46);
 	mRestartButton->Resize(mAlmanacButton->mX, mAlmanacButton->mY + 43, 209, 46);
@@ -214,7 +280,7 @@ void NewOptionsDialog::Draw(Sexy::Graphics* g)
 		g->SetScale(aFontScale, aFontScale, 0.0f, 0.0f);
 	PvzpDrawString(g, mApp->GetString("OPTIONS_MUSIC_LABEL", "Music"), aSliderLabelsX, 140 + aMusicOffset, FONT_DWARVENTODCRAFT18, aTextColor, DrawStringJustification::DS_ALIGN_RIGHT);
 	PvzpDrawString(g, mApp->GetString("OPTIONS_SOUNDFX", "Sound FX"), aSliderLabelsX, 167 + aSfxOffset, FONT_DWARVENTODCRAFT18, aTextColor, DrawStringJustification::DS_ALIGN_RIGHT);
-	PvzpDrawString(g, "Turbo Mode", aCheckboxLabelsX - 35, 197 + a3DAccelOffset, FONT_DWARVENTODCRAFT18, aTextColor, DrawStringJustification::DS_ALIGN_RIGHT);
+	PvzpDrawString(g, "Turbo Mode", aCheckboxLabelsX - 28, 197 + a3DAccelOffset, FONT_DWARVENTODCRAFT18, aTextColor, DrawStringJustification::DS_ALIGN_RIGHT);
 	PvzpDrawString(g, mApp->GetString("OPTIONS_FULL_SCREEN", "Full Screen"), aCheckboxLabelsX, 229 + aFullScreenOffset, FONT_DWARVENTODCRAFT18, aTextColor, DrawStringJustification::DS_ALIGN_RIGHT);
 	if (aFontScale != 1.0f)
 		g->SetScale(1.0f, 1.0f, 0.0f, 0.0f);

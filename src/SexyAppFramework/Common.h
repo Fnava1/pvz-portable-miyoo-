@@ -151,6 +151,7 @@ void				RegisterLogFileSink(std::string_view thePath);
 void				InitLogRingBuffer();
 void				ClearLogRingBuffer();
 void				DumpLogRingBufferToCrashFile(const char* theFilePath = nullptr);
+void				DumpLogRingBufferToCrashFd(int theFd);
 
 template<typename... Args>
 void				LogInfoLn(std::format_string<Args...> theFmt, Args&&... theArgs)

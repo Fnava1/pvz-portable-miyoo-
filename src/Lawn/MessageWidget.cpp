@@ -296,7 +296,7 @@ void MessageWidget::DrawReanimatedText(Graphics* g, _Font* theFont, const Color&
 		Reanimation* aTextReanim = mApp->ReanimationTryToGet(mTextReanimID[aCharIdx]);
 		if (aTextReanim == nullptr)
 		{
-			break;
+			continue;
 		}
 
 		ReanimatorTransform aTransform;
@@ -305,7 +305,7 @@ void MessageWidget::DrawReanimatedText(Graphics* g, _Font* theFont, const Color&
 		int anAlpha = std::clamp(FloatRoundToInt(theColor.mAlpha * aTransform.mAlpha), 0, 255);
 		if (anAlpha <= 0)
 		{
-			break;
+			continue;
 		}
 		Color aFinalColor(theColor);
 		aFinalColor.mAlpha = anAlpha;

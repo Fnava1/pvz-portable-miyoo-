@@ -66,14 +66,17 @@ public:
 	ZombieType					mSelectedZombie;
 	int							mPrewarmPlantIndex;
 	int							mPrewarmZombieIndex;
+	int							mPrewarmTickCounter;
+	bool						mPriorBoardPaused;
 	std::unique_ptr<Plant>		mPlant;
 	std::unique_ptr<Zombie>		mZombie;
 	std::array<std::unique_ptr<Zombie>, 400>	mZombiePerfTest;
 
 public:
-	AlmanacDialog(LawnApp* theApp);
+	AlmanacDialog(LawnApp* theApp, AlmanacPage thePage = AlmanacPage::ALMANAC_PAGE_INDEX, SeedType theSeedType = SeedType::SEED_NONE, ZombieType theZombieType = ZombieType::ZOMBIE_INVALID);
 	~AlmanacDialog() override;
 
+	void						EnsurePageResources(AlmanacPage thePage);
 	void						ClearPlantsAndZombies();
 	void						RemovedFromManager(WidgetManager* theWidgetManager) override;
 	void						SetupPlant();

@@ -171,6 +171,7 @@ public:
 	void                    ScaryPotterPlacePot(ScaryPotType theScaryPotType, ZombieType theZombieType, SeedType theSeedType, int theCount, PvzpWeightedGridArray* theGridArray, int theGridArrayCount);
 	void                    ScaryPotterStart();
 	void                    ScaryPotterUpdate();
+	void                    ScaryPotterCheckLevelComplete();
 	void                    ScaryPotterOpenPot(GridItem* theScaryPot);
 	void                    ScaryPotterJackExplode(int thePosX, int thePosY);
 	int                    ScaryPotterIsCompleted();

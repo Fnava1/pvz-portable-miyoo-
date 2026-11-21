@@ -432,7 +432,9 @@ void CutScene::PreloadResources()
 		Zombie::PreloadZombieResources(ZombieType::ZOMBIE_BOSS);
 	}
 
-	if (!IsSurvivalRepick() && mApp->mGameMode != GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN && mApp->mGameMode != GameMode::GAMEMODE_TREE_OF_WISDOM)
+	if (!mApp->IsScaryPotterLevel() && !mApp->IsIZombieLevel() && !IsSurvivalRepick() && 
+		mApp->mGameMode != GAMEMODE_CHALLENGE_ZEN_GARDEN && 
+		mApp->mGameMode != GAMEMODE_TREE_OF_WISDOM)
 	{
 		for (SeedType aSeedType = SeedType::SEED_PEASHOOTER; aSeedType < SeedType::NUM_SEED_TYPES; aSeedType = static_cast<SeedType>(static_cast<int>(aSeedType) + 1))
 		{
@@ -1513,6 +1515,11 @@ bool CutScene::IsShowingCrazyDave()
 
 void CutScene::Update()
 {
+	if (mApp->GetDialog(Dialogs::DIALOG_STORE) != nullptr || mApp->GetDialog(Dialogs::DIALOG_ALMANAC) != nullptr)
+	{
+		return;
+	}
+
 	if (mPreUpdatingBoard)
 		return;
 

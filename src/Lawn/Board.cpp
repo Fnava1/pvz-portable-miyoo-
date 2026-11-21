@@ -24,6 +24,7 @@
 #include <SDL.h>
 #if defined(__linux__) && defined(__GLIBC__) && !defined(__ANDROID__)
 #include <malloc.h>
+#include <unistd.h>
 #endif
 #include <format>
 #include "ZenGarden.h"
@@ -45,6 +46,7 @@
 #include "Widget/SeedChooserScreen.h"
 #include "../PvzpLib/Attachment.h"
 #include "../PvzpLib/Reanimator.h"
+#include "../PvzpLib/SpriteCachePool.h"
 #include "widget/Dialog.h"
 #include "misc/MTRand.h"
 #include "../PvzpLib/PvzpParticle.h"
@@ -290,6 +292,7 @@ void BoardInitForPlayer()
 
 void Board::DisposeBoard()
 {
+	SpriteCachePool::FreeLevelArena();
 	SpriteStreamer::CancelAll();
 	PvZ::Graphics::DmaTexturePool::Instance().Reset();
 
@@ -399,12 +402,15 @@ bool Board::AreEnemyZombiesOnScreen()
 {
 	for (Zombie* aZombie : mZombies)
 	{
-		if (aZombie->mDead)
+		if (aZombie->mDead || aZombie->IsDeadOrDying() || aZombie->mMindControlled)
 			continue;
-		if (aZombie->mHasHead && !aZombie->IsDeadOrDying() && !aZombie->mMindControlled)
-		{
-			return true;
-		}
+		if (!aZombie->IsOnBoard())
+			continue;
+		if (aZombie->mPosX < -150.0f || aZombie->mPosX > 850.0f)
+			continue;
+		if (!aZombie->mHasHead && aZombie->mPosX <= 0.0f)
+			continue;
+		return true;
 	}
 	return false;
 }
@@ -1493,6 +1499,8 @@ void Board::InitSurvivalStage()
 		mApp->mReanimatorCache->ClearLevelTransientCaches();
 	SpriteStreamer::CancelAll();
 	PvZ::Graphics::DmaTexturePool::Instance().Reset();
+	SpriteCachePool::InitLevelArena();
+	SpriteCachePool::PreloadSynchronous(this);
 #if defined(__linux__) && defined(__GLIBC__) && !defined(__ANDROID__)
 	malloc_trim(0);
 #endif
@@ -1789,6 +1797,8 @@ void Board::InitLevel()
 		mFogOffset = 1065 - LeftFogColumn() * 80;
 	}
 	mChallenge->InitLevel();
+	SpriteCachePool::InitLevelArena();
+	SpriteCachePool::PreloadSynchronous(this);
 }
 
 Reanimation* Board::CreateRakeReanim(float theRakeX, float theRakeY, int theRenderOrder)
@@ -1927,6 +1937,8 @@ void Board::StartLevel()
 void Board::PreloadSpriteCache()
 {
 	mApp->PreloadCommonSounds();
+	SpriteCachePool::InitLevelArena();
+	SpriteCachePool::PreloadSynchronous(this);
 }
 
 LawnMower* Board::GetBottomLawnMower()
@@ -6565,6 +6577,31 @@ void Board::Update()
 	MarkDirty();
 
 	mBoardUpdateCounter++;
+
+#if defined(__linux__)
+	if ((mBoardUpdateCounter % 60) == 0)
+	{
+		FILE* statmFile = fopen("/proc/self/statm", "r");
+		if (statmFile)
+		{
+			unsigned long size = 0, resident = 0;
+			if (fscanf(statmFile, "%lu %lu", &size, &resident) == 2)
+			{
+				long pageSize = 4096;
+#if defined(_SC_PAGESIZE)
+				long sysPage = sysconf(_SC_PAGESIZE);
+				if (sysPage > 0) pageSize = sysPage;
+#endif
+				double rssMB = (resident * pageSize) / (1024.0 * 1024.0);
+				if (rssMB > 65.0)
+				{
+					PvzpLogLn("[Board::Update] WARNING: RSS {:.2f} MB exceeds 65.0 MB soft ceiling!", rssMB);
+				}
+			}
+			fclose(statmFile);
+		}
+	}
+#endif
 	mCutScene->Update();
 	UpdateMousePosition();
 	if (mApp->mGameMode == GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN)
@@ -7109,7 +7146,7 @@ bool Board::ShouldEngageComputeWorker(int theUncachedRigs)
 #if defined(PVZ_ENABLE_DUALCORE)
 	if (!mWorkerEngaged)
 	{
-		if (theUncachedRigs >= 12)
+		if (theUncachedRigs >= 10)
 		{
 			mWorkerEngaged = true;
 			mWorkerHysteresisCounter = 0;
@@ -7117,7 +7154,7 @@ bool Board::ShouldEngageComputeWorker(int theUncachedRigs)
 	}
 	else
 	{
-		if (theUncachedRigs <= 8)
+		if (theUncachedRigs <= 6)
 		{
 			if (++mWorkerHysteresisCounter >= 45)
 			{
@@ -7139,6 +7176,7 @@ bool Board::ShouldEngageComputeWorker(int theUncachedRigs)
 void Board::DrawGameObjects(Graphics* g)
 {
 #if defined(PVZ_ENABLE_DUALCORE)
+	ReanimRigEvaluator::BeginFrame();
 	Reanimation* activeRigs[MAX_ACTIVE_RIGS];
 	int rigCount = 0;
 
@@ -7186,12 +7224,9 @@ void Board::DrawGameObjects(Graphics* g)
 		ReanimRigEvaluator::EvaluateBatch(activeRigs, 0, half);
 		ComputeWorker::WaitForTask();
 	}
-	else
+	else if (rigCount > 0)
 	{
-		for (int i = 0; i < rigCount; ++i)
-		{
-			activeRigs[i]->mCacheIndex = -1;
-		}
+		ReanimRigEvaluator::EvaluateBatch(activeRigs, 0, rigCount);
 	}
 #endif
 

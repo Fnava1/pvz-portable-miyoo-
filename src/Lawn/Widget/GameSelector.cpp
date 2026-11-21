@@ -1470,6 +1470,7 @@ void GameSelector::ShowZombatarScreen()
 	if (!mZombatarWidget)
 	{
 		PvzpLoadResources("DelayLoad_Zombatar");
+		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_ZOMBATAR_HEAD, true);
 		mZombatarWidget = std::make_unique<ZombatarWidget>(this);
 		if (mWidgetManager)
 		{
