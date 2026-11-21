@@ -33,8 +33,6 @@ else
     cd "$GAMEDIR"
     if [ -f "./launch.sh" ]; then
         ./launch.sh
-    elif [ -f "./launcher.sh" ]; then
-        ./launcher.sh
     else
         ./PvZ
     fi

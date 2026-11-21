@@ -244,15 +244,13 @@ def stage_release(
                 '    cd "$GAMEDIR"\n'
                 '    if [ -f "./launch.sh" ]; then\n'
                 '        ./launch.sh\n'
-                '    elif [ -f "./launcher.sh" ]; then\n'
-                '        ./launcher.sh\n'
                 '    else\n'
                 '        ./PvZ\n'
                 '    fi\n'
                 'fi\n'
             )
 
-    # 3. Launch Scripts (launch.sh & launcher.sh alias)
+    # 3. Launch Script (launch.sh)
     launch_candidates = [
         os.path.join(REPO_ROOT, "packaging", "Roms", "PORTS", "Games", GAME_NAME, "launch.sh"),
         os.path.join(REPO_ROOT, "ports", "Games", GAME_NAME, "launch.sh"),
@@ -297,9 +295,6 @@ def stage_release(
                 'chmod +x ./PvZ 2>/dev/null\n'
                 './PvZ "$@"\n'
             )
-
-    launcher_alias_dst = os.path.join(staging_game, "launcher.sh")
-    shutil.copy2(launch_dst, launcher_alias_dst)
 
     # 4. ARM Binaries: PvZ & setup_miyoo
     b_dirs = [
@@ -371,21 +366,39 @@ def stage_release(
             "2. Insert SD card into Miyoo Mini Plus and launch Plants vs. Zombies from Ports.\r\n"
             "3. The autonomous setup tool will optimize assets on-screen, rename main.pak\r\n"
             "   to main.pak.bak, self-clean setup_miyoo to save storage, and start the game!\r\n\r\n"
-            "CONTROLS:\r\n"
-            "- D-Pad: 9x5 Grid Snapping (Lawn) / Menu Selection / Free Cursor (Zen Garden)\r\n"
-            "- Hover Cursor: Automatically collects flying suns and coins!\r\n"
-            "- L1 / R1: Cycle seed packets left / right\r\n"
-            "- A: Plant selected seed / Confirm\r\n"
-            "- B: Cancel seed selection / Back\r\n"
-            "- X: Shovel tool (dig plant at cursor)\r\n"
-            "- MENU: Pause / Options Menu\r\n"
+            "CONTROLS & SHORTCUTS (MIYOO MINI PLUS):\r\n"
+            "----------------------------------------\r\n"
+            "- D-Pad:\r\n"
+            "  * Lawn Battle: 9x5 Grid Snapping (precise tile-by-tile movement).\r\n"
+            "  * Menus / Zen Garden / Tree of Wisdom / Almanac: Free-floating analog cursor.\r\n"
+            "- Hover Auto-Collect:\r\n"
+            "  * Hover cursor over suns or coins to collect them instantly on the fly.\r\n"
+            "- Button A:\r\n"
+            "  * Plant selected seed / Confirm / Primary click in menus.\r\n"
+            "  * Collect victory award/trophy with top priority upon level completion.\r\n"
+            "- Button B:\r\n"
+            "  * Cancel seed selection / Drop plant / Secondary click (Right Click).\r\n"
+            "  * Unpause game or immediately dismiss/close active dialogs.\r\n"
+            "- Button X:\r\n"
+            "  * Shovel tool (dig up plant at current cursor tile).\r\n"
+            "  * Minigames (e.g. Slot Machine): Pull slot machine lever directly.\r\n"
+            "- Button Y:\r\n"
+            "  * Toggle automatic sun collection (Auto-Collect Suns ON/OFF).\r\n"
+            "  * Secondary click in menus.\r\n"
+            "- Triggers L1 / R1 (L / R):\r\n"
+            "  * Cycle selected seed packet left / right across the seed bank.\r\n"
+            "- Button SELECT:\r\n"
+            "  * Cycle game speed / Turbo mode (1x -> 2x) during active gameplay.\r\n"
+            "- Button START:\r\n"
+            "  * Start game / Pause.\r\n"
+            "- Button MENU:\r\n"
+            "  * Instant pause menu / Options / Dismiss dialogs.\r\n"
         )
 
     # 6. Normalize on-disk permissions (where supported by OS)
     executables = [
         shortcut_dst,
         launch_dst,
-        launcher_alias_dst,
         pvz_dst,
         setup_dst,
     ]
@@ -428,7 +441,6 @@ def create_release_zip(
         "PvZ",
         "setup_miyoo",
         "launch.sh",
-        "launcher.sh",
         f"{GAME_NAME}.port",
     }
 

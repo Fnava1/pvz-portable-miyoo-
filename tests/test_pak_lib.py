@@ -428,7 +428,7 @@ class TestPakLib(unittest.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(deployed_pvz_dir, "main_mmp.pak")))
         self.assertTrue(os.path.isfile(os.path.join(deployed_pvz_dir, ".installed")))
         self.assertTrue(os.path.isfile(os.path.join(deployed_pvz_dir, "launch.sh")))
-        self.assertTrue(os.path.isfile(os.path.join(deployed_pvz_dir, "launcher.sh")))
+        self.assertFalse(os.path.isfile(os.path.join(deployed_pvz_dir, "launcher.sh")))
 
         deployed_shortcut = os.path.join(out_dir, "Roms", "PORTS", "Shortcuts", "Strategy", "Plants vs. Zombies.port")
         self.assertTrue(os.path.isfile(deployed_shortcut))

@@ -203,7 +203,7 @@ def build_package(
         if os.path.isdir(pkg_ports):
             copy_tree_merge(pkg_ports, ports_root, log_fn=log)
 
-        # 2. Deploy launch scripts (launch.sh, launcher.sh)
+        # 2. Deploy launch script (launch.sh)
         launch_script_path = os.path.join(games_pvz, "launch.sh")
         if not os.path.isfile(launch_script_path):
             template_launch = os.path.join(pkg_ports, "Games", "Plants vs. Zombies", "launch.sh")
@@ -247,8 +247,8 @@ def build_package(
                         "./PvZ\n"
                     )
 
-        # Duplicate launch.sh as launcher.sh for alias compatibility
-        shutil.copy2(launch_script_path, os.path.join(games_pvz, "launcher.sh"))
+
+
 
         # 3. Deploy shortcut script (Plants vs. Zombies.port)
         shortcut_target = os.path.join(shortcuts_dir, "Plants vs. Zombies.port")
@@ -287,8 +287,8 @@ def build_package(
                         "    cd \"$GAMEDIR\"\n"
                         "    if [ -f \"./launch.sh\" ]; then\n"
                         "        ./launch.sh\n"
-                        "    elif [ -f \"./launcher.sh\" ]; then\n"
-                        "        ./launcher.sh\n"
+
+
                         "    else\n"
                         "        ./PvZ\n"
                         "    fi\n"
@@ -360,7 +360,7 @@ def build_package(
 
                     # POSIX permissions: 0755 for binaries/scripts, 0644 for assets
                     if (
-                        file in ("PvZ", "setup_miyoo", "launch.sh", "launcher.sh", "Plants vs. Zombies.port")
+                        file in ("PvZ", "setup_miyoo", "launch.sh", "Plants vs. Zombies.port")
                         or file.endswith(".sh")
                         or file.endswith(".so")
                         or ".so." in file

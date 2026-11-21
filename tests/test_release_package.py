@@ -107,7 +107,6 @@ class TestReleasePackage(unittest.TestCase):
             "PvZ",
             "setup_miyoo",
             "launch.sh",
-            "launcher.sh",
             "HOW_TO_INSTALL.txt",
         ]
         for f in expected_game_files:
@@ -157,7 +156,7 @@ class TestReleasePackage(unittest.TestCase):
             self.assertIn("Roms/PORTS/Games/Plants vs. Zombies/PvZ", namelist)
             self.assertIn("Roms/PORTS/Games/Plants vs. Zombies/setup_miyoo", namelist)
             self.assertIn("Roms/PORTS/Games/Plants vs. Zombies/launch.sh", namelist)
-            self.assertIn("Roms/PORTS/Games/Plants vs. Zombies/launcher.sh", namelist)
+            self.assertNotIn("Roms/PORTS/Games/Plants vs. Zombies/launcher.sh", namelist)
             self.assertIn("Roms/PORTS/Games/Plants vs. Zombies/HOW_TO_INSTALL.txt", namelist)
             self.assertIn("Roms/PORTS/Games/Plants vs. Zombies/properties/default.xml", namelist)
             self.assertIn("Roms/PORTS/Games/Plants vs. Zombies/properties/partner.xml", namelist)
@@ -184,7 +183,6 @@ class TestReleasePackage(unittest.TestCase):
             "Roms/PORTS/Games/Plants vs. Zombies/PvZ",
             "Roms/PORTS/Games/Plants vs. Zombies/setup_miyoo",
             "Roms/PORTS/Games/Plants vs. Zombies/launch.sh",
-            "Roms/PORTS/Games/Plants vs. Zombies/launcher.sh",
             "Roms/PORTS/Shortcuts/Strategy/Plants vs. Zombies.port",
         }
 
