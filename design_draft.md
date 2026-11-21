@@ -1,281 +1,273 @@
-# Estabilización de la Tienda de Crazy Dave en el Interludio de Supervivencia
+# Vasebreaker Save-Load Crash Elimination & Reanimation Hardening
 
-*   **Author:** Fnava1
+*   **Author:** Francisco
 *   **Status:** Draft
-*   **Date:** 2026-11-14
+*   **Date:** 2026-11-21
 
 --------------------------------------------------------------------------------
 
 ## Overview
 
-Este documento de diseño técnico formaliza la arquitectura requerida para estabilizar de forma completa y determinista la entrada y salida de la tienda de Crazy Dave (`StoreScreen`) desde la pantalla de selección de semillas (`SeedChooserScreen`) durante los interludios de cambio de ola en los modos de Supervivencia (`Survival: Endless` y `Survival: Pool Hard`) en la consola portátil Miyoo Mini Plus (SoC SigmaStar SSD202D, CPU Dual-Core ARM Cortex-A7 @ 1.2 GHz, 128 MB RAM física, límite del kernel OOM de 85 MB).
+During save restoration in Vasebreaker (Rompejarrones) on the Miyoo Mini Plus handheld (ARMv7-A dual-core Cortex-A7 @ 1.2 GHz, 128 MB RAM total, Linux OOM killer at ~83 MB RSS, combat RSS budget $\le 54.5$ MB), the game encounters fatal segmentation faults (`SIGSEGV`, Signal 11) at small address handles like `0x2f1` (decimal 753) and unmapped addresses like `0xdb842`.
 
-El objetivo principal es resolver las vulnerabilidades de memoria, colisiones de renderizado y reentrancia de actualización que provocan cierres forzados del juego (`SIGSEGV` y `SIGKILL`), manteniendo intacto el 100% del contenido audiovisual, diálogos, fonemas Foley y animaciones de Crazy Dave en la tienda.
+Investigation of physical crash logs revealed that the crash is caused by a chain of interactions between atlas index encoding, uncached animation evaluation during save restoration, and unvalidated fallback text rendering:
+1. `ReanimAtlas::ReanimAtlasCreate` encodes integer atlas indices into typed pointer fields (`ReanimatorTransform::mImage = (Image*)(aImageIndex + 1)`).
+2. During save hydration in `SaveGame.cpp:FixBoardAfterLoad`, setting an artificial warmup delay (`mWarmupCounter = 2`) on restored plants forces them to bypass the pre-baked sprite cache on frames 0 and 1, falling back to the raw skeletal bone evaluation routine (`Reanimation::DrawTrack`).
+3. In `Reanimation::DrawTrack`, when an image pointer is rejected or unassigned, execution unconditionally falls through to text rendering. In restored entities, transient text pointers (`aTransform.mText`) contain stale numeric handles (such as `0x2f1`), which are dereferenced by `*aTransform.mText != '\0'`, causing an immediate fatal null-page segmentation fault.
+4. Calling `ReanimAtlasCreate` or `ReanimationFreeDefinition` on already-encoded definitions treats integer handles as valid pointers, causing secondary crashes in `aImage->mWidth` and corrupting memory management inside `RemoveDynamicImage`.
 
-## The Problem
-
-En el flujo original del motor, acceder a la tienda desde el interludio de supervivencia desencadena múltiples fallos convergentes que derivan en cierres abruptos:
-
-1. **Lectura de memoria invalidada (Use-After-Free) al salir:** En `SeedChooserScreen::ButtonDepress`, la llamada modal `aStore->WaitForResult()` destruye y encola el widget en `mSafeDeleteList` debido a que el parámetro por defecto es `autoKill = true`. Inmediatamente en la línea siguiente, el código intenta leer `aStore->mGoToTreeNow`, desreferenciando memoria liberada y arrojando una violación de acceso (`SIGSEGV`).
-2. **Duplicación visual y conflicto de coordenadas de Crazy Dave:** Durante el interludio de supervivencia, la escena del juego es `SCENE_LEVEL_INTRO`. `Board::DrawUITop` evalúa esta escena y llama incondicionalmente a `mApp->DrawCrazyDave` para dibujarlo en el césped. Cuando se abre la tienda, `StoreScreen::Draw` dibuja a Dave dentro de la batea de la camioneta. Ambas rutinas compiten por la misma reanimación en el mismo cuadro con transformaciones de matriz incompatibles, visualizando un Dave fantasma flotando en el césped.
-3. **Falta de suspensión del tablero en segundo plano:** `mBoard->mPaused` permanece en `false` durante la selección de semillas. Mientras la tienda corre su bucle modal de interacción, el despachador de widgets sigue invocando `Board::Update()` y `CutScene::Update()`, avanzando cinemáticas, físicas de partículas y cálculos de lógica mientras el jugador interactúa con la tienda.
-4. **Desbordamiento de memoria RAM sobre el límite del sistema:** En rondas avanzadas de supervivencia, el tablero acumula decenas de plantas sembradas, bancos de audio y el `SpriteCachePool` (ocupando ~58.5 MB). Al entrar a la tienda, `DelayLoad_Store` añade más de 10 MB de texturas de fondo y coche. Paralelamente, `CutScene::PreloadResources` forzaba la precarga indiscriminada de 6 atlas de zombies calcinados (`REANIM_ZOMBIE_CHARRED_*`), sumando otros 11.4 MB. Este pico conjunto alcanzaba 89.4 MB, superando el techo estricto de 85 MB del kernel Linux y provocando la muerte del proceso por *Out Of Memory Killer*.
-
-## Goals
-
-*   **G1 (Cero Crashes):** Eliminar definitivamente los fallos de segmentación (`SIGSEGV`) y violaciones de acceso al abrir la tienda y regresar a la selección de semillas.
-*   **G2 (Preservación Absoluta de Crazy Dave):** Mantener al 100% todas las animaciones (`anim_enter`, `anim_idle`, `anim_blahblah`, `anim_talk_handing`), fonemas de voz Foley, movimientos de boca sincronizados, apertura y cierre del maletero y parpadeos aleatorios de Crazy Dave en la tienda.
-*   **G3 (Aislamiento de Renderizado):** Garantizar que Crazy Dave se dibuje única y exclusivamente dentro de la camioneta de la tienda, suprimiendo cualquier dibujado duplicado o residual en el césped del tablero.
-*   **G4 (Suspensión Completa del Tablero):** Pausar la ejecución lógica del tablero (`Board::Update`), cinemáticas (`CutScene::Update`) y emisión de partículas mientras el diálogo modal de la tienda esté visible.
-*   **G5 (Presupuesto de RAM < 80 MB):** Reducir el pico máximo de memoria de la tienda por debajo de 80 MB (garantizando más de 5 MB de margen libre de seguridad frente al límite de 85 MB) mediante precarga selectiva inteligente de reanimaciones calcinadas.
-*   **G6 (Actualización Dinámica de Ranuras):** Permitir que las ranuras de semillas compradas en la tienda se reflejen de inmediato en el banco superior al volver a la selección de semillas, sin parpadeos ni fugas.
-
-## Non-Goals
-
-*   **NG1:** No se modificará, simplificará ni eliminará ningún diálogo, animación, sonido ni funcionalidad interactiva de Crazy Dave en la tienda.
-*   **NG2:** No se vaciará el pool de caché de plantas activas (`SpriteCachePool`) en el interludio, evitando degradación de cuadros por segundo o micro-congelamientos al reanudar el juego.
-*   **NG3:** No se reestructurará la interfaz gráfica de la tienda ni el catálogo de precios o artículos disponibles.
-*   **NG4:** No se modificará el comportamiento de Crazy Dave en las cinemáticas guiadas del modo Aventura.
-
-## Open Questions
-
-*   *Ninguna.* Todos los aspectos de comportamiento y límites arquitectónicos han sido consensuados en la fase previa de ideación (precarga selectiva de calcinados, exclusividad visual en `StoreScreen` y corrección del ciclo de vida del diálogo).
-
-## Critical User Journeys (CUJs)
-
-### CUJ 1: Entrada y salida limpia de la tienda en el interludio de Supervivencia
-
-*   **Given**: Partida activa en Supervivencia (Endless o Pool Hard) que alcanza la bandera 2 y entra al interludio de selección de semillas (`SeedChooserScreen`).
-*   **When**: El jugador presiona el botón `Tienda` para revisar artículos y posteriormente pulsa el botón `[STORE_BACK_TO_GAME]`.
-*   **Then**: La tienda abre de inmediato mostrando a Dave en la camioneta; el tablero de fondo y la piscina quedan congelados; en el césped no aparece ningún clon de Dave; al salir, el juego retorna al selector de semillas de forma instantánea sin cierres ni errores de memoria.
-
-### CUJ 2: Adquisición de mejoras de ranura de semillas en caliente
-
-*   **Given**: Jugador en el interludio de supervivencia con monedas suficientes para adquirir la mejora de paquetes de semillas (`STORE_ITEM_PACKET_UPGRADE`).
-*   **When**: El jugador compra la ranura adicional dentro de la tienda y presiona `[STORE_BACK_TO_GAME]`.
-*   **Then**: La compra se procesa exitosamente; al volver al `SeedChooserScreen`, el banco de semillas superior se reconfigura para mostrar la nueva ranura y permite seleccionar una planta adicional de inmediato sin salir de la partida.
-
-### CUJ 3: Supervivencia densa con plantas explosivas bajo restricción de RAM
-
-*   **Given**: Partida de supervivencia con más de 60 plantas activas en el mapa y oleadas con zombies gigantes (Gargantuar).
-*   **When**: El jugador transiciona al interludio entre oleadas y accede a la tienda.
-*   **Then**: La memoria RAM del proceso no excede los 79.8 MB en ningún momento; el sistema operativo no emite `SIGKILL`; Crazy Dave funciona a 60 FPS estables.
+This design document specifies a zero-RAM architectural hardening plan to eliminate all save-load crashes in Vasebreaker and puzzle modes while maintaining strict 60 FPS performance and absolute memory safety.
 
 --------------------------------------------------------------------------------
 
-## Technical Plan (Architecture)
+## The Problem
 
-### 1. Diagrama de Arquitectura y Flujo de Control
+### 1. Pointer Dereference of Encoded Atlas Handles in Fallback Chain (`Reanimation::DrawTrack`)
+When an entity reanimation draws without an atlas image bound (or when atlas handles fail `IsValidImagePtr`), execution drops into lines 963 and 1099 of `src/PvzpLib/Reanimator.cpp`:
+```cpp
+else if (aTransform.mFont != nullptr && aTransform.mText != nullptr && *aTransform.mText != '\0')
+```
+If `aTransform.mText` holds an integer atlas index (e.g. `0x2f1` / 753) or an uninitialized pointer from save deserialization, the machine instruction `ldrb r3, [r3]` dereferences the unmapped address, causing an immediate SIGSEGV. Furthermore, line 966 and line 1192 invoke `mFont->StringWidth(...)` and access `mFont->mAscent`, dereferencing `mFont`'s vtable without range or alignment validation.
+
+### 2. Impure State Mutation & Uncached Bypass Window (`mWarmupCounter = 2`)
+In `SaveGame.cpp:FixBoardAfterLoad`, setting `aPlant->mWarmupCounter = 2` forces `Plant::CanUseSpriteCache()` to return `false` on frames 0 and 1. This exposes the unbuffered fallback `Reanimation::DrawTrack` on frame 0, precisely when restored entities are most vulnerable. 
+Additionally, `Plant::CanUseSpriteCache()` decrements `mWarmupCounter` directly inside a `const` query method called multiple times per tick (in both `Plant::Animate()` and `Plant::Draw()`), violating query idempotency and causing premature or inconsistent state progression.
+
+### 3. Destructive In-Place Re-Encoding in `ReanimAtlasCreate` and Leaks in `ReanimationFreeDefinition`
+In `ReanimAtlas.cpp:ReanimAtlasCreate`, image pointers in `ReanimatorDefinition` tracks are destructively rewritten to `(Image*)(aImageIndex + 1)` in-place. If an atlas is created a second time on an already-encoded definition (e.g. during save reload or level transition), line 223 dereferences `aImage->mWidth` on integer handles like `753`, segfaulting immediately. 
+Conversely, in `ReanimationFreeDefinition`, skipping handles `<= 1000` prevents corrupting `RemoveDynamicImage`, but if done naively, leaks source textures stored in `mImageArray`.
+
+--------------------------------------------------------------------------------
+
+## Goals
+
+*   **G-1 (Save-Load Crash Elimination):** Completely eliminate all `SIGSEGV` and `SIGBUS` crashes during save game loading and Vasebreaker level startup on the Miyoo Mini Plus handheld.
+*   **G-2 (Reanimation Pipeline Boundary Hardening):** Guarantee that no encoded atlas handle (`<= 1024`) or invalid address (`< 0x10000`) is ever dereferenced as a string, font, or image pointer across `DrawTrack`, `GetTrackMatrix`, and blit functions.
+*   **G-3 (Idempotent Asset Lifecycle):** Ensure `ReanimAtlasCreate` and `ReanimationFreeDefinition` autonomously recognize encoded states (`mIsAtlasEncoded`), preventing double-encoding corruption and resource manager image leaks.
+*   **G-4 (Immediate Frame-0 Sprite Cache Dispatch):** Prime pre-baked restored plants (`SpriteCachePool::IsPlantReady`) with `mWarmupCounter = 0` so frame 0 renders directly from sprite sheets with 0 ms animation stutter.
+*   **G-5 (Strict Zero-RAM Overhead):** Maintain 0 bytes of dynamic heap allocation, respecting the hardware limit ($\le 54.5$ MB combat RSS, $\ge 28.5$ MB safety headroom).
+
+--------------------------------------------------------------------------------
+
+## Non-Goals
+
+*   **NG-1 (Save File Schema Alteration):** Modifying save file binary schemas or TLV chunk layouts. All sanitization is executed in RAM.
+*   **NG-2 (Heap-Allocated Handle Tables):** Creating dynamic hash tables or map allocations for atlas handles. Zero-RAM in-place encoding remains.
+*   **NG-3 (Modifying Low-Level Software Rasterizers):** Structural alterations to `PvzpBltMatrix` or `GLImage::BltMatrix`; safety invariants are enforced at the transform evaluation boundary.
+
+
+--------------------------------------------------------------------------------
+
+## Technical Plan
+
+### 1. Architectural Overview & Component Data Flow
+
+The solution establishes strict data invariants across three functional boundaries: **Save Deserialization**, **Asset Management**, and **Render Evaluation**. No unmapped pointer or numeric atlas handle can escape beyond its owning subsystem.
 
 ```mermaid
 flowchart TD
-    subgraph SurvivalIntermission ["Interludio de Supervivencia (SCENE_LEVEL_INTRO)"]
-        SeedChooser["SeedChooserScreen (Activo)"]
-        BoardUnder["Board (Fondo)"]
-        CutSceneState["CutScene::Update (Cinemática)"]
+    subgraph SaveLoadBoundary ["1. Save Deserialization Boundary (SaveGame.cpp)"]
+        A["LawnLoadGame / TLV Sync"] --> B["SyncReanimationPortable: null out transient mText & mFont"]
+        B --> C["FixBoardAfterLoad: Check SpriteCachePool::IsPlantReady"]
+        C -->|Ready| D["Prime mWarmupCounter = 0 (Immediate Sprite Cache)"]
+        C -->|Not Ready| E["Keep mWarmupCounter for background baking"]
+        C --> F["Reset GridItem::sSharedSunReanim"]
     end
 
-    subgraph ModalStoreFlow ["Apertura Modal de StoreScreen"]
-        StoreBtn["Clic en Botón Tienda"] --> ShowStore["mApp->ShowStoreScreen()"]
-        ShowStore --> CreateStore["new StoreScreen(this)"]
-        CreateStore --> StorePreload["StorePreload(): Dave Enter + 100% Animaciones"]
-        CreateStore --> WaitModal["aStore->WaitForResult(false) (Sin Auto-Kill)"]
+    subgraph AssetLifecycle ["2. ReanimAtlas Lifecycle (ReanimAtlas.cpp & Reanimator.cpp)"]
+        G["ReanimAtlasCreate"] --> H{"theReanimDef->mIsAtlasEncoded?"}
+        H -->|Yes| I["Abort Re-encoding (Idempotent Guard)"]
+        H -->|No| J["Encode handles (1..1024) & set mIsAtlasEncoded = true"]
+        K["ReanimationFreeDefinition"] --> L["Filter aTransform.mImage: skip handles <= 1024"]
+        L --> M["Only valid heap textures sent to RemoveDynamicImage"]
     end
 
-    subgraph BackgroundProtection ["Protección de Estado en Board"]
-        WaitModal -.->|"Detecta DIALOG_STORE"| PauseBoard["mBoard->mPaused = true"]
-        PauseBoard --> HaltCutScene["Omitir CutScene::Update()"]
-        WaitModal -.->|"Detecta DIALOG_STORE"| SuppressLawnDave["Board::DrawUITop: Suprimir Dave en Césped"]
+    subgraph RenderGatekeeper ["3. Reanimation Render Evaluation (Reanimator.cpp)"]
+        N["Reanimation::Draw / DrawTrack"] --> O{"IsValidImagePtr(aImage)?"}
+        O -->|Valid Image| P["Draw via Atlas or ReanimBltMatrix"]
+        O -->|Invalid / Null| Q{"Valid Font & Text? (ptr >= 0x10000)"}
+        Q -->|Valid & Non-Empty| R["Draw Text String safely"]
+        Q -->|Invalid / Sentinel| S["Skip Text Draw safely (No-Op)"]
     end
 
-    subgraph RenderIsolation ["Aislamiento de Renderizado"]
-        StoreRender["StoreScreen::Draw(): Dave en Batea Camioneta"]
-    end
-
-    subgraph SafeExitFlow ["Salida Segura de Tienda"]
-        BackBtn["Clic en [STORE_BACK_TO_GAME]"] --> ReadFlags["Leer flag local: bool aGoToTree = aStore->mGoToTreeNow"]
-        ReadFlags --> KillStore["mApp->KillStoreScreen() (Destrucción Ordenada)"]
-        KillStore --> RestoreAudio["Restaurar CHOOSE_YOUR_SEEDS"]
-        KillStore --> UnpauseBoard["mBoard->mPaused = false"]
-        KillStore --> UpdateSlots["mSeedBank->UpdateWidth() (Reflejar slots comprados)"]
-    end
-
-    SeedChooser --> StoreBtn
-    WaitModal --> RenderIsolation
-    RenderIsolation --> BackBtn
-    UpdateSlots --> SeedChooser
+    SaveLoadBoundary --> RenderGatekeeper
+    AssetLifecycle --> RenderGatekeeper
 ```
 
-### 2. Modificaciones Arquitectónicas por Componente
+### 2. Module 1: Unified Sentinel Constants & Pointer Invariants
 
-#### A. Ciclo de Vida Modal Seguro y Erradicación de Use-After-Free (`SeedChooserScreen.cpp`)
-*   **Problema de diseño original:** `Dialog::WaitForResult` tomaba por omisión `autoKill = true`. Tras pulsar el botón de salida, el gestor destruía el diálogo en `KillDialog`, dejando la variable `aStore` como un puntero colgante en el heap.
-*   **Solución arquitectónica:** 
-    1. Invocar explícitamente `aStore->WaitForResult(false)`. Esto previene que el bucle de eventos ejecute `KillDialog` antes del retorno de la función.
-    2. Al salir del bucle `WaitForResult`, copiar las propiedades necesarias a variables locales en la pila de ejecución:
-       ```cpp
-       bool aGoToTree = aStore->mGoToTreeNow;
-       ```
-    3. Invocar la destrucción ordenada a través de la API oficial `mApp->KillStoreScreen()`.
-    4. Sincronizar el banco de semillas si el jugador adquirió ranuras adicionales durante la visita a la tienda, asegurando que `mSeedBank->UpdateWidth()` reacomode los paquetes disponibles.
+To eliminate disjoint magic numbers (`1000`, `10000`, `0x10000`), centralized compile-time sentinels are defined in `src/PvzpLib/Reanimator.h`:
 
-#### B. Aislamiento Visual y Propiedad Exclusiva de Crazy Dave (`Board.cpp`)
-*   **Problema de diseño original:** `Board::DrawUITop` evaluaba ciegamente `mGameScene == SCENE_LEVEL_INTRO` sin comprobar si la cutscene estaba solicitando activamente a Dave ni si existía una pantalla modal superpuesta. Al inicializarse `mCrazyDaveReanimID` en la tienda, el tablero dibujaba a Dave en el césped a la vez que la tienda lo dibujaba en la camioneta.
-*   **Solución arquitectónica:**
-    1. Añadir una guarda compuesta en `Board::DrawUITop`:
-       ```cpp
-       bool aStoreActive = (mApp->GetDialog(Dialogs::DIALOG_STORE) != nullptr);
-       if (!aStoreActive &&
-           ((mApp->mGameScene == GameScenes::SCENE_LEVEL_INTRO && mCutScene->IsShowingCrazyDave()) ||
-            mApp->mGameMode == GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN ||
-            mApp->mGameMode == GameMode::GAMEMODE_TREE_OF_WISDOM ||
-            IsScaryPotterDaveTalking()))
-       {
-           Graphics aScreenSpace(*g);
-           aScreenSpace.mTransX -= mX;
-           aScreenSpace.mTransY -= mY;
-           mApp->DrawCrazyDave(&aScreenSpace);
-       }
-       ```
-    2. Esta guarda desacopla el ciclo visual del tablero y delega el control exclusivo de la reanimación de Dave a `StoreScreen::Draw`, eliminando la duplicación en pantalla.
+```cpp
+constexpr uintptr_t REANIM_ATLAS_HANDLE_MAX = 1024;
+constexpr uintptr_t SYSTEM_POINTER_MIN       = 0x10000;
 
-#### C. Congelamiento del Tablero durante la Modalidad (`Board.cpp`)
-*   **Problema de diseño original:** `WidgetManager::UpdateAll` actualizaba todos los widgets hijos en cada pulso de reloj. Como `mPaused` era falso durante el selector de semillas, `Board::Update()` continuaba ejecutando el motor de cinemáticas y físicas.
-*   **Solución arquitectónica:**
-    1. En `Board::Update()`, anteponer una comprobación temprana:
-       ```cpp
-       if (mApp->GetDialog(Dialogs::DIALOG_STORE) != nullptr)
-       {
-           mPaused = true;
-           return;
-       }
-       ```
-    2. Al cerrarse la tienda en `SeedChooserScreen`, reanudar `mBoard->mPaused = false`. Esto congela en seco las animaciones de la piscina, agua, partículas y cinemáticas mientras el jugador navega por el catálogo de Dave.
+inline bool IsAtlasEncodedHandle(const void* thePtr)
+{
+    const uintptr_t aVal = reinterpret_cast<uintptr_t>(thePtr);
+    return aVal > 0 && aVal <= REANIM_ATLAS_HANDLE_MAX;
+}
 
-#### D. Presupuesto de Memoria RAM mediante Precarga Selectiva (`CutScene.cpp`)
-*   **Problema de diseño original:** `CutScene::PreloadResources()` forzaba la precarga indiscriminada de 6 reanimaciones de zombies calcinados (`REANIM_ZOMBIE_CHARRED`, `_IMP`, `_DIGGER`, `_ZAMBONI`, `_CATAPULT`, `_GARGANTUAR`), consumiendo 11.4 MB de texturas atlas independientemente de si la oleada contenía dichos zombies o si el usuario portaba plantas de fuego.
-*   **Solución arquitectónica:**
-    1. Inspeccionar el banco de semillas del jugador (`mBoard->mSeedBank->mSeedPackets`).
-    2. Precargar `REANIM_ZOMBIE_CHARRED` únicamente si el banco contiene al menos una planta de fuego o explosiva (`SEED_CHERRYBOMB`, `SEED_JALAPENO`, `SEED_DOOMSHROOM` o `SEED_COBCANNON`).
-    3. Precargar las variantes masivas (`CHARRED_GARGANTUAR`, `CHARRED_ZAMBONI`, `CHARRED_CATAPULT`, `CHARRED_DIGGER`) únicamente si se cumple la condición de planta explosiva Y además el zombie está explícitamente habilitado en la oleada actual (`mBoard->mZombieAllowed[...]`).
-    4. Esta poda quirúrgica reduce el gasto de memoria transitoria en ~9.6 MB sin incurrir en caídas de cuadros por segundo durante el combate.
+inline bool IsValidMemoryPointer(const void* thePtr)
+{
+    const uintptr_t aVal = reinterpret_cast<uintptr_t>(thePtr);
+    return aVal >= SYSTEM_POINTER_MIN;
+}
+```
 
-### 3. Presupuesto Comparativo de Memoria RAM (< 85 MB)
+In `src/PvzpLib/Definition.h`, `ReanimatorDefinition` is extended with:
+```cpp
+bool mIsAtlasEncoded = false;
+```
+This flag explicitly tracks whether `mTransforms` contains raw `Image*` pointers or encoded numeric tokens.
 
-| Componente de Memoria | Consumo Pre-Fix | Consumo Post-Fix | Impacto y Justificación |
-| :--- | :--- | :--- | :--- |
-| **Tablero de Supervivencia (Césped, 60+ Plantas, Podadoras)** | 42.5 MB | 42.5 MB | Intacto (Estado activo esencial) |
-| **SpriteCachePool (Texturas precheadas de plantas)** | 16.0 MB | 16.0 MB | Intacto (Garantiza 60 FPS estables) |
-| **Texturas de la Tienda (`DelayLoad_Store` Día/Noche/Auto)** | 10.2 MB | 10.2 MB | Intacto (Activo solo en Store) |
-| **Crazy Dave (Atlas de Reanimación, Sonidos Foley y Texturas)** | 3.8 MB | 3.8 MB | Intacto (Preservación 100%) |
-| **Precarga Indiscriminada de Calcinados** | **11.4 MB** | **0.0 – 1.8 MB** | **Ahorro de ~9.6 MB mediante precarga selectiva** |
-| **Búfer de Video Framebuffer & Sobrecarga SO Linux** | 5.5 MB | 5.5 MB | Requerimiento base de hardware |
-| **PICO MÁXIMO DE MEMORIA RAM EN TIENDA** | **89.4 MB (OOM Crash ⚠️)** | **78.0 – 79.8 MB (Estable ✅)** | **Margen de seguridad: > 5.2 MB libres bajo techo 85 MB** |
+### 3. Module 2: Fallback Chain Hardening in `Reanimation::DrawTrack` and `GetTrackMatrix`
+
+In `src/PvzpLib/Reanimator.cpp`:
+1. In `Reanimation::DrawTrack` (lines 963 and 1099), gate text rendering:
+```cpp
+else if (IsValidMemoryPointer(aTransform.mFont) &&
+         IsValidMemoryPointer(aTransform.mText) &&
+         *aTransform.mText != '\0')
+```
+2. In `Reanimation::GetTrackMatrix` (line 1191), guard font access:
+```cpp
+if (IsValidMemoryPointer(aTransform.mFont))
+{
+    // safe to access aTransform.mFont->mAscent
+}
+```
+3. At the entry point of `PvzpBltMatrix` (line 1010), verify `IsValidImagePtr(aImage)` before invoking the low-level blitter. If invalid, drop to a safe no-op.
+
+### 4. Module 3: Idempotent Atlas Creation & Leak-Free Definition Teardown
+
+In `src/PvzpLib/ReanimAtlas.cpp` (`ReanimAtlas::ReanimAtlasCreate`):
+* Inspect `theReanimDef->mIsAtlasEncoded` and `theReanimDef->mReanimAtlas != nullptr`. If true, log an operational warning via `PvzpLogLn` and return immediately without modifying track transforms.
+* Once atlas baking finishes and tokens are assigned, set `theReanimDef->mIsAtlasEncoded = true`.
+
+In `src/PvzpLib/Reanimator.cpp` (`ReanimationFreeDefinition`):
+* When collecting unique textures to remove via `aResMgr->RemoveDynamicImage(anImage)`, skip any pointer where `IsAtlasEncodedHandle(anImage)`.
+* This preserves resource manager bookkeeping integrity and prevents segfaults when freeing atlas-backed definitions during level transitions.
+
+### 5. Module 4: Frame-0 Sprite Cache Prime & Query Purity in `Plant`
+
+In `src/Lawn/Plant.cpp`:
+1. **Idempotent Query:** In `Plant::CanUseSpriteCache() const`, remove the `const_cast<Plant*>(this)->mWarmupCounter--` statement. `CanUseSpriteCache()` becomes a strictly pure query that returns `false` if `mWarmupCounter > 0` without side effects.
+2. **Simulation Progression:** In `Plant::Update()`, advance the warmup state deterministically:
+```cpp
+if (mWarmupCounter > 0)
+{
+    mWarmupCounter--;
+}
+```
+
+In `src/Lawn/System/SaveGame.cpp` (`FixBoardAfterLoad`):
+* After synchronous cache preloading (`SpriteCachePool::PreloadSynchronous(theBoard)`), inspect each active restored plant:
+```cpp
+if (SpriteCachePool::IsPlantReady(aPlant->mSeedType))
+{
+    aPlant->mWarmupCounter = 0; // Immediate frame-0 sprite cache dispatch
+}
+```
+Restored plants bypass the fragile fallback chain entirely on frame 0, rendering directly from pre-baked sprite sheets.
+
+### 6. Module 5: Deserialization Boundary Sanitization & Puzzle Mode Lifecycles
+
+In `src/Lawn/System/SaveGame.cpp`:
+1. In `SyncReanimationPortable`:
+   * For every restored track instance and blend transform, unconditionally initialize:
+   ```cpp
+   aTransform.mText = nullptr;
+   aTransform.mFont = nullptr;
+   ```
+   Because text and font pointers are runtime transient pointers created dynamically by attachers, they have zero meaning upon disk deserialization. Nullifying them guarantees that no stale numeric handle can masquerade as a string pointer.
+2. In `Board::DisposeBoard()` and `FixBoardAfterLoad()`:
+   * Sanitize `GridItem::sSharedSunReanim` (used for transparent vases in Vasebreaker):
+   ```cpp
+   if (GridItem::sSharedSunReanim)
+   {
+       delete GridItem::sSharedSunReanim;
+       GridItem::sSharedSunReanim = nullptr;
+   }
+   ```
+   This prevents dangling pointers across level restarts.
+
 
 --------------------------------------------------------------------------------
 
 ## Alternatives Considered
 
-### Alternativa A: Eliminar la reanimación de Crazy Dave en la tienda
-*   **Pros**: Recupera aproximadamente 3.8 MB de memoria RAM y evita cualquier conflicto de renderizado entre capas.
-*   **Cons**: Destruye la inmersión, despoja a la tienda de su elemento narrativo central y degrada sustancialmente la calidad visual del port retro.
-*   **Reason for Rejection**: `Rejected by author: Crazy Dave es parte integral e irremplazable de Plants vs. Zombies. La arquitectura debe acomodar sus recursos sin comprometer la estabilidad.`
+### 1. Scatter Handle Checks Across Low-Level Rasterizers (`PvzpBltMatrix`, `GLImage::BltMatrix`, `ReanimBltMatrix`)
+*   **Mechanism:** Add checks (`reinterpret_cast<uintptr_t>(theImage) > 0x10000 && reinterpret_cast<uintptr_t>(theImage) % 4 == 0`) inside every leaf blit function.
+*   **Trade-offs:** Adds defensive branches to tight inner loops executed thousands of times per second. Does not protect `*aTransform.mText` or `mFont->mAscent` which crash before reaching blit functions.
+*   **Verdict:** *Rejected by author:* Littering low-level rasterization primitives with domain-specific handle bounds degrades instruction cache performance on the ARMv7 Cortex-A7 (1.2 GHz) and masks upstream state corruption. Safety invariants belong at the transform interpolation and dispatch stage (`DrawTrack`), leaving blitters lean and fast.
 
-### Alternativa B: Vaciar todo el pool de sprites de plantas (`SpriteCachePool::ClearAllSlots`) al entrar a la tienda
-*   **Pros**: Libera de forma transitoria ~1.8 MB de memoria física mientras la tienda está abierta.
-*   **Cons**: Al cerrar la tienda y retornar al césped, el juego sufre una congelación severa mientras la CPU decodifica y reconstruye en tiempo real los sprites de las más de 60 plantas sembradas en el tablero.
-*   **Reason for Rejection**: `Rejected by author: El ahorro de memoria es insignificante (1.8 MB frente al margen seguro de 5.2 MB obtenido por calcinados) y penaliza severamente la fluidez de 60 FPS al regresar al juego.`
+### 2. Dynamically Allocate External Atlas Index Lookup Tables
+*   **Mechanism:** Replace the in-place pointer overloading `(Image*)(aImageIndex + 1)` with a heap-allocated `std::unordered_map<Image*, int>` or dynamic handle vector per definition.
+*   **Trade-offs:** Preserves pointer type purity and avoids numeric token storage in pointer members, but introduces dynamic memory allocations and pointer indirections during level loading and asset lookups.
+*   **Verdict:** *Rejected by author:* Allocating auxiliary lookup tables across ~120 reanimation definitions introduces heap fragmentation and increases combat RSS, threatening the strict $\le 54.5$ MB memory ceiling on the Miyoo Mini Plus and risking kernel OOM termination (~83 MB limit). Lightweight integer handle sentinels achieve zero-RAM safety without memory growth.
 
-### Alternativa C: Destruir y reconstruir el tablero (`Board`) completo al entrar a la tienda
-*   **Pros**: Libera más de 42 MB de memoria del proceso mientras se visita la tienda.
-*   **Cons**: En el modo Supervivencia, destruir el objeto `Board` borra la configuración de la oleada, elimina las plantas sembradas, resetea las podadoras y genera tiempos de carga y fragmentación inaceptables.
-*   **Reason for Rejection**: `Rejected by author: Rompe la persistencia del estado de juego y es incompatible con el diseño original de PvZ.`
+### 3. Reconstruct Atlases Per Restored Entity in `FixBoardAfterLoad`
+*   **Mechanism:** When deserializing a save file, iterate over all restored plants, zombies, and board reanimations and invoke `ReanimationCreateAtlas` for each entity's definition.
+*   **Trade-offs:** Attempts to repair missing or broken atlas bindings on a per-entity basis. However, definitions are globally shared across all instances of an archetype.
+*   **Verdict:** *Rejected by author:* Blindly calling `ReanimationCreateAtlas` per restored entity in `FixBoardAfterLoad` repeatedly triggers the double-encoding defect on already-encoded definitions, causing immediate crashes in `aImage->mWidth` and introducing unnecessary CPU overhead during level initialization. Definition integrity must be managed declaratively at the definition level.
 
-### Alternativa D: Precarga perezosa bajo demanda (Lazy Loading) de zombies calcinados durante el combate
-*   **Pros**: Cero consumo de memoria al inicio del nivel y durante la tienda.
-*   **Cons**: Cuando una Petacereza o Mazorcañon detona en una horda masiva de 60 zombies, cargar un atlas de 2 MB en caliente bloquea el hilo principal durante 150-250 ms, produciendo un micro-congelamiento en el momento culminante de la explosión.
-*   **Reason for Rejection**: `Rejected by author: Provoca tirones severos en la CPU Cortex-A7; la precarga selectiva condicionada al banco de semillas y a la lista de zombies permitidos ofrece carga imperceptible sin comprometer la RAM.`
-
---------------------------------------------------------------------------------
-
-## Non-Functional Requirements
-
-### 1. Rendimiento y Estabilidad de Memoria
-*   **Techo de Memoria OOM:** El proceso bajo ninguna circunstancia debe superar los 80.5 MB de memoria residente (RSS) en la Miyoo Mini Plus, asegurando un margen de seguridad libre permanente de al menos 4.5 MB sobre el límite del kernel (85 MB).
-*   **Tasa de Cuadros (Framerate):** La transición entre `SeedChooserScreen` y `StoreScreen` debe completarse en menos de 100 ms y mantener 60 FPS estables sin caídas de cuadros.
-
-### 2. Integridad de Audio
-*   **Transición de Pistas:** Al entrar a la tienda, la pista de selección de semillas se detiene y se activa `MUSIC_TUNE_TITLE_CRAZY_DAVE_MAIN_THEME`. Al retornar a la selección, la música de la tienda se silencia limpiamente y se reanuda `MUSIC_TUNE_CHOOSE_YOUR_SEEDS` sin canales huérfanos ni distorsión.
-
-### 3. Seguridad de Tipos y Ciclo de Vida
-*   **Gestión de Punteros:** No desreferenciar ningún puntero a widget de diálogo después de invocar funciones de salida modal o `KillDialog`.
 
 --------------------------------------------------------------------------------
 
 ## Detailed Implementation Plan
 
-### Target Files to Create/Modify
+The implementation is executed as a unified, coordinated sequence touching the reanimation engine, asset definitions, save-game loader, plant entity lifecycle, and puzzle mode auxiliary caches.
 
-#### 1. `src/Lawn/Widget/SeedChooserScreen.cpp` (Modify)
-*   **Type / Scope**: Interfaz de usuario en C++ / Control de ciclo de vida de diálogos modales.
-*   **Proposed Changes**:
-    *   En el despachador de eventos `ButtonDepress` para el identificador `SeedChooserScreen_Store`:
-        *   Reemplazar la invocación `aStore->WaitForResult()` por `aStore->WaitForResult(false)`, deshabilitando la eliminación automática interna del diálogo.
-        *   Copiar la variable de destino `aStore->mGoToTreeNow` a una variable booleana local en la pila antes del cierre del widget.
-        *   Invocar la destrucción segura y explícita del diálogo con `mApp->KillStoreScreen()`.
-        *   Evaluar el booleano local para conmutar al Árbol de la Sabiduría (`GAMEMODE_TREE_OF_WISDOM`) o asegurar la reproducción de `MUSIC_TUNE_CHOOSE_YOUR_SEEDS`.
-        *   Invocar `mSeedBank->UpdateWidth()` para sincronizar y redimensionar el banco visual superior en caso de haberse adquirido la mejora de paquetes de semillas en la tienda.
+### Touched Files and File-by-File Rationale
 
-#### 2. `src/Lawn/Board.cpp` (Modify)
-*   **Type / Scope**: Motor de juego en C++ / Renderizado de interfaz y bucle de simulación.
-*   **Proposed Changes**:
-    *   En `Board::DrawUITop` (líneas 8373-8382):
-        *   Condicionar la rutina de dibujado de Crazy Dave para que compruebe que no exista un diálogo `DIALOG_STORE` activo (`mApp->GetDialog(Dialogs::DIALOG_STORE) == nullptr`).
-        *   Validar que la cinemática de introducción demande explícitamente a Crazy Dave (`mCutScene->IsShowingCrazyDave()`) antes de transferir coordenadas al motor de renderizado.
-    *   En `Board::Update()` (líneas 6405-6435):
-        *   Insertar una guarda temprana que verifique si `mApp->GetDialog(Dialogs::DIALOG_STORE)` está instanciado.
-        *   Si la tienda está abierta, forzar `mPaused = true` y ejecutar un retorno anticipado, impidiendo el avance de `CutScene::Update()`, temporizadores y físicas de partículas del tablero de fondo.
+1. [src/PvzpLib/Reanimator.h](file:///c:/DEV/PVZ/src/PvzpLib/Reanimator.h)
+   * **Changes:** Add centralized compile-time boundary sentinels `REANIM_ATLAS_HANDLE_MAX = 1024` and `SYSTEM_POINTER_MIN = 0x10000`. Provide inline predicate helpers `IsAtlasEncodedHandle(const void*)` and `IsValidMemoryPointer(const void*)`.
+   * **Rationale:** Eliminates disjoint magic numbers across files and provides a single, audited memory safety contract for pointer dereferences.
 
-#### 3. `src/Lawn/CutScene.cpp` (Modify)
-*   **Type / Scope**: Cinemáticas de nivel en C++ / Gestión de precarga de atlas de animación.
-*   **Proposed Changes**:
-    *   En `CutScene::PreloadResources()` (líneas 380-390):
-        *   Eliminar la precarga obligatoria e incondicional de los 6 atlas esqueléticos de zombies calcinados.
-        *   Implementar un bucle de escaneo sobre los paquetes del banco de semillas (`mBoard->mSeedBank->mSeedPackets`) para determinar si el usuario ha equipado al menos una planta ígnea o explosiva (`SEED_CHERRYBOMB`, `SEED_JALAPENO`, `SEED_DOOMSHROOM` o `SEED_COBCANNON`).
-        *   Cargar la reanimación básica `REANIM_ZOMBIE_CHARRED` únicamente si se detecta la presencia de plantas explosivas.
-        *   Condicionar la precarga de las variantes pesadas (`CHARRED_GARGANTUAR`, `CHARRED_ZAMBONI`, `CHARRED_CATAPULT`, `CHARRED_DIGGER`) a que el banco contenga plantas explosivas Y dicho tipo de zombie esté presente en el arreglo de zombies autorizados para el nivel (`mBoard->mZombieAllowed[...]`).
+2. [src/PvzpLib/Definition.h](file:///c:/DEV/PVZ/src/PvzpLib/Definition.h)
+   * **Changes:** Add `bool mIsAtlasEncoded = false;` member to `ReanimatorDefinition`.
+   * **Rationale:** Allows the reanimation system to distinguish between raw `Image*` texture references and in-place encoded atlas token integers without scanning track arrays or guessing memory addresses.
 
-#### 4. `packaging/Roms/PORTS/Games/Plants vs. Zombies/PvZ` (Build / Update)
-*   **Type / Scope**: Binario ejecutable compilado para la arquitectura ARMv7-A Linux (Miyoo Mini Plus).
-*   **Proposed Changes**:
-    *   Recompilar el binario optimizado con símbolos descartados (`strip`) utilizando el entorno de compilación cruzada.
-    *   Actualizar los binarios distribuibles en `packaging/Roms/PORTS/Games/Plants vs. Zombies/PvZ` y `bin/PvZ`.
+3. [src/PvzpLib/Reanimator.cpp](file:///c:/DEV/PVZ/src/PvzpLib/Reanimator.cpp)
+   * **Changes:**
+     * In `Reanimation::DrawTrack` (lines 963 and 1099), verify that `aTransform.mFont` and `aTransform.mText` satisfy `IsValidMemoryPointer` before evaluating `*aTransform.mText != '\0'` or invoking `mFont->StringWidth`.
+     * In `Reanimation::GetTrackMatrix` (line 1191), guard font access before evaluating `mFont->mAscent`.
+     * In `Reanimation::DrawTrack` (line 1010), verify `IsValidImagePtr(aImage)` before passing to `PvzpBltMatrix`.
+     * In `ReanimationFreeDefinition` (lines 280–344), skip `aTransform.mImage` when `IsAtlasEncodedHandle(aTransform.mImage)` is true.
+   * **Rationale:** Hardens the fallback rendering chain against null-page and unmapped pointer dereferences, while preventing resource manager corruption when atlas-backed definitions are freed.
 
-### Verification Plan
+4. [src/PvzpLib/ReanimAtlas.cpp](file:///c:/DEV/PVZ/src/PvzpLib/ReanimAtlas.cpp)
+   * **Changes:**
+     * In `ReanimAtlas::ReanimAtlasCreate`, check if `theReanimDef->mIsAtlasEncoded || theReanimDef->mReanimAtlas != nullptr`. If so, log a diagnostic warning and return early without mutating transforms.
+     * After successfully encoding transforms to atlas indices, assign `theReanimDef->mIsAtlasEncoded = true;`.
+   * **Rationale:** Guarantees idempotency of atlas generation, preventing destructive double-encoding and SIGSEGV crashes on `aImage->mWidth`.
 
-#### Compilation & Build
-*   Compilación limpia y sin errores mediante el toolchain oficial ARMv7-A Cortex-A7.
-*   Comprobación de enlaces de bibliotecas dinámicas compartidas y símbolos exportados.
+5. [src/Lawn/Plant.cpp](file:///c:/DEV/PVZ/src/Lawn/Plant.cpp)
+   * **Changes:**
+     * In `Plant::CanUseSpriteCache() const`, remove the `const_cast<Plant*>(this)->mWarmupCounter--` statement. Ensure the function is a pure, idempotent query.
+     * In `Plant::Update()`, decrement `mWarmupCounter` if `mWarmupCounter > 0`.
+   * **Rationale:** Eliminates double-decrement state corruption caused by calling `CanUseSpriteCache()` across both `Animate()` and `Draw()`, and ensures warmup progression occurs deterministically during simulation updates.
 
-#### Test Cases Manuales y de Integración (Hardware Miyoo Mini Plus)
-1.  **TC1: Regresión de Use-After-Free y Salida de Tienda:**
-    *   Iniciar Supervivencia Normal o Difícil, alcanzar la bandera 2 y acceder a la tienda.
-    *   Presionar `[STORE_BACK_TO_GAME]`.
-    *   *Criterio de Éxito:* Retorno instantáneo al selector de semillas; cero caídas `SIGSEGV` o lecturas inválidas en el depurador.
-2.  **TC2: Inspección Visual de Crazy Dave:**
-    *   Abrir la tienda desde el selector de semillas en Supervivencia.
-    *   Examinar el césped a la izquierda de la pantalla y la batea del coche.
-    *   *Criterio de Éxito:* Crazy Dave aparece exclusivamente en la camioneta. Cero apariciones duplicadas en el jardín. Animaciones, gestos de habla y sonidos Foley operan al 100%.
-3.  **TC3: Congelamiento del Tablero de Fondo:**
-    *   Abrir la tienda en un escenario con piscina y niebla.
-    *   *Criterio de Éxito:* La animación de las olas de la piscina y los emisores de partículas permanecen completamente inmóviles mientras el diálogo de la tienda esté en pantalla.
-4.  **TC4: Compra de Ranura de Semillas en Caliente:**
-    *   Comprar la novena o décima ranura de semillas (`STORE_ITEM_PACKET_UPGRADE`) en la tienda y volver al selector.
-    *   *Criterio de Éxito:* El banco de semillas superior se ensancha de forma dinámica y permite seleccionar de inmediato una semilla para la nueva casilla sin reiniciar la partida.
-5.  **TC5: Auditoría de Presupuesto de Memoria RAM:**
-    *   Monitorear `/proc/self/status` (VmRSS) en la consola durante una oleada densa de Supervivencia y abrir la tienda 5 veces seguidas.
-    *   *Criterio de Éxito:* El consumo pico de memoria nunca excede los 80.5 MB (margen de al menos 4.5 MB libres bajo el techo de 85 MB). Cero llamadas de *OOM Killer*.
+6. [src/Lawn/System/SaveGame.cpp](file:///c:/DEV/PVZ/src/Lawn/System/SaveGame.cpp)
+   * **Changes:**
+     * In `FixBoardAfterLoad`, inspect all active restored plants: if `SpriteCachePool::IsPlantReady(aPlant->mSeedType)` is true, set `aPlant->mWarmupCounter = 0;`.
+     * In `SyncReanimationPortable`, unconditionally nullify transient pointers on restored transforms: `aTransform.mText = nullptr; aTransform.mFont = nullptr;`.
+     * In `FixBoardAfterLoad`, delete and reset `GridItem::sSharedSunReanim = nullptr;` if allocated.
+   * **Rationale:** Dispatches restored plants directly to the pre-baked sprite cache on frame 0, sanitizes deserialized reanimation states to prevent stale numeric handles from being read as text, and eliminates dangling static pointers in puzzle mode.
 
---------------------------------------------------------------------------------
+7. [src/Lawn/Board.cpp](file:///c:/DEV/PVZ/src/Lawn/Board.cpp)
+   * **Changes:** In `Board::DisposeBoard()`, ensure `GridItem::sSharedSunReanim` is safely freed and reset to `nullptr`.
+   * **Rationale:** Guarantees that auxiliary puzzle mode reanimations do not persist as dangling pointers across session teardown and recreation.
 
-*Drafted with EGM*
+8. [tests/test_release_package.py](file:///c:/DEV/PVZ/tests/test_release_package.py)
+   * **Changes:** Verify that release binaries compile without warnings, maintain the zero-RAM growth budget, and package cleanly into distribution zip files.
+   * **Rationale:** Continuous regression verification for release packaging.
+
+### Execution Phases & Verification Gates
+
+*   **Phase 1: Shared Sentinels & Definition State:** Implement `REANIM_ATLAS_HANDLE_MAX`, `SYSTEM_POINTER_MIN`, and `mIsAtlasEncoded`.
+*   **Phase 2: Atlas Lifecycle & Engine Hardening:** Implement idempotency in `ReanimAtlasCreate`, handle skipping in `ReanimationFreeDefinition`, and pointer guards in `DrawTrack` / `GetTrackMatrix`.
+*   **Phase 3: Save-Game Deserialization & Plant Query Purity:** Pure `CanUseSpriteCache()`, simulation-driven warmup progression, and frame-0 sprite cache priming in `FixBoardAfterLoad`.
+*   **Phase 4: Auxiliary Resource Cleanup:** Teardown of `sSharedSunReanim` in `Board::DisposeBoard()` and `FixBoardAfterLoad`.
+*   **Phase 5: Compilation & Physical Toolchain Verification:** Build via Docker `aemiii91/miyoomini-toolchain:latest`, verify zero warnings, strip executable, run test suite, and generate final release package.

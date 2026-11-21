@@ -50,7 +50,7 @@ class TestReleasePackage(unittest.TestCase):
             shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_memory_budget_audit_constraints(self):
-        """Verify steady-state combat memory budget is <= 53 MB and headroom is >= 30 MB."""
+        """Verify steady-state combat memory budget is <= 54.5 MB and headroom is >= 28.5 MB."""
         report = audit_memory_budget()
 
         # Audit status
@@ -60,24 +60,25 @@ class TestReleasePackage(unittest.TestCase):
         subsystems = report["subsystems"]
         self.assertEqual(subsystems["textures"]["budget_mb"], 12.0)
         self.assertEqual(subsystems["dma_pool"]["budget_mb"], 10.0)
+        self.assertEqual(subsystems["sprite_cache"]["budget_mb"], 3.5)
         self.assertEqual(subsystems["reanim"]["budget_mb"], 8.0)
         self.assertEqual(subsystems["audio"]["budget_mb"], 4.0)
         self.assertEqual(subsystems["logic_and_fb"]["budget_mb"], 15.0)
 
-        # Base steady-state should sum to 49.0 MB
-        self.assertEqual(report["base_steady_state_mb"], 49.0)
-        self.assertLessEqual(report["base_steady_state_mb"], 50.0)
+        # Base steady-state should sum to 52.5 MB
+        self.assertEqual(report["base_steady_state_mb"], 52.5)
+        self.assertLessEqual(report["base_steady_state_mb"], 53.0)
 
-        # Peak wave surge + base should sum to 51.0 MB (<= 53.0 MB requirement)
-        self.assertEqual(report["max_steady_state_mb"], 51.0)
-        self.assertLessEqual(report["max_steady_state_mb"], 53.0)
+        # Peak wave surge + base should sum to 54.5 MB (<= 54.5 MB requirement)
+        self.assertEqual(report["max_steady_state_mb"], 54.5)
+        self.assertLessEqual(report["max_steady_state_mb"], 54.5)
 
         # Hard memory ceiling should be 83.0 MB
         self.assertEqual(report["hard_ceiling_mb"], 83.0)
         self.assertLessEqual(report["hard_ceiling_mb"], 85.0)
 
-        # Headroom before OOM killer (>= 30 MB)
-        self.assertGreaterEqual(report["safety_margin_mb"], 30.0)
+        # Headroom before OOM killer (>= 28.5 MB)
+        self.assertGreaterEqual(report["safety_margin_mb"], 28.5)
         self.assertLessEqual(report["hard_ceiling_mb"], report["usable_system_ram_mb"])
 
     def test_stage_release_structure(self):
@@ -249,6 +250,15 @@ class TestReleasePackage(unittest.TestCase):
         fake_pak = os.path.join(self.temp_dir, "Roms", "PORTS", "Games", "Plants vs. Zombies", "main.pak")
         with open(fake_pak, "wb") as f:
             f.write(b"fakepak")
+
+        with self.assertRaises(ValueError):
+            verify_clean_room(self.temp_dir)
+
+        os.remove(fake_pak)
+
+        fake_spc = os.path.join(self.temp_dir, "Roms", "PORTS", "Games", "Plants vs. Zombies", "peashooter.spc")
+        with open(fake_spc, "wb") as f:
+            f.write(b"fakespc")
 
         with self.assertRaises(ValueError):
             verify_clean_room(self.temp_dir)

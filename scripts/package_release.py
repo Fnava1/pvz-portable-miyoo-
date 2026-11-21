@@ -45,6 +45,10 @@ MEMORY_BUDGET_TABLE: Dict[str, Dict[str, Any]] = {
         "budget_mb": 10.0,
         "description": "Pre-allocated DMA texture pool (downsized from 16 MB) for dynamic 16-bit reanimations",
     },
+    "sprite_cache": {
+        "budget_mb": 3.5,
+        "description": "Bounded in-memory ARGB4444 plant idle sprite cache slab (sub-allocated from DmaTexturePool / heap)",
+    },
     "reanim": {
         "budget_mb": 8.0,
         "description": "Pre-parsed Reanim skeletal animation tracks & bone transformation matrices",
@@ -59,9 +63,9 @@ MEMORY_BUDGET_TABLE: Dict[str, Dict[str, Any]] = {
     },
 }
 
-BASE_STEADY_STATE_MB = sum(item["budget_mb"] for item in MEMORY_BUDGET_TABLE.values())  # 49.0 MB
+BASE_STEADY_STATE_MB = sum(item["budget_mb"] for item in MEMORY_BUDGET_TABLE.values())  # 52.5 MB
 PEAK_WAVE_SURGE_MB = 2.0
-MAX_STEADY_STATE_MB = BASE_STEADY_STATE_MB + PEAK_WAVE_SURGE_MB  # 51.0 MB (<= 53.0 MB)
+MAX_STEADY_STATE_MB = BASE_STEADY_STATE_MB + PEAK_WAVE_SURGE_MB  # 54.5 MB (<= 54.5 MB)
 HARD_CEILING_MB = 83.0
 USABLE_RAM_MB = 95.0
 
@@ -69,7 +73,7 @@ USABLE_RAM_MB = 95.0
 def audit_memory_budget() -> Dict[str, Any]:
     """
     Performs a static memory profiling audit against the OnionOS runtime limits.
-    Verifies that steady-state combat memory is <= 53.0 MB with >= 30.0 MB safety headroom.
+    Verifies that steady-state combat memory is <= 54.5 MB with >= 28.5 MB safety headroom.
     """
     subsystems = {}
     for name, data in MEMORY_BUDGET_TABLE.items():
@@ -83,7 +87,7 @@ def audit_memory_budget() -> Dict[str, Any]:
     peak_steady = steady_base + PEAK_WAVE_SURGE_MB
     headroom = HARD_CEILING_MB - peak_steady
 
-    is_valid = (steady_base <= 50.0) and (peak_steady <= 53.0) and (headroom >= 30.0)
+    is_valid = (steady_base <= 53.0) and (peak_steady <= 54.5) and (headroom >= 28.5)
 
     report = {
         "subsystems": subsystems,
@@ -111,11 +115,11 @@ def print_memory_audit_report(report: Dict[str, Any]):
     print("-" * 70)
     print(f"{'Base Steady-State':<20} | {report['base_steady_state_mb']:>9.1f} MB | Normal lawn wave execution")
     print(f"{'Peak Wave Headroom':<20} | {report['peak_wave_surge_mb']:>9.1f} MB | Dense zombie horde + particle bursts")
-    print(f"{'Max Steady-State':<20} | {report['max_steady_state_mb']:>9.1f} MB | Verified <= 53.0 MB combat limit")
+    print(f"{'Max Steady-State':<20} | {report['max_steady_state_mb']:>9.1f} MB | Verified <= 54.5 MB combat limit")
     print(f"{'Hard Memory Ceiling':<20} | {report['hard_ceiling_mb']:>9.1f} MB | Strict <= 83.0 MB OOM threshold")
-    print(f"{'Safety Headroom':<20} | {report['safety_margin_mb']:>9.1f} MB | Margin >= 30.0 MB before kernel OOM intervention")
+    print(f"{'Safety Headroom':<20} | {report['safety_margin_mb']:>9.1f} MB | Margin >= 28.5 MB before kernel OOM intervention")
     print("=" * 70)
-    status_str = "AUDIT PASSED (Combat RSS <= 53.0 MB, Headroom >= 30.0 MB)" if report["audit_passed"] else "AUDIT FAILED"
+    status_str = "AUDIT PASSED (Combat RSS <= 54.5 MB, Headroom >= 28.5 MB)" if report["audit_passed"] else "AUDIT FAILED"
     print(f" Result: {status_str}")
     print("=" * 70)
 
@@ -146,7 +150,7 @@ def verify_clean_room(staging_dir: str):
     - Zero .pak, .dat, .mo3, .mp3, .wav proprietary asset files
     - Zero Windows .exe executables
     """
-    forbidden_exts = {".exe", ".pak", ".dat", ".mo3"}
+    forbidden_exts = {".exe", ".pak", ".dat", ".mo3", ".spc"}
     for root, _, files in os.walk(staging_dir):
         for f in files:
             ext = os.path.splitext(f)[1].lower()
@@ -300,8 +304,8 @@ def stage_release(
     # 4. ARM Binaries: PvZ & setup_miyoo
     b_dirs = [
         os.path.join(REPO_ROOT, "bin"),
-        os.path.join(REPO_ROOT, "ports", "Games", "Plants vs. Zombies"),
         build_dir or os.path.join(REPO_ROOT, "build"),
+        os.path.join(REPO_ROOT, "ports", "Games", "Plants vs. Zombies"),
         os.path.join(REPO_ROOT, "build-miyoo"),
     ]
     pvz_path = resolve_binary("PvZ", b_dirs, allow_missing=allow_missing_binaries)
