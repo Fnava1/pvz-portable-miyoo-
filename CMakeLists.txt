@@ -17,6 +17,8 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 
 add_compile_definitions(PVZ_ENABLE_GLES=0)
 add_compile_definitions(LOW_MEMORY=1)
+add_compile_definitions(PVZ_ENABLE_DUALCORE=1)
+add_compile_definitions(NDEBUG=1)
 
 if(NOT WIN32)
     add_compile_definitions(_POSIX_C_SOURCE=200809L _GNU_SOURCE)
@@ -191,11 +193,18 @@ list(FILTER ENGINE_CPP_SOURCES EXCLUDE REGEX "src/SexyAppFramework/sound/SDL-Mix
 
 set(ENGINE_SOURCES
     ${ENGINE_CPP_SOURCES}
+    src/threading/ComputeWorker.cpp
+    src/PvzpLib/ReanimRigEvaluator.cpp
     src/SexyAppFramework/fcaseopen/fcaseopen.c
     src/main_miyoo.cpp
 )
+list(REMOVE_DUPLICATES ENGINE_SOURCES)
 
 add_executable(PvZ ${ENGINE_SOURCES})
+if(NOT WIN32)
+    target_compile_options(PvZ PRIVATE -funwind-tables)
+    target_link_options(PvZ PRIVATE -rdynamic)
+endif()
 target_link_libraries(PvZ PRIVATE
     pvz_graphics
     pvz_audio
