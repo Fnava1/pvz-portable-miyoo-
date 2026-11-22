@@ -188,7 +188,7 @@ constinit const ReanimationParams gLawnReanimationArray[ReanimationType::NUM_REA
 	{ .mReanimationType = ReanimationType::REANIM_CREDITS_WEARETHEUNDEAD, .mReanimFileName = "reanim/Credits_WeAreTheUndead.reanim", .mReanimParamFlags = 1 },
 	{ .mReanimationType = ReanimationType::REANIM_CREDITS_DISCOLIGHTS, .mReanimFileName = "reanim/Credits_DiscoLights.reanim", .mReanimParamFlags = 1 },
 	{ .mReanimationType = ReanimationType::REANIM_FLAG, .mReanimFileName = "reanim/Zombie_FlagPole.reanim", .mReanimParamFlags = 0 },
-	{ .mReanimationType = ReanimationType::REANIM_ZOMBATAR_HEAD, .mReanimFileName = "reanim/zombatar_zombie_head.reanim", .mReanimParamFlags = 0 },
+	{ .mReanimationType = ReanimationType::REANIM_ZOMBATAR_HEAD, .mReanimFileName = "reanim/zombatar_zombie_head.reanim", .mReanimParamFlags = 1 },
 };
 
 ReanimatorTransform::ReanimatorTransform() :
@@ -272,6 +272,10 @@ void ReanimationFreeDefinition(ReanimatorDefinition* theDefinition)
 	// free the atlas
 	if (theDefinition->mReanimAtlas != nullptr)
 	{
+		if (theDefinition->mReanimAtlas->mMemoryImage)
+		{
+			FilterEffectRemoveImage(theDefinition->mReanimAtlas->mMemoryImage.get());
+		}
 		delete theDefinition->mReanimAtlas;
 		theDefinition->mReanimAtlas = nullptr;
 	}
@@ -378,6 +382,7 @@ Reanimation::Reanimation()
 	mFrameCount = 0;
 	mFrameBasePose = -1;
 	mOverlayMatrix.LoadIdentity();
+	mHasOverlayMatrix = false;
 	mColorOverride = Color::White;
 	mExtraAdditiveColor = Color::White;
 	mEnableExtraAdditiveDraw = false;
@@ -637,7 +642,7 @@ void BlendTransform(ReanimatorTransform* theResult, const ReanimatorTransform& t
 	theResult->mImage = theTransform1.mImage;
 }
 
-void Reanimation::GetCurrentTransform(int theTrackIndex, ReanimatorTransform* theTransformCurrent, ReanimatorFrameTime* theFrameTime)
+bool Reanimation::GetCurrentTransform(int theTrackIndex, ReanimatorTransform* theTransformCurrent, ReanimatorFrameTime* theFrameTime)
 {
 	if (theTrackIndex < 0 || !mDefinition || !mTrackInstances || theTrackIndex >= mDefinition->mTracks.count)
 	{
@@ -645,7 +650,7 @@ void Reanimation::GetCurrentTransform(int theTrackIndex, ReanimatorTransform* th
 		{
 			*theTransformCurrent = ReanimatorTransform();
 		}
-		return;
+		return false;
 	}
 
 	ReanimatorFrameTime aFrameTime;
@@ -654,26 +659,43 @@ void Reanimation::GetCurrentTransform(int theTrackIndex, ReanimatorTransform* th
 		GetFrameTime(&aFrameTime);
 		theFrameTime = &aFrameTime;
 	}
-	GetTransformAtTime(theTrackIndex, theTransformCurrent, theFrameTime);  // base transform interpolated between the two frames
+	bool aVisible = GetTransformAtTime(theTrackIndex, theTransformCurrent, theFrameTime);  // base transform interpolated between the two frames
 
 	ReanimatorTrackInstance* aTrack = &mTrackInstances[theTrackIndex];
+	if (aTrack->mImageOverride != nullptr)
+	{
+		aVisible = true;
+	}
+
 	if (FloatRoundToInt(theTransformCurrent->mFrame) >= 0 && aTrack->mBlendCounter > 0)  // not a blank frame and a blend is in progress
 	{
 		float aBlendFactor = aTrack->mBlendCounter / static_cast<float>(aTrack->mBlendTime);
 		BlendTransform(theTransformCurrent, *theTransformCurrent, aTrack->mBlendTransform, aBlendFactor);  // blend with the recorded source transform
+		if (theTransformCurrent->mAlpha <= 0.005f)
+		{
+			aVisible = false;
+		}
 	}
+
+	return aVisible;
 }
 
-void Reanimation::GetTransformAtTime(int theTrackIndex, ReanimatorTransform* theTransform, ReanimatorFrameTime* theFrameTime)
+bool Reanimation::GetTransformAtTime(int theTrackIndex, ReanimatorTransform* theTransform, ReanimatorFrameTime* theFrameTime)
 {
 	PVZP_ASSERT(theTrackIndex >= 0 && theTrackIndex < mDefinition->mTracks.count);
 	if (mDefinition == nullptr || theTrackIndex < 0 || theTrackIndex >= mDefinition->mTracks.count)
-		return;
+	{
+		if (theTransform) *theTransform = ReanimatorTransform();
+		return false;
+	}
 
 	ReanimatorTrack* aTrack = &mDefinition->mTracks.tracks[theTrackIndex];
 	PVZP_ASSERT(aTrack->mTransforms.count == mDefinition->mTracks.tracks[0].mTransforms.count);
 	if (aTrack->mTransforms.count <= 0 || aTrack->mTransforms.mTransforms == nullptr)
-		return;
+	{
+		if (theTransform) *theTransform = ReanimatorTransform();
+		return false;
+	}
 
 	int aMaxIndex = aTrack->mTransforms.count - 1;
 	int aBeforeIndex = std::clamp(theFrameTime->mAnimFrameBeforeInt, 0, aMaxIndex);
@@ -695,7 +717,7 @@ void Reanimation::GetTransformAtTime(int theTrackIndex, ReanimatorTransform* the
 		theTransform->mFont = nullptr;
 		theTransform->mText = "";
 		theTransform->mFrame = -1.0f;
-		return;
+		return false;
 	}
 
 	theTransform->mTransX = FloatLerp(aTransBefore.mTransX, aTransAfter.mTransX, theFrameTime->mFraction);
@@ -713,6 +735,8 @@ void Reanimation::GetTransformAtTime(int theTrackIndex, ReanimatorTransform* the
 		theTransform->mFrame = -1.0f;  // cut the transition to a blank frame when the track truncates disappearing frames
 	else
 		theTransform->mFrame = aTransBefore.mFrame;
+
+	return (theTransform->mFrame >= 0.0f || theTransform->mImage != nullptr || theTransform->mFont != nullptr) && (theTransform->mAlpha > 0.005f);
 }
 
 struct SinCosEntry {
@@ -856,7 +880,8 @@ bool Reanimation::DrawTrack(Graphics* g, int theTrackIndex, [[maybe_unused]] int
 {
 	ReanimatorTransform aTransform;
 	ReanimatorTrackInstance* aTrackInstance = &mTrackInstances[theTrackIndex];
-	GetCurrentTransform(theTrackIndex, &aTransform, theFrameTime);
+	if (!GetCurrentTransform(theTrackIndex, &aTransform, theFrameTime))
+		return false;
 	int aImageFrame = FloatRoundToInt(aTransform.mFrame);  // cel index within the image
 	if (aImageFrame < 0 || aTransform.mAlpha <= 0.005f)  // no image to draw or fully transparent
 		return false;
@@ -953,30 +978,32 @@ bool Reanimation::DrawTrack(Graphics* g, int theTrackIndex, [[maybe_unused]] int
 
 	SexyMatrix3 aMatrix;
 	bool aFullScreen = false;
+	float aPivotX = 0.0f;
+	float aPivotY = 0.0f;
 	if (aPivotAtlasImage != nullptr)
 	{
-		aMatrix.LoadIdentity();
-		SexyMatrix3Translation(aMatrix, aPivotAtlasImage->mWidth * 0.5f, aPivotAtlasImage->mHeight * 0.5f);  // Use original atlas metadata for pivot sizing.
+		aPivotX = aPivotAtlasImage->mWidth * 0.5f;
+		aPivotY = aPivotAtlasImage->mHeight * 0.5f;
 	}
 	else if (aPivotImage != nullptr)
 	{
 		int aCelWidth = aPivotImage->GetCelWidth();
 		int aCelHeight = aPivotImage->GetCelHeight();
-		aMatrix.LoadIdentity();
-		SexyMatrix3Translation(aMatrix, aCelWidth * 0.5f, aCelHeight * 0.5f);
+		aPivotX = aCelWidth * 0.5f;
+		aPivotY = aCelHeight * 0.5f;
 	}
 	else if (aImage != nullptr)
 	{
 		int aCelWidth = aImage->GetCelWidth();
 		int aCelHeight = aImage->GetCelHeight();
-		aMatrix.LoadIdentity();
-		SexyMatrix3Translation(aMatrix, aCelWidth * 0.5f, aCelHeight * 0.5f);
+		aPivotX = aCelWidth * 0.5f;
+		aPivotY = aCelHeight * 0.5f;
 	}
 	else if (IsValidMemoryPointer(aTransform.mFont) && IsValidMemoryPointer(aTransform.mText) && *aTransform.mText != '\0')
 	{
-		aMatrix.LoadIdentity();
 		int aWidth = aTransform.mFont->StringWidth(aTransform.mText);
-		SexyMatrix3Translation(aMatrix, -aWidth * 0.5f, aTransform.mFont->mAscent);
+		aPivotX = -aWidth * 0.5f;
+		aPivotY = aTransform.mFont->mAscent;
 	}
 	else
 	{
@@ -1041,11 +1068,18 @@ bool Reanimation::DrawTrack(Graphics* g, int theTrackIndex, [[maybe_unused]] int
 	else
 #endif
 	{
-		SexyMatrix3 aTransformMatrix;
-		MatrixFromTransform(aTransform, aTransformMatrix);
-		SexyMatrix3Multiply(aMatrix, aTransformMatrix, aMatrix);  // apply the track transform
-		SexyMatrix3Multiply(aMatrix, mOverlayMatrix, aMatrix);  // apply the overlay matrix
-		SexyMatrix3Translation(aMatrix, aTrackInstance->mShakeX + g->mTransX, aTrackInstance->mShakeY + g->mTransY);  // apply track shake and g's translation
+		MatrixFromTransform(aTransform, aMatrix);
+		if (aPivotX != 0.0f || aPivotY != 0.0f)
+		{
+			aMatrix.m02 += aMatrix.m00 * aPivotX + aMatrix.m01 * aPivotY;
+			aMatrix.m12 += aMatrix.m10 * aPivotX + aMatrix.m11 * aPivotY;
+		}
+		if (__builtin_expect(mHasOverlayMatrix, 0))
+		{
+			SexyMatrix3Multiply(aMatrix, mOverlayMatrix, aMatrix);  // apply the overlay matrix
+		}
+		aMatrix.m02 += aTrackInstance->mShakeX + g->mTransX;  // apply track shake and g's translation
+		aMatrix.m12 += aTrackInstance->mShakeY + g->mTransY;
 	}
 
 	if (aAtlasImage != nullptr)  // atlas exists, the frame has an image, and no override is set
@@ -1220,7 +1254,12 @@ void Reanimation::GetTrackMatrix(int theTrackIndex, SexyTransform2D& theMatrix)
 	SexyTransform2D aTransformMatrix;
 	MatrixFromTransform(aTransform, aTransformMatrix);
 	SexyMatrix3Multiply(theMatrix, aTransformMatrix, theMatrix);  // apply the track transform
-	SexyMatrix3Multiply(theMatrix, mOverlayMatrix, theMatrix);  // apply the overlay matrix
+	if (mOverlayMatrix.m00 != 1.0f || mOverlayMatrix.m11 != 1.0f ||
+	    mOverlayMatrix.m02 != 0.0f || mOverlayMatrix.m12 != 0.0f ||
+	    mOverlayMatrix.m01 != 0.0f || mOverlayMatrix.m10 != 0.0f)
+	{
+		SexyMatrix3Multiply(theMatrix, mOverlayMatrix, theMatrix);  // apply the overlay matrix
+	}
 	SexyMatrix3Translation(theMatrix, aTrackInstance->mShakeX - 0.5f, aTrackInstance->mShakeY - 0.5f);  // apply track shake
 }
 
@@ -1272,6 +1311,10 @@ void Reanimation::DrawRenderGroup(Graphics* g, int theRenderGroup, PvzpTriangleG
 	if (mDead || mDefinition == nullptr || mFrameCount <= 0 || mDefinition->mTracks.count == 0 || mDefinition->mTracks.tracks == nullptr)
 		return;
 
+	mHasOverlayMatrix = (mOverlayMatrix.m00 != 1.0f || mOverlayMatrix.m11 != 1.0f ||
+	                     mOverlayMatrix.m02 != 0.0f || mOverlayMatrix.m12 != 0.0f ||
+	                     mOverlayMatrix.m01 != 0.0f || mOverlayMatrix.m10 != 0.0f);
+
 	PvzpTriangleGroup aLocalGroup;
 	PvzpTriangleGroup* aGroup = theTriangleGroup ? theTriangleGroup : &aLocalGroup;
 
@@ -1308,7 +1351,7 @@ void Reanimation::DrawAllRenderGroups(Graphics* g, PvzpTriangleGroup* theTriangl
 
 int Reanimation::FindTrackIndex(const char* theTrackName)
 {
-	if (mDefinition == nullptr || mDefinition->mTracks.tracks == nullptr || mDefinition->mTracks.count <= 0 || theTrackName == nullptr)
+	if (this == nullptr || mDefinition == nullptr || mDefinition->mTracks.tracks == nullptr || mDefinition->mTracks.count <= 0 || theTrackName == nullptr)
 		return -1;
 
 	for (int aTrackIndex = 0; aTrackIndex < mDefinition->mTracks.count; aTrackIndex++)
@@ -1324,7 +1367,7 @@ int Reanimation::FindTrackIndex(const char* theTrackName)
 
 ReanimatorTrackInstance* Reanimation::GetTrackInstanceByName(const char* theTrackName)
 {
-	if (mDefinition == nullptr || mTrackInstances == nullptr)
+	if (this == nullptr || mDefinition == nullptr || mTrackInstances == nullptr)
 		return nullptr;
 
 	int aTrackIndex = FindTrackIndex(theTrackName);
@@ -1386,7 +1429,12 @@ void Reanimation::GetAttachmentOverlayMatrix(int theTrackIndex, SexyTransform2D&
 	GetCurrentTransform(theTrackIndex, &aTransform);  // blended transform without overrides
 	SexyTransform2D aTransformMatrix;
 	MatrixFromTransform(aTransform, aTransformMatrix);
-	SexyMatrix3Multiply(aTransformMatrix, mOverlayMatrix, aTransformMatrix);  // apply the overlay matrix
+	if (mOverlayMatrix.m00 != 1.0f || mOverlayMatrix.m11 != 1.0f ||
+	    mOverlayMatrix.m02 != 0.0f || mOverlayMatrix.m12 != 0.0f ||
+	    mOverlayMatrix.m01 != 0.0f || mOverlayMatrix.m10 != 0.0f)
+	{
+		SexyMatrix3Multiply(aTransformMatrix, mOverlayMatrix, aTransformMatrix);  // apply the overlay matrix
+	}
 
 	if (mFrameBasePose == NO_BASE_POSE)
 	{
@@ -1526,12 +1574,14 @@ void Reanimation::SetPosition(float theX, float theY)
 {
 	mOverlayMatrix.m02 = theX;
 	mOverlayMatrix.m12 = theY;
+	mHasOverlayMatrix = (theX != 0.0f || theY != 0.0f || mOverlayMatrix.m00 != 1.0f || mOverlayMatrix.m11 != 1.0f);
 }
 
 void Reanimation::OverrideScale(float theScaleX, float theScaleY)
 {
 	mOverlayMatrix.m00 = theScaleX;
 	mOverlayMatrix.m11 = theScaleY;
+	mHasOverlayMatrix = (theScaleX != 1.0f || theScaleY != 1.0f || mOverlayMatrix.m02 != 0.0f || mOverlayMatrix.m12 != 0.0f);
 }
 
 Image* Reanimation::GetImageOverride(const char* theTrackName)
@@ -1607,7 +1657,13 @@ void ReanimatorEnsureDefinitionLoaded(ReanimationType theReanimType, bool theIsP
 	PVZP_ASSERT(theReanimType >= 0 && theReanimType < gReanimatorDefCount);
 	ReanimatorDefinition* aReanimDef = &gReanimatorDefArray[theReanimType];
 	if (aReanimDef->mTracks.tracks != nullptr)  // non-null tracks means the definition is already loaded
+	{
+		if (theIsPreloading && aReanimDef->mReanimAtlas == nullptr)
+		{
+			ReanimationCreateAtlas(aReanimDef, theReanimType);
+		}
 		return;
+	}
 	const ReanimationParams* aReanimParams = &gReanimationParamArray[theReanimType];
 	PvzpLogLn("'{}'", aReanimParams->mReanimFileName);
 	if (theIsPreloading)
@@ -1629,6 +1685,10 @@ void ReanimatorEnsureDefinitionLoaded(ReanimationType theReanimType, bool theIsP
 	if (!ReanimationLoadDefinition(aReanimParams->mReanimFileName, aReanimDef))
 	{
 		PvzpLogLn("Warning: Failed to load reanim '{}'", aReanimParams->mReanimFileName);
+	}
+	if (theIsPreloading && aReanimDef->mReanimAtlas == nullptr)
+	{
+		ReanimationCreateAtlas(aReanimDef, theReanimType);
 	}
 	int aDuration = aTimer.GetDuration();
 	if (aDuration > 100)  // report slow reanim loading
@@ -1668,10 +1728,14 @@ void ReanimatorFreeDefinitions()
 
 float Reanimation::GetTrackVelocity(const char* theTrackName)
 {
+	if (this == nullptr || mDefinition == nullptr || theTrackName == nullptr)
+		return 0.0f;
+
 	ReanimatorFrameTime aFrameTime;
 	GetFrameTime(&aFrameTime);
 	int aTrackIndex = FindTrackIndex(theTrackName);
-	PVZP_ASSERT(aTrackIndex >= 0 && aTrackIndex < mDefinition->mTracks.count);
+	if (aTrackIndex < 0 || aTrackIndex >= mDefinition->mTracks.count)
+		return 0.0f;
 
 	ReanimatorTrack* aTrack = &mDefinition->mTracks.tracks[aTrackIndex];
 	float aDis = aTrack->mTransforms.mTransforms[aFrameTime.mAnimFrameAfterInt].mTransX - aTrack->mTransforms.mTransforms[aFrameTime.mAnimFrameBeforeInt].mTransX;
@@ -1680,45 +1744,66 @@ float Reanimation::GetTrackVelocity(const char* theTrackName)
 
 bool Reanimation::IsTrackShowing(const char* theTrackName)
 {
+	if (this == nullptr || mDefinition == nullptr || theTrackName == nullptr)
+		return false;
+
 	ReanimatorFrameTime aFrameTime;
 	GetFrameTime(&aFrameTime);
 	int aTrackIndex = FindTrackIndex(theTrackName);
-	PVZP_ASSERT(aTrackIndex >= 0 && aTrackIndex < mDefinition->mTracks.count);
+	if (aTrackIndex < 0 || aTrackIndex >= mDefinition->mTracks.count)
+		return false;
 
 	return mDefinition->mTracks.tracks[aTrackIndex].mTransforms.mTransforms[aFrameTime.mAnimFrameAfterInt].mFrame >= 0.0f;  // whether the next integer frame has an image
 }
 
 void Reanimation::ShowOnlyTrack(const char* theTrackName)
 {
+	if (this == nullptr || mDefinition == nullptr || mDefinition->mTracks.tracks == nullptr || mTrackInstances == nullptr || theTrackName == nullptr)
+		return;
+
 	for (int i = 0; i < mDefinition->mTracks.count; i++)
 	{
-		mTrackInstances[i].mRenderGroup = strcasecmp(mDefinition->mTracks.tracks[i].mName, theTrackName) == 0 ? RENDER_GROUP_NORMAL : RENDER_GROUP_HIDDEN;
+		const char* aName = mDefinition->mTracks.tracks[i].mName;
+		if (aName != nullptr)
+			mTrackInstances[i].mRenderGroup = strcasecmp(aName, theTrackName) == 0 ? RENDER_GROUP_NORMAL : RENDER_GROUP_HIDDEN;
 	}
 }
 
 void Reanimation::AssignRenderGroupToTrack(const char* theTrackName, int theRenderGroup)
 {
+	if (this == nullptr || mDefinition == nullptr || mDefinition->mTracks.tracks == nullptr || mTrackInstances == nullptr || theTrackName == nullptr)
+		return;
+
 	for (int i = 0; i < mDefinition->mTracks.count; i++)
-		if (strcasecmp(mDefinition->mTracks.tracks[i].mName, theTrackName) == 0)
+	{
+		const char* aName = mDefinition->mTracks.tracks[i].mName;
+		if (aName != nullptr && strcasecmp(aName, theTrackName) == 0)
 		{
 			mTrackInstances[i].mRenderGroup = theRenderGroup;  // only the first exact match
 			return;
 		}
+	}
 }
 
 void Reanimation::AssignRenderGroupToPrefix(const char* theTrackName, int theRenderGroup)
 {
+	if (this == nullptr || mDefinition == nullptr || mDefinition->mTracks.tracks == nullptr || mTrackInstances == nullptr || theTrackName == nullptr)
+		return;
+
 	size_t aPrifixLength = strlen(theTrackName);
 	for (int i = 0; i < mDefinition->mTracks.count; i++)
 	{
 		const char* const aTrackName = mDefinition->mTracks.tracks[i].mName;
-		if (strlen(aTrackName) >= aPrifixLength && !strncasecmp(aTrackName, theTrackName, aPrifixLength))  // the name must be at least as long as the prefix
+		if (aTrackName != nullptr && strlen(aTrackName) >= aPrifixLength && !strncasecmp(aTrackName, theTrackName, aPrifixLength))  // the name must be at least as long as the prefix
 			mTrackInstances[i].mRenderGroup = theRenderGroup;
 	}
 }
 
 void Reanimation::PropogateColorToAttachments()
 {
+	if (this == nullptr || mDefinition == nullptr || mTrackInstances == nullptr)
+		return;
+
 	for (int i = 0; i < mDefinition->mTracks.count; i++)
 		AttachmentPropogateColor(
 			mTrackInstances[i].mAttachmentID, mColorOverride, mEnableExtraAdditiveDraw, mExtraAdditiveColor, mEnableExtraOverlayDraw, mExtraOverlayColor

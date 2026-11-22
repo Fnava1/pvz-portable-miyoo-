@@ -19,6 +19,10 @@ void EvaluateSingleRig(Reanimation* theReanim, int cacheIndex) {
     if (!theReanim || cacheIndex < 0 || cacheIndex >= MAX_ACTIVE_RIGS) return;
     if (!theReanim->mDefinition) return;
 
+    theReanim->mHasOverlayMatrix = (theReanim->mOverlayMatrix.m00 != 1.0f || theReanim->mOverlayMatrix.m11 != 1.0f ||
+                                    theReanim->mOverlayMatrix.m02 != 0.0f || theReanim->mOverlayMatrix.m12 != 0.0f ||
+                                    theReanim->mOverlayMatrix.m01 != 0.0f || theReanim->mOverlayMatrix.m10 != 0.0f);
+
     int trackCount = theReanim->mDefinition->mTracks.count;
     if (trackCount > MAX_TRACKS_PER_RIG) trackCount = MAX_TRACKS_PER_RIG;
 

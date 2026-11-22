@@ -303,6 +303,7 @@ void LawnApp::KillBoard()
 #ifdef LOW_MEMORY
 		CleanSharedImages();
 #endif
+		FilterEffectClearAll();
 	}
 
 	SpriteStreamer::CancelAll();
@@ -3579,6 +3580,18 @@ void LawnApp::PreloadCommonSounds()
 	mSoundSystem->PreloadFoley(FoleyType::FOLEY_DOLPHIN_BEFORE_JUMPING);
 	mSoundSystem->PreloadFoley(FoleyType::FOLEY_GARGANTUDEATH);
 	mSoundSystem->PreloadFoley(FoleyType::FOLEY_IMP);
+
+	// Drops & Rewards (eliminate mid-combat SD card latency)
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_CHIME);
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_PRIZE);
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_MONEYFALLS);
+	mSoundManager->PreloadSound(Sexy::SOUND_DIAMOND);
+
+	// Vehicles & Armor combat Foley
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_ZAMBONI);
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_SHIELD_HIT);
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_TIRE_POP);
+	mSoundSystem->PreloadFoley(FoleyType::FOLEY_JUICY);
 
 	// Common combat and gameplay samples
 	mSoundManager->PreloadSound(Sexy::SOUND_GULP);

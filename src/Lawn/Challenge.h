@@ -23,6 +23,8 @@
 #define __CHALLENGE_H__
 
 #include <cstdint>
+#include <map>
+#include <memory>
 #include "../ConstEnums.h"
 #include "../GameConstants.h"
 #include "../PvzpLib/FilterEffect.h"
@@ -35,6 +37,18 @@ constexpr const int ART_CHALLEGE_SIZE_X = MAX_GRID_SIZE_X;
 constexpr const int MAX_PICK_GRID_SIZE = 50;
 
 using namespace Sexy;
+
+namespace Sexy
+{
+	class MemoryImage;
+}
+
+struct CardboardPlantCacheEntry
+{
+	std::unique_ptr<Sexy::MemoryImage> mImage;
+	int mOffsetX = 0;
+	int mOffsetY = 0;
+};
 
 class LawnApp;
 class Board;
@@ -88,6 +102,7 @@ public:
 
 public:
 	Challenge();
+	~Challenge();
 
 	void                    StartLevel();
 	void                    BeghouledPopulateBoard();
@@ -188,6 +203,9 @@ public:
 	void                    IZombiePlacePlants(SeedType theSeedType, int theCount, int theGridY = -1);
 	void                    IZombieUpdate();
 	void                    IZombieDrawPlant(Graphics* g, Plant* thePlant);
+	void                    BakeCardboardPlant(Plant* thePlant, uint32_t theCacheKey);
+	void                    ClearCardboardPlantCache();
+	std::map<uint32_t, CardboardPlantCacheEntry> mCardboardPlantCache;
 	void                    IZombieSetPlantFilterEffect(Plant* thePlant, FilterEffect theFilterEffect);
 	int          ScaryPotterCountSunInPot(GridItem* theScaryPot);
 	int                     ScaryPotterCountPots();

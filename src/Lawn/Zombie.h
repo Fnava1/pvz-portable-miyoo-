@@ -404,6 +404,7 @@ public:
 	static bool			IsZombotany(ZombieType theZombieType);
 
 	static Sexy::MemoryImage*       gPrebakedSpotlights[5];
+	static Sexy::MemoryImage*       gPrebakedSpotlights2[5];
 	static void                     InitSpotlights();
 	static void                     FreeSpotlights();
 };

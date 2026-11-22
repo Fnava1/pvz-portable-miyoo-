@@ -93,14 +93,28 @@ void FilterEffectInitForApp()
 {
 }
 
-void FilterEffectDisposeForApp()
+void FilterEffectRemoveImage(Image* theImage)
+{
+	if (theImage == nullptr)
+		return;
+
+	for (int i = 0; i < static_cast<int>(FilterEffect::NUM_FILTER_EFFECTS); i++)
+	{
+		gFilterMap[i].erase(theImage);
+	}
+}
+
+void FilterEffectClearAll()
 {
 	for (int i = 0; i < static_cast<int>(FilterEffect::NUM_FILTER_EFFECTS); i++)
 	{
-		ImageFilterMap& aFilterMap = gFilterMap[i];
-
-		aFilterMap.clear();
+		gFilterMap[i].clear();
 	}
+}
+
+void FilterEffectDisposeForApp()
+{
+	FilterEffectClearAll();
 }
 
 void FilterEffectDoLumSat(MemoryImage* theImage, float theLum, float theSat)

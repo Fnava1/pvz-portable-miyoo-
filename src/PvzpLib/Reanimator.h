@@ -215,6 +215,7 @@ public:
 	int32_t                         mFrameCount;
 	int32_t                         mFrameBasePose;
 	SexyTransform2D                 mOverlayMatrix;
+	bool                            mHasOverlayMatrix{false};
 	Color                           mColorOverride;
 	ReanimatorTrackInstance*        mTrackInstances;
 	int32_t                         mLoopCount;
@@ -243,8 +244,8 @@ public:
 	void                            DrawRenderGroup(Graphics* g, int theRenderGroup, PvzpTriangleGroup* theTriangleGroup = nullptr);
 	bool                            DrawTrack(Graphics* g, int theTrackIndex, int theRenderGroup, PvzpTriangleGroup* theTriangleGroup, ReanimatorFrameTime* theFrameTime = nullptr);
 	void                            CalculateModelMatrix(int theTrackIndex, float outM[2][3], float* outA, uint32_t* outC);
-	void                            GetCurrentTransform(int theTrackIndex, ReanimatorTransform* theTransformCurrent, ReanimatorFrameTime* theFrameTime = nullptr);
-	void                            GetTransformAtTime(int theTrackIndex, ReanimatorTransform* theTransform, ReanimatorFrameTime* theFrameTime);
+	bool                            GetCurrentTransform(int theTrackIndex, ReanimatorTransform* theTransformCurrent, ReanimatorFrameTime* theFrameTime = nullptr);
+	bool                            GetTransformAtTime(int theTrackIndex, ReanimatorTransform* theTransform, ReanimatorFrameTime* theFrameTime);
 	void                            GetFrameTime(ReanimatorFrameTime* theFrameTime);
 	int                             FindTrackIndex(const char* theTrackName);
 	void                            AttachToAnotherReanimation(Reanimation* theAttachReanim, const char* theTrackName);

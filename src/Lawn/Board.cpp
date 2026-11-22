@@ -46,6 +46,7 @@
 #include "Widget/SeedChooserScreen.h"
 #include "../PvzpLib/Attachment.h"
 #include "../PvzpLib/Reanimator.h"
+#include "../PvzpLib/FilterEffect.h"
 #include "../PvzpLib/SpriteCachePool.h"
 #include "widget/Dialog.h"
 #include "misc/MTRand.h"
@@ -384,8 +385,10 @@ void Board::DisposeBoard()
 	mApp->mResourceManager->ReleaseTrackedResources(mLoadedResourceNames);
 	mLoadedResourceNames.clear();
 	mApp->CleanSharedImages();
+	FilterEffectClearAll();
 #else
 	mPuzzlePreloadedSeeds.clear();
+	FilterEffectClearAll();
 #endif
 
 	mApp->mSoundSystem->StopFoley(FoleyType::FOLEY_RAIN);
@@ -7204,7 +7207,7 @@ void Board::DrawGameObjects(Graphics* g)
 	{
 		if (aPlant->mDead)
 			continue;
-		if (aPlant->CanUseSpriteCache())
+		if (aPlant->CanUseSpriteCache() || aPlant->mSeedType == SeedType::SEED_PUMPKINSHELL)
 			continue;
 		if (rigCount < MAX_ACTIVE_RIGS)
 		{

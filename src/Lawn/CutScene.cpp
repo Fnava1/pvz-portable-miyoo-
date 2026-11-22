@@ -152,7 +152,11 @@ void CutScene::PlaceAZombie(ZombieType theZombieType, int theGridX, int theGridY
 	if (aPutOnDuckyTube)
 	{
 		//aZombie->ReanimShowTrack("Zombie_duckytube", 0);
-		mApp->ReanimationGet(aZombie->mBodyReanimID)->AssignRenderGroupToTrack("Zombie_duckytube", RENDER_GROUP_NORMAL);
+		Reanimation* aZombieBodyReanim = mApp->ReanimationTryToGet(aZombie->mBodyReanimID);
+		if (aZombieBodyReanim)
+		{
+			aZombieBodyReanim->AssignRenderGroupToTrack("Zombie_duckytube", RENDER_GROUP_NORMAL);
+		}
 	}
 	if (mBoard->StageHasRoof())
 	{
@@ -516,12 +520,10 @@ void CutScene::PreloadResources()
 		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_POOL_CLEANER, true);
 	}
 
-	if (mBoard->CanDropLoot())
-	{
-		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_COIN_SILVER, true);
-		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_COIN_GOLD, true);
-		ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_DIAMOND, true);
-	}
+	// Always preload universal coin and diamond reanimations to eliminate mid-match atlas building
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_COIN_SILVER, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_COIN_GOLD, true);
+	ReanimatorEnsureDefinitionLoaded(ReanimationType::REANIM_DIAMOND, true);
 
 	if (mSodTime > 0)
 	{

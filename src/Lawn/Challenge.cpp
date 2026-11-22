@@ -45,6 +45,7 @@
 #include "../PvzpLib/PvzpFoley.h"
 #include "../PvzpLib/PvzpCommon.h"
 #include "graphics/Font.h"
+#include "graphics/MemoryImage.h"
 #include "../PvzpLib/Reanimator.h"
 #include "misc/Debug.h"
 #include "misc/MTRand.h"
@@ -107,6 +108,16 @@ Challenge::Challenge()
 		aHandleReanim->mAnimRate = 0;
 		mReanimChallenge = mApp->ReanimationGetID(aHandleReanim);
 	}
+}
+
+Challenge::~Challenge()
+{
+	ClearCardboardPlantCache();
+}
+
+void Challenge::ClearCardboardPlantCache()
+{
+	mCardboardPlantCache.clear();
 }
 
 void Challenge::LoadBeghouledBoardState(BeghouledBoardState* theBoardState)
@@ -4097,6 +4108,8 @@ void Challenge::PuzzleNextStageClear()
 
 	SpriteCachePool::ClearZombieSlots();
 	SpriteCachePool::ClearPlantSlots();
+	ClearCardboardPlantCache();
+	FilterEffectClearAll();
 	if (mApp->mReanimatorCache)
 		mApp->mReanimatorCache->ClearLevelTransientCaches();
 
@@ -4624,8 +4637,112 @@ void Challenge::IZombieSetPlantFilterEffect(Plant* thePlant, FilterEffect theFil
 	if (aHeadReanim3)	aHeadReanim3->mFilterEffect = theFilterEffect;
 }
 
+void Challenge::BakeCardboardPlant(Plant* thePlant, uint32_t theCacheKey)
+{
+	Reanimation* aReanim = mApp->ReanimationTryToGet(thePlant->mBodyReanimID);
+	if (!aReanim)
+		return;
+
+	int aDefOffsetX = -20;
+	int aDefOffsetY = -20;
+	int aDefWidth = 120;
+	int aDefHeight = 120;
+	if (mApp->mReanimatorCache)
+	{
+		mApp->mReanimatorCache->GetPlantImageSize(thePlant->mSeedType, aDefOffsetX, aDefOffsetY, aDefWidth, aDefHeight);
+	}
+
+	constexpr int aPadding = 8;
+	int aBakeOffsetX = aDefOffsetX - aPadding;
+	int aBakeOffsetY = aDefOffsetY - aPadding;
+	int aBakeWidth = aDefWidth + aPadding * 2;
+	int aBakeHeight = aDefHeight + aPadding * 2;
+
+	auto aCardboardImage = std::make_unique<MemoryImage>();
+	aCardboardImage->mWidth = aBakeWidth;
+	aCardboardImage->mHeight = aBakeHeight;
+	int aNumPixels = aBakeWidth * aBakeHeight;
+	aCardboardImage->mBits = std::make_unique<uint32_t[]>(aNumPixels + 1);
+	aCardboardImage->mHasTrans = true;
+	aCardboardImage->mHasAlpha = true;
+	memset(aCardboardImage->mBits.get(), 0, aNumPixels * sizeof(uint32_t));
+	aCardboardImage->mBits[aNumPixels] = Sexy::MEMORYCHECK_ID;
+
+	Graphics aBakeG(aCardboardImage.get());
+	aBakeG.SetLinearBlend(true);
+	IZombieSetPlantFilterEffect(thePlant, FilterEffect::FILTER_EFFECT_WHITE);
+	aBakeG.SetColorizeImages(true);
+
+	// Strip plant-instance-specific shake and height offset during baking
+	SexyTransform2D aSavedOverlayMatrix = aReanim->mOverlayMatrix;
+	float aPlantHeightOffset = PlantDrawHeightOffset(mBoard, thePlant, thePlant->mSeedType, thePlant->mPlantCol, thePlant->mRow);
+	aReanim->mOverlayMatrix.m02 -= thePlant->mShakeOffsetX;
+	aReanim->mOverlayMatrix.m12 -= (thePlant->mShakeOffsetY + aPlantHeightOffset);
+
+	float aOriginX = -static_cast<float>(aBakeOffsetX);
+	float aOriginY = -static_cast<float>(aBakeOffsetY);
+
+	// Pass 1: Dark brown shadow (+4, +4)
+	aBakeG.mTransX = aOriginX + 4;
+	aBakeG.mTransY = aOriginY + 4;
+	aBakeG.SetColor(Color(122, 86, 58));
+	aReanim->DrawRenderGroup(&aBakeG, 0);
+
+	// Pass 2: Medium brown outline (+2, +2)
+	aBakeG.mTransX = aOriginX + 2;
+	aBakeG.mTransY = aOriginY + 2;
+	aBakeG.SetColor(Color(171, 135, 107));
+	aReanim->DrawRenderGroup(&aBakeG, 0);
+
+	// Pass 3: Medium brown outline (-2, -2)
+	aBakeG.mTransX = aOriginX - 2;
+	aBakeG.mTransY = aOriginY - 2;
+	aBakeG.SetColor(Color(171, 135, 107));
+	aReanim->DrawRenderGroup(&aBakeG, 0);
+
+	// Pass 4: Light cardboard face (+0, +0)
+	aBakeG.mTransX = aOriginX;
+	aBakeG.mTransY = aOriginY;
+	aBakeG.SetColor(Color(255, 201, 160));
+	IZombieSetPlantFilterEffect(thePlant, FilterEffect::FILTER_EFFECT_NONE);
+	aReanim->DrawRenderGroup(&aBakeG, 0);
+
+	IZombieSetPlantFilterEffect(thePlant, FilterEffect::FILTER_EFFECT_NONE);
+	aBakeG.SetDrawMode(Graphics::DRAWMODE_NORMAL);
+	aBakeG.SetColorizeImages(false);
+
+	// Restore original overlay matrix
+	aReanim->mOverlayMatrix = aSavedOverlayMatrix;
+
+	FixPixelsOnAlphaEdgeForBlending(aCardboardImage.get());
+	aCardboardImage->mBitsChangedCount++;
+
+	CardboardPlantCacheEntry aEntry;
+	aEntry.mImage = std::move(aCardboardImage);
+	aEntry.mOffsetX = aBakeOffsetX;
+	aEntry.mOffsetY = aBakeOffsetY;
+	mCardboardPlantCache[theCacheKey] = std::move(aEntry);
+}
+
 void Challenge::IZombieDrawPlant(Graphics* g, Plant* thePlant)
 {
+	uint32_t aCacheKey = (static_cast<uint32_t>(thePlant->mSeedType) << 8) | (static_cast<uint32_t>(thePlant->mState) & 0xFF);
+	auto it = mCardboardPlantCache.find(aCacheKey);
+	if (it == mCardboardPlantCache.end())
+	{
+		BakeCardboardPlant(thePlant, aCacheKey);
+		it = mCardboardPlantCache.find(aCacheKey);
+	}
+
+	if (it != mCardboardPlantCache.end() && it->second.mImage)
+	{
+		float aPlantHeightOffset = PlantDrawHeightOffset(mBoard, thePlant, thePlant->mSeedType, thePlant->mPlantCol, thePlant->mRow);
+		g->DrawImage(it->second.mImage.get(),
+		            it->second.mOffsetX + thePlant->mShakeOffsetX,
+		            it->second.mOffsetY + thePlant->mShakeOffsetY + static_cast<int>(aPlantHeightOffset));
+		return;
+	}
+
 	Reanimation* aReanim = mApp->ReanimationTryToGet(thePlant->mBodyReanimID);
 	if (aReanim)
 	{

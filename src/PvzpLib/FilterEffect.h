@@ -47,6 +47,8 @@ extern ImageFilterMap gFilterMap[FilterEffect::NUM_FILTER_EFFECTS];
 
 void                FilterEffectInitForApp();
 void                FilterEffectDisposeForApp();
+void                FilterEffectRemoveImage(Image* theImage);
+void                FilterEffectClearAll();
 void                FilterEffectDoLumSat(MemoryImage* theImage, float theLum, float theSat);
 void     FilterEffectDoWashedOut(MemoryImage* theImage);
 void     FilterEffectDoLessWashedOut(MemoryImage* theImage);

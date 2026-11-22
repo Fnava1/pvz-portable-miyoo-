@@ -666,7 +666,12 @@ void PvzpParticleEmitter::UpdateSpawning()
 {
 	PvzpParticleEmitter* aCrossFadeEmitter = mParticleSystem->mParticleHolder->mEmitters.DataArrayTryToGet(static_cast<unsigned int>(mCrossFadeEmitterID));
 	PvzpParticleEmitter* aSpawningEmitter = !aCrossFadeEmitter ? this : aCrossFadeEmitter;  // all spawn data is taken from this "primary" emitter
-	mSpawnAccum += aSpawningEmitter->SystemTrackEvaluate(aSpawningEmitter->mEmitterDef->mSpawnRate, ParticleSystemTracks::TRACK_SPAWN_RATE) * 0.01;
+	float aSpawnRate = aSpawningEmitter->SystemTrackEvaluate(aSpawningEmitter->mEmitterDef->mSpawnRate, ParticleSystemTracks::TRACK_SPAWN_RATE);
+	if (mParticleSystem && mParticleSystem->mEffectType == ParticleEffect::PARTICLE_DANCER_RISE)
+	{
+		aSpawnRate *= 0.25f;
+	}
+	mSpawnAccum += aSpawnRate * 0.01;
 	int aSpawnCount = static_cast<int>(mSpawnAccum);
 	mSpawnAccum -= aSpawnCount;
 
@@ -674,6 +679,11 @@ void PvzpParticleEmitter::UpdateSpawning()
 	if (aSpawnMinActive >= 0 && aSpawnCount < aSpawnMinActive - mParticleList.mSize)
 		aSpawnCount = aSpawnMinActive - mParticleList.mSize;  // spawn at least enough to reach aSpawnMinActive
 	int aSpawnMaxActive = static_cast<int>(aSpawningEmitter->SystemTrackEvaluate(aSpawningEmitter->mEmitterDef->mSpawnMaxActive, ParticleSystemTracks::TRACK_SPAWN_MAX_ACTIVE));
+	if (mParticleSystem && mParticleSystem->mEffectType == ParticleEffect::PARTICLE_DANCER_RISE)
+	{
+		if (aSpawnMaxActive > 16)
+			aSpawnMaxActive = 16;
+	}
 	if (aSpawnMaxActive >= 0 && aSpawnCount > aSpawnMaxActive - mParticleList.mSize)
 		aSpawnCount = aSpawnMaxActive - mParticleList.mSize;  // cap the active count at aSpawnMaxActive
 	if (FloatTrackIsSet(aSpawningEmitter->mEmitterDef->mSpawnMaxLaunched))
@@ -1025,10 +1035,12 @@ void PvzpParticleEmitter::DrawParticle(Graphics* g, PvzpParticle* theParticle, P
 	{
 		int aAlpha = std::clamp(FloatRoundToInt(aParams.mAlpha), 0, 255);
 		int aMinAlpha = 4;
-		if (mParticleSystem && mParticleSystem->mParticleHolder &&
-		    mParticleSystem->mParticleHolder->mParticles.mSize > 120)
+		if (mParticleSystem && mParticleSystem->mParticleHolder)
 		{
-			aMinAlpha = 20;
+			if (mParticleSystem->mParticleHolder->mParticles.mSize > 120)
+				aMinAlpha = 24;
+			else if (mParticleSystem->mParticleHolder->mParticles.mSize > 60)
+				aMinAlpha = 16;
 		}
 		if (aAlpha <= aMinAlpha)
 			return;

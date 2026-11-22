@@ -28,9 +28,17 @@
 #include "graphics/Graphics.h"
 #include "graphics/MemoryImage.h"
 
+#include "FilterEffect.h"
+
 ReanimAtlas::ReanimAtlas() = default;
 
-ReanimAtlas::~ReanimAtlas() = default;
+ReanimAtlas::~ReanimAtlas()
+{
+	if (mMemoryImage)
+	{
+		FilterEffectRemoveImage(mMemoryImage.get());
+	}
+}
 
 ReanimAtlasImage* ReanimAtlas::GetEncodedReanimAtlas(Image* theImage)
 {

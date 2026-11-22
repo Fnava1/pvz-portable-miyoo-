@@ -642,6 +642,11 @@ std::unique_ptr<MemoryImage> ReanimatorCache::MakeCachedPlantIdleFrame(SeedType 
 		aBodyReanim.mAnimRate = 0.0f;
 		aBodyReanim.mAnimTime = theAnimTime;
 
+		if (theSeedType == SeedType::SEED_PUMPKINSHELL)
+		{
+			aBodyReanim.AssignRenderGroupToTrack("Pumpkin_back", 1);
+		}
+
 		if (theSeedType == SeedType::SEED_THREEPEATER)
 		{
 			Reanimation* aHead1 = mApp->AddReanimation(0.0f, 0.0f, 0, ReanimationType::REANIM_THREEPEATER);

@@ -23,7 +23,17 @@ void Reanimation::CalculateModelMatrix(int theTrackIndex, float outM[2][3], floa
 
 	ReanimatorTransform aTransform;
 	ReanimatorTrackInstance* aTrackInstance = &mTrackInstances[theTrackIndex];
-	GetCurrentTransform(theTrackIndex, &aTransform, nullptr);
+	if (!GetCurrentTransform(theTrackIndex, &aTransform, nullptr))
+	{
+		if (outM)
+		{
+			outM[0][0] = 1.0f; outM[0][1] = 0.0f; outM[0][2] = 0.0f;
+			outM[1][0] = 0.0f; outM[1][1] = 1.0f; outM[1][2] = 0.0f;
+		}
+		if (outA) *outA = 0.0f;
+		if (outC) *outC = 0;
+		return;
+	}
 
 	if (outA)
 	{
@@ -78,34 +88,46 @@ void Reanimation::CalculateModelMatrix(int theTrackIndex, float outM[2][3], floa
 		aImage = nullptr;
 
 	SexyMatrix3 aMatrix;
-	aMatrix.LoadIdentity();
+	MatrixFromTransform(aTransform, aMatrix);
 
+	float aPivotX = 0.0f;
+	float aPivotY = 0.0f;
 	if (aPivotAtlasImage != nullptr)
 	{
-		SexyMatrix3Translation(aMatrix, aPivotAtlasImage->mWidth * 0.5f, aPivotAtlasImage->mHeight * 0.5f);
+		aPivotX = aPivotAtlasImage->mWidth * 0.5f;
+		aPivotY = aPivotAtlasImage->mHeight * 0.5f;
 	}
 	else if (aPivotImage != nullptr)
 	{
 		int aCelWidth = aPivotImage->GetCelWidth();
 		int aCelHeight = aPivotImage->GetCelHeight();
-		SexyMatrix3Translation(aMatrix, aCelWidth * 0.5f, aCelHeight * 0.5f);
+		aPivotX = aCelWidth * 0.5f;
+		aPivotY = aCelHeight * 0.5f;
 	}
 	else if (aImage != nullptr)
 	{
 		int aCelWidth = aImage->GetCelWidth();
 		int aCelHeight = aImage->GetCelHeight();
-		SexyMatrix3Translation(aMatrix, aCelWidth * 0.5f, aCelHeight * 0.5f);
+		aPivotX = aCelWidth * 0.5f;
+		aPivotY = aCelHeight * 0.5f;
 	}
 	else if (aTransform.mFont != nullptr && aTransform.mText != nullptr && *aTransform.mText != '\0')
 	{
 		int aWidth = aTransform.mFont->StringWidth(aTransform.mText);
-		SexyMatrix3Translation(aMatrix, -aWidth * 0.5f, aTransform.mFont->mAscent);
+		aPivotX = -aWidth * 0.5f;
+		aPivotY = aTransform.mFont->mAscent;
 	}
 
-	SexyMatrix3 aTransformMatrix;
-	MatrixFromTransform(aTransform, aTransformMatrix);
-	SexyMatrix3Multiply(aMatrix, aTransformMatrix, aMatrix);
-	SexyMatrix3Multiply(aMatrix, mOverlayMatrix, aMatrix);
+	if (aPivotX != 0.0f || aPivotY != 0.0f)
+	{
+		aMatrix.m02 += aMatrix.m00 * aPivotX + aMatrix.m01 * aPivotY;
+		aMatrix.m12 += aMatrix.m10 * aPivotX + aMatrix.m11 * aPivotY;
+	}
+
+	if (__builtin_expect(mHasOverlayMatrix, 0))
+	{
+		SexyMatrix3Multiply(aMatrix, mOverlayMatrix, aMatrix);
+	}
 
 	if (outM)
 	{
