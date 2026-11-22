@@ -8,6 +8,7 @@ A port of **Plants vs. Zombies: Game of the Year Edition** for the **Miyoo Mini 
 ---
 **Bugs:**
 - reported: buttons stop working on Zombatar
+- Shop's background when opened from Zen Garden
 ---
 
 ## Features
