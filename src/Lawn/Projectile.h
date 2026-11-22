@@ -104,6 +104,8 @@ public:
 	bool                    IsZombieHitBySplash(Zombie* theZombie);
 	bool                    PeaAboutToHitTorchwood();
 
+	static void             FreeRotatedProjectileCache();
+
 };
 
 #endif

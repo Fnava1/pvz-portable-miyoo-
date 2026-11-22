@@ -31,8 +31,79 @@
 #include "../PvzpLib/PvzpDebug.h"
 #include "../PvzpLib/Reanimator.h"
 #include "../PvzpLib/Attachment.h"
+#include "../SexyAppFramework/graphics/MemoryImage.h"
 #include "Widget/AchievementsScreen.h"
 #include <algorithm>
+#include <cmath>
+
+namespace {
+constexpr int NUM_PROJECTILE_ROTATION_FRAMES = 16;
+
+struct RotatedProjectileCache {
+	MemoryImage* mFrames[NUM_PROJECTILE_ROTATION_FRAMES] = {nullptr};
+	int mCelSize = 0;
+	bool mInitialized = false;
+
+	void Free() {
+		for (int i = 0; i < NUM_PROJECTILE_ROTATION_FRAMES; ++i) {
+			delete mFrames[i];
+			mFrames[i] = nullptr;
+		}
+		mInitialized = false;
+		mCelSize = 0;
+	}
+
+	void Init(Image* theSourceImage) {
+		if (!theSourceImage || mInitialized) return;
+		int aSrcW = theSourceImage->GetCelWidth();
+		int aSrcH = theSourceImage->GetCelHeight();
+		mCelSize = static_cast<int>(std::ceil(std::sqrt(static_cast<float>(aSrcW * aSrcW + aSrcH * aSrcH)))) + 4;
+		if (mCelSize % 2 != 0) mCelSize++;
+
+		for (int i = 0; i < NUM_PROJECTILE_ROTATION_FRAMES; ++i) {
+			float aAngle = (i * 2.0f * PI) / NUM_PROJECTILE_ROTATION_FRAMES;
+			auto aImg = new MemoryImage();
+			int aBitsCount = mCelSize * mCelSize;
+			aImg->mBits = std::make_unique<uint32_t[]>(aBitsCount + 1);
+			aImg->mWidth = mCelSize;
+			aImg->mHeight = mCelSize;
+			aImg->mHasTrans = true;
+			aImg->mHasAlpha = true;
+			memset(aImg->mBits.get(), 0, aBitsCount * 4);
+			aImg->mBits[aBitsCount] = Sexy::MEMORYCHECK_ID;
+
+			Graphics gImg(aImg);
+			SexyTransform2D aTransform;
+			PvzpScaleRotateTransformMatrix(aTransform, mCelSize * 0.5f, mCelSize * 0.5f, aAngle, 1.0f, 1.0f);
+			PvzpBltMatrix(&gImg, theSourceImage, aTransform, Rect(0, 0, mCelSize, mCelSize), Color::White, Graphics::DRAWMODE_NORMAL, Rect(0, 0, aSrcW, aSrcH));
+			aImg->BitsChanged();
+
+			mFrames[i] = aImg;
+		}
+		mInitialized = true;
+	}
+
+	bool Draw(Graphics* g, float theCenterX, float theCenterY, float theAngle) {
+		if (!mInitialized) return false;
+		float aRot = std::fmod(theAngle, 2.0f * PI);
+		if (aRot < 0.0f) aRot += 2.0f * PI;
+		int aIdx = static_cast<int>(std::round(aRot * (NUM_PROJECTILE_ROTATION_FRAMES / (2.0f * PI)))) & (NUM_PROJECTILE_ROTATION_FRAMES - 1);
+		int aX = FloatRoundToInt(theCenterX - mCelSize * 0.5f);
+		int aY = FloatRoundToInt(theCenterY - mCelSize * 0.5f);
+		g->DrawImage(mFrames[aIdx], aX, aY);
+		return true;
+	}
+};
+
+RotatedProjectileCache gStarCache;
+RotatedProjectileCache gSpikeCache;
+}
+
+void Projectile::FreeRotatedProjectileCache()
+{
+	gStarCache.Free();
+	gSpikeCache.Free();
+}
 
 constinit const ProjectileDefinition gProjectileDefinition[] = {
 	{ .mProjectileType = ProjectileType::PROJECTILE_PEA, .mImageRow = 0, .mDamage = 20 },
@@ -928,10 +999,16 @@ void Projectile::DoImpact(Zombie* theZombie)
 	switch (mProjectileType)
 	{
 	case ProjectileType::PROJECTILE_MELON:
-		mApp->AddPvzpParticle(aLastPosX + 30.0f, aLastPosY + 30.0f, mRenderOrder + 1, ParticleEffect::PARTICLE_MELONSPLASH);
+		if (!theZombie || theZombie->CanAttachHitSplat())
+		{
+			mApp->AddPvzpParticle(aLastPosX + 30.0f, aLastPosY + 30.0f, mRenderOrder + 1, ParticleEffect::PARTICLE_MELONSPLASH);
+		}
 		break;
 	case ProjectileType::PROJECTILE_WINTERMELON:
-		mApp->AddPvzpParticle(aLastPosX + 30.0f, aLastPosY + 30.0f, mRenderOrder + 1, ParticleEffect::PARTICLE_WINTERMELON);
+		if (!theZombie || theZombie->CanAttachHitSplat())
+		{
+			mApp->AddPvzpParticle(aLastPosX + 30.0f, aLastPosY + 30.0f, mRenderOrder + 1, ParticleEffect::PARTICLE_WINTERMELON);
+		}
 		break;
 	case ProjectileType::PROJECTILE_COBBIG:
 	{
@@ -1086,7 +1163,14 @@ void Projectile::Draw(Graphics* g)
 		break;
 	case ProjectileType::PROJECTILE_PUFF:
 		aImage = IMAGE_PUFFSHROOM_PUFF1;
-		aScale = PvzpAnimateCurveFloat(0, 30, mProjectileAge, 0.3f, 1.0f, PvzpCurves::CURVE_LINEAR);
+		if (mProjectileAge >= 30)
+		{
+			aScale = 1.0f;
+		}
+		else
+		{
+			aScale = PvzpAnimateCurveFloat(0, 30, mProjectileAge, 0.3f, 1.0f, PvzpCurves::CURVE_LINEAR);
+		}
 		break;
 	case ProjectileType::PROJECTILE_BASKETBALL:
 		aImage = IMAGE_REANIM_ZOMBIE_CATAPULT_BASKETBALL;
@@ -1131,10 +1215,45 @@ void Projectile::Draw(Graphics* g)
 		int aCelWidth = aImage->GetCelWidth();
 		int aCelHeight = aImage->GetCelHeight();
 		Rect aSrcRect(aCelWidth * mFrame, aCelHeight * aProjectileDef.mImageRow, aCelWidth, aCelHeight);
-		if (FloatApproxEqual(mRotation, 0.0f) && FloatApproxEqual(aScale, 1.0f))
+
+		if (!gSexyAppBase->Is3DAccelerated() && mProjectileType == ProjectileType::PROJECTILE_STAR)
 		{
-			Rect aDestRect(0, 0, aCelWidth, aCelHeight);
-			g->DrawImageMirror(aImage, aDestRect, aSrcRect, aMirror);
+			if (!gStarCache.mInitialized)
+				gStarCache.Init(IMAGE_PROJECTILE_STAR);
+			if (gStarCache.Draw(g, (mPosX - mX) + aCelWidth * 0.5f, (mPosY + mPosZ - mY) + aCelHeight * 0.5f, mRotation))
+			{
+				goto drawn_projectile;
+			}
+		}
+		else if (!gSexyAppBase->Is3DAccelerated() && mProjectileType == ProjectileType::PROJECTILE_SPIKE)
+		{
+			if (!gSpikeCache.mInitialized)
+				gSpikeCache.Init(IMAGE_PROJECTILECACTUS);
+			if (gSpikeCache.Draw(g, (mPosX - mX) + aCelWidth * 0.5f, (mPosY + mPosZ - mY) + aCelHeight * 0.5f, mRotation))
+			{
+				goto drawn_projectile;
+			}
+		}
+
+		if (FloatApproxEqual(mRotation, 0.0f))
+		{
+			if (FloatApproxEqual(aScale, 1.0f))
+			{
+				Rect aDestRect(0, 0, aCelWidth, aCelHeight);
+				g->DrawImageMirror(aImage, aDestRect, aSrcRect, aMirror);
+			}
+			else
+			{
+				int aW = FloatRoundToInt(aCelWidth * aScale);
+				int aH = FloatRoundToInt(aCelHeight * aScale);
+				int aDestX = FloatRoundToInt((aCelWidth - aW) * 0.5f);
+				int aDestY = FloatRoundToInt((aCelHeight - aH) * 0.5f);
+				Rect aDestRect(aDestX, aDestY, aW, aH);
+				bool aOldFast = g->GetFastStretch();
+				g->SetFastStretch(true);
+				g->DrawImage(aImage, aDestRect, aSrcRect);
+				g->SetFastStretch(aOldFast);
+			}
 		}
 		else
 		{
@@ -1142,9 +1261,17 @@ void Projectile::Draw(Graphics* g)
 			float aOffsetY = mPosZ + mPosY + aCelHeight * 0.5f;
 			SexyTransform2D aTransform;
 			PvzpScaleRotateTransformMatrix(aTransform, aOffsetX + mBoard->mX, aOffsetY + mBoard->mY, mRotation, aScale, aScale);
+			bool aOldLinear = g->mLinearBlend;
+			if (!gSexyAppBase->Is3DAccelerated() && mBoard && mBoard->mProjectiles.mSize > 25)
+			{
+				g->mLinearBlend = false;
+			}
 			PvzpBltMatrix(g, aImage, aTransform, g->mClipRect, Color::White, g->mDrawMode, aSrcRect);
+			g->mLinearBlend = aOldLinear;
 		}
 	}
+
+drawn_projectile:
 
 	if (mAttachmentID != AttachmentID::ATTACHMENTID_NULL)
 	{

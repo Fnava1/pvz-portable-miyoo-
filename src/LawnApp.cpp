@@ -32,6 +32,7 @@
 #include "Lawn/Board.h"
 #include "Lawn/Plant.h"
 #include "Lawn/Zombie.h"
+#include "Lawn/Projectile.h"
 #include "Lawn/Cutscene.h"
 #include "GameConstants.h"
 #include "sound/SoundManager.h"
@@ -236,6 +237,7 @@ LawnApp::~LawnApp()
 	mReanimatorCache.reset();
 
 	Zombie::FreeSpotlights();
+	Projectile::FreeRotatedProjectileCache();
 
 	FilterEffectDisposeForApp();
 	PvzpParticleFreeDefinitions();
@@ -250,6 +252,7 @@ LawnApp::~LawnApp()
 void LawnApp::Shutdown()
 {
 	Zombie::FreeSpotlights();
+	Projectile::FreeRotatedProjectileCache();
 	SpriteStreamer::CancelAll();
 	PvZ::Graphics::DmaTexturePool::Instance().Shutdown();
 

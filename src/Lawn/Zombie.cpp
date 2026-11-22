@@ -155,6 +155,16 @@ bool Zombie::CanAttachHitSplat()
 		return true;
 
 	int aCurrentTick = mBoard->mBoardUpdateCounter;
+	if (mBoard->mZombies.mSize > 15 || mBoard->mProjectiles.mSize > 20)
+	{
+		if (aCurrentTick - mLastSplatTick < 2)
+			return false;
+
+		mLastSplatTick = aCurrentTick;
+		mSplatCountInTick = 1;
+		return true;
+	}
+
 	if (aCurrentTick == mLastSplatTick)
 	{
 		if (mSplatCountInTick >= 2)
@@ -5575,6 +5585,12 @@ void Zombie::UpdateReanim()
 	}
 	else
 	{
+		if (IsImmobilizied() && mBonesCalculatedThisTick)
+		{
+			aBodyReanim->UpdateAnimationTimeOnly();
+			return;
+		}
+
 		bool skipHordeBoneUpdate = false;
 		if (mZombiePhase == ZombiePhase::PHASE_DANCER_RISING)
 		{
