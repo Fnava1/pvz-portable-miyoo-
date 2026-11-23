@@ -18,34 +18,11 @@ This directory appears **after** the first boot
 
 ---
 
-## Features
-
-- **Hybrid Ergonomic Controls:**
-  - **Lawn Battle:** Discrete 9×5 grid snapping on D-pad with L/R seed packet cycling.
-  - **Hover Sun Vacuum:** Hovering the cursor over falling or produced suns and coins automatically collects them.
-  - **Zen Garden:** Dedicated **L / R** triggers cycle available top-shelf tools (Watering Can, Fertilizer, Bug Spray, Phonograph, Chocolate, Glove, Money Sign, Wheelbarrow, Tree Food); **A** applies the tool on the selected plant; **B** drops/cancels.
-  - **Dave's Shop:** Direct shelf-and-slot navigation.
-- **Extreme Wave & Survival Performance (Locked 60 FPS):**
-  - **Discrete Rotation Cache:** 16 pre-rendered angles for Starfruits and homing Cattail/Cactus spikes, replacing heavy software matrix bilinear interpolation with instantaneous SIMD blits.
-  - **Particle Storm Throttling:** Intelligent rate-limiting of impact splat emitters during dense horde waves, preventing emitter saturation.
-  - **Kinematics Bypass for Immobilized Entities:** Motionless frozen/buttered zombies skip redundant bone recalculations while Gargantuars and walking hordes retain uncompromised 60 FPS skeletal fidelity.
-- **Visual Fidelity & Defensive Plant Fixes:**
-  - Multi-layer depth sorting for Pumpkin shells (`Pumpkin_back` behind plants, `Pumpkin_front` in front) with accurate 3-stage damage visuals.
-  - Persistent degradation sprites for Wall-nuts, Tall-nuts, and Pumpkins when sustaining damage.
-  - Defensive null guards preventing crashes across Reanimation, Plant, Zombie, and CutScene subsystems.
-- **Dynamic Overclocking & Power Resiliency:**
-  - Automatic model detection: **1800 MHz** for Miyoo Mini Plus (AXP223 PMIC) and a safe **1400 MHz** ceiling for Miyoo Mini non-Plus (preventing undervoltage PMIC kernel panics).
-  - Signal traps (`EXIT`, `INT`, `TERM`, `HUP`) with unconditional `sync` and governor restoration to `ondemand 1200` to eliminate FAT32 SD card corruption.
-  - Direct hardware framebuffer restoration (`ResetFramebuffer()` via `ioctl(FBIOPAN_DISPLAY)`) completely eliminating post-game black screens.
-- **Dual Installation Workflow:** 3-second automated PC builder (`Launcher.py`) or autonomous console conversion (`setup_miyoo`) with on-screen `/dev/fb0` progress tracking.
-
----
-
 ## Control Scheme
  
 | Button | Garden Battle Mode | Menus & Dave's Shop | Zen Garden | Minigames (*Whack-a-Zombie*, etc.) |
 |---|---|---|---|---|
-| **D-Pad** | Discrete 9×5 Grid Snapping (Tile-to-Tile) | Navigate Items / Shelves | Move Virtual Cursor / Target Pot | Smooth Contextual Virtual Cursor |
+| **D-Pad** | Discrete 9×5 Grid Snapping (Tile-to-Tile) | Navigate Items / Shelves | Move Virtual Cursor / Target Pot | Contextual Virtual Cursor |
 | **Cursor Hover** | **Auto-Collect Suns & Coins** | — | — | — |
 | **L / R** | Cycle Seed Packets Prev / Next | Tab Pages Left / Right | **Cycle Zen Garden Tools** (Water, Fertilizer, Spray, Music, Chocolate, Glove, Money, Cart, Tree Food) | Cycle Available Items |
 | **A** | Plant Selected Seed / Confirm | Select / Purchase | **Equip / Apply Tool to Plant** | Hit / Whack / Select |
@@ -73,8 +50,7 @@ This repository strictly complies with the **Bring Your Own Data (BYOD)** legal 
 
 ## Installation Guide
 
-### Method A: Fast PC Preparation (Recommended)
-*Prepares and optimizes assets on your computer in ~3 seconds using Python standard library.*
+### Method A: PC Preparation
 
 1. **Clone or Download:**
    ```bash
@@ -100,7 +76,7 @@ This repository strictly complies with the **Bring Your Own Data (BYOD)** legal 
 *No PC setup tools required—drag and drop your raw game file straight to your SD card.*
 
 1. **Download Release Package:**
-   Download `PvZ_MiyooMiniPlus_v1.1.0.zip` from the [Releases](https://github.com/Fnava1/pvz-portable-miyoo-/releases) page.
+   Download `PvZ_MiyooMiniPlus.zip` from the [Releases](https://github.com/Fnava1/pvz-portable-miyoo-/releases) page.
 2. **Extract to SD Card:**
    Extract the ZIP archive directly to the root of your microSD card. It will stage:
    ```text
