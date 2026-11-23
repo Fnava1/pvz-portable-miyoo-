@@ -66,6 +66,13 @@ src/SexyAppFramework/sound/SDL-Mixer-X/test/
 .aider*
 .agents/
 .superpowers/
+AGENTS.md
+GEMINI.md
+CLAUDE.md
+COPILOT.md
+*_report.md
+concepts_brief.md
+design_draft.md
 
 # ==============================================================================
 # IDE, Editor & Developer Workspace Artifacts
