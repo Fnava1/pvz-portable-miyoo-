@@ -109,7 +109,7 @@ This repository strictly complies with the **Bring Your Own Data (BYOD)** legal 
 4. **Boot & Play:**
    - Insert the microSD card into your Miyoo Mini or Miyoo Mini Plus.
    - In OnionOS, open **Ports -> Strategy -> Plants vs. Zombies**.
-   - On first launch, the autonomous installer (`setup_miyoo`) will display an on-screen progress bar on the LCD, downscale textures and resample audio into `main_mmp.pak`, back up your original file to `main.pak.bak`, delete `setup_miyoo` to free storage, and immediately launch into the game! (**The first launch GUI visuals are bugged right now, this does not affect the functionality and I'll fix it later**)
+   - On first launch, the autonomous installer (`setup_miyoo`) will display an on-screen progress bar on the LCD, preserve textures at 1:1 resolution and resample audio into `main_mmp.pak`, back up your original file to `main.pak.bak`, delete `setup_miyoo` to free storage, and immediately launch into the game! (**The first launch GUI visuals are bugged right now, this does not affect the functionality and I'll fix it later**)
 
 ---
 

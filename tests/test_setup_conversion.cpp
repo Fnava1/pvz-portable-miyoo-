@@ -216,9 +216,9 @@ static void test_pak_streaming_conversion_and_peak_memory() {
 
     assert(stats.total_files == 4);
     assert(stats.processed_files == 4);
-    assert(stats.images_scaled == 1);
+    assert(stats.images_scaled == 0);
     assert(stats.audio_resampled == 1);
-    assert(stats.passthrough_files == 2);
+    assert(stats.passthrough_files == 3);
 
     // Peak memory MUST stay <= 10 MB
     std::cout << "  Peak conversion memory: " << (stats.peak_memory_bytes / 1024) << " KB" << std::endl;

@@ -75,8 +75,11 @@ if [ -f "./main_mmp.pak" ]; then
         rm -f ./setup_miyoo
     fi
     touch .installed
-elif [ -f "./main.pak" ]; then
-    # Only raw PC main.pak detected: run on-device converter first
+elif [ -f "./main.pak" ] || [ -f "./main.pak.bak" ]; then
+    # Raw PC main.pak detected (or backed up main.pak.bak):
+    if [ ! -f "./main.pak" ] && [ -f "./main.pak.bak" ]; then
+        cp ./main.pak.bak ./main.pak 2>/dev/null || true
+    fi
     if [ -f "./setup_miyoo" ]; then
         chmod +x ./setup_miyoo
         ./setup_miyoo
@@ -84,12 +87,12 @@ elif [ -f "./main.pak" ]; then
             rm -f ./setup_miyoo
             touch .installed
         else
-            echo "setup_miyoo conversion failed!"
-            exit 1
+            echo "setup_miyoo conversion failed, falling back to direct main.pak!"
+            touch .installed
         fi
     else
-        echo "Error: setup_miyoo missing and main_mmp.pak not found!"
-        exit 1
+        # If setup_miyoo is not present, launch directly using raw PC main.pak
+        touch .installed
     fi
 fi
 

@@ -38,9 +38,14 @@ int main(int argc, char *argv[]) {
 
     // Verify raw input archive exists
     if (access(raw_pak_path, F_OK) != 0) {
-        fprintf(stderr, "[SETUP] Error: Target archive '%s' not found!\n", raw_pak_path);
-        fprintf(stderr, "Please place your PC 'main.pak' file in this folder.\n");
-        return 1;
+        if (access(bak_pak_path, F_OK) == 0) {
+            printf("[SETUP] Info: '%s' not found, but '%s' detected. Using backup archive.\n", raw_pak_path, bak_pak_path);
+            raw_pak_path = bak_pak_path;
+        } else {
+            fprintf(stderr, "[SETUP] Error: Target archive '%s' not found!\n", raw_pak_path);
+            fprintf(stderr, "Please place your PC 'main.pak' file in this folder.\n");
+            return 1;
+        }
     }
 
     // 1. Initialize framebuffer UI
@@ -62,9 +67,9 @@ int main(int argc, char *argv[]) {
     }
 
     printf("\n[SETUP] Conversion Summary:\n");
-    printf("  Total files:     %zu\n", stats.total_files);
-    printf("  Images scaled:   %zu (0.8x downscale)\n", stats.images_scaled);
-    printf("  Audio converted: %zu (22.05 kHz mono PCM)\n", stats.audio_resampled);
+    printf("  Total files:      %zu\n", stats.total_files);
+    printf("  Images preserved: %zu (1:1 native resolution)\n", stats.passthrough_files);
+    printf("  Audio converted:  %zu (22.05 kHz mono PCM)\n", stats.audio_resampled);
     printf("  Passthrough:     %zu\n", stats.passthrough_files);
     printf("  Input size:      %.2f MB\n", (double)stats.total_in_bytes / (1024.0 * 1024.0));
     printf("  Output size:     %.2f MB\n", (double)stats.total_out_bytes / (1024.0 * 1024.0));

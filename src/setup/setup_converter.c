@@ -624,26 +624,9 @@ int convert_pak_streaming(const char *in_pak_path, const char *out_pak_path,
             } else {
                 passthrough_files++;
             }
-        } else if (str_ends_with_case_insensitive(fname, ".png") ||
-                   str_ends_with_case_insensitive(fname, ".jpg") ||
-                   str_ends_with_case_insensitive(fname, ".jpeg")) {
-            if (!is_preserved_image(fname)) {
-                uint8_t *scaled_data = NULL;
-                size_t scaled_sz = 0;
-                if (convert_image_buffer(in_buf, orig_sz, fname, &scaled_data, &scaled_sz) == 0 && scaled_data) {
-                    final_buf = scaled_data;
-                    final_sz = scaled_sz;
-                    free(in_buf);
-                    converted = 1;
-                    images_scaled++;
-                    file_mem += scaled_sz;
-                } else {
-                    passthrough_files++;
-                }
-            } else {
-                passthrough_files++;
-            }
         } else {
+            // All images (.png, .jpg) and other non-audio assets are preserved 1:1 at original resolution
+            // to prevent double downscaling when rendered by the 800x600 logical engine and NEON blitter.
             passthrough_files++;
         }
 
@@ -718,7 +701,7 @@ int finalize_installation(const char *tmp_pak, const char *final_pak,
     }
 
     // 2. Rename raw main.pak -> main.pak.bak
-    if (raw_pak && bak_pak) {
+    if (raw_pak && bak_pak && strcmp(raw_pak, bak_pak) != 0) {
         remove(bak_pak);
         if (rename(raw_pak, bak_pak) != 0) {
             fprintf(stderr, "[SETUP] Warning: Could not rename '%s' -> '%s'\n", raw_pak, bak_pak);
