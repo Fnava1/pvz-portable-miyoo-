@@ -10,6 +10,13 @@ A port of **Plants vs. Zombies: Game of the Year Edition** for the **Miyoo Mini 
 - reported: buttons stop working on Zombatar
 - Shop's background when opened from Zen Garden
 ---
+**Bring your save:**
+
+Copy the folders _userdata_ and _userdata_backup_ from your PC to /Roms/PORTS/Games/PlantsvsZombies/.local/share/io.github.wszqkzqk/PvZPortable/
+
+This directory appears **after** the first boot
+
+---
 
 ## Features
 
