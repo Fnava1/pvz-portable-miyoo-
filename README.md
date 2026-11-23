@@ -18,6 +18,14 @@ A port of **Plants vs. Zombies: Game of the Year Edition** for the **Miyoo Mini 
   - **Hover Sun Vacuum:** Hovering the cursor over falling or produced suns and coins automatically collects them.
   - **Zen Garden:** Dedicated **L / R** triggers cycle available top-shelf tools (Watering Can, Fertilizer, Bug Spray, Phonograph, Chocolate, Glove, Money Sign, Wheelbarrow, Tree Food); **A** applies the tool on the selected plant; **B** drops/cancels.
   - **Dave's Shop:** Direct shelf-and-slot navigation.
+- **Extreme Wave & Survival Performance (Locked 60 FPS):**
+  - **Discrete Rotation Cache:** 16 pre-rendered angles for Starfruits and homing Cattail/Cactus spikes, replacing heavy software matrix bilinear interpolation with instantaneous SIMD blits.
+  - **Particle Storm Throttling:** Intelligent rate-limiting of impact splat emitters during dense horde waves, preventing emitter saturation.
+  - **Kinematics Bypass for Immobilized Entities:** Motionless frozen/buttered zombies skip redundant bone recalculations while Gargantuars and walking hordes retain uncompromised 60 FPS skeletal fidelity.
+- **Visual Fidelity & Defensive Plant Fixes:**
+  - Multi-layer depth sorting for Pumpkin shells (`Pumpkin_back` behind plants, `Pumpkin_front` in front) with accurate 3-stage damage visuals.
+  - Persistent degradation sprites for Wall-nuts, Tall-nuts, and Pumpkins when sustaining damage.
+  - Defensive null guards preventing crashes across Reanimation, Plant, Zombie, and CutScene subsystems.
 - **Dynamic Overclocking & Power Resiliency:**
   - Automatic model detection: **1800 MHz** for Miyoo Mini Plus (AXP223 PMIC) and a safe **1400 MHz** ceiling for Miyoo Mini non-Plus (preventing undervoltage PMIC kernel panics).
   - Signal traps (`EXIT`, `INT`, `TERM`, `HUP`) with unconditional `sync` and governor restoration to `ondemand 1200` to eliminate FAT32 SD card corruption.
@@ -63,8 +71,8 @@ This repository strictly complies with the **Bring Your Own Data (BYOD)** legal 
 
 1. **Clone or Download:**
    ```bash
-   git clone https://github.com/Francisco/PVZ.git
-   cd PVZ
+   git clone https://github.com/Fnava1/pvz-portable-miyoo-.git
+   cd pvz-portable-miyoo-
    ```
 2. **Launch the Graphical Builder:**
    ```bash
@@ -85,7 +93,7 @@ This repository strictly complies with the **Bring Your Own Data (BYOD)** legal 
 *No PC setup tools required—drag and drop your raw game file straight to your SD card.*
 
 1. **Download Release Package:**
-   Download `PvZ_MiyooMiniPlus_v1.1.0.zip` from the [Releases](https://github.com/Francisco/PVZ/releases) page.
+   Download `PvZ_MiyooMiniPlus_v1.1.0.zip` from the [Releases](https://github.com/Fnava1/pvz-portable-miyoo-/releases) page.
 2. **Extract to SD Card:**
    Extract the ZIP archive directly to the root of your microSD card. It will stage:
    ```text
