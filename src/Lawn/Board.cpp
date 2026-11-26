@@ -2379,10 +2379,10 @@ void Board::CycleSeedPacket(int theDelta)
 		return;
 	}
 
-	if (mSeedBank == nullptr || mSeedBank->mNumPackets <= 1)
+	if (mSeedBank == nullptr || mSeedBank->mNumPackets <= 0)
 		return;
 
-	int aIndex = aCurrentIndex;
+	int aIndex = (aCurrentIndex >= 0) ? aCurrentIndex : (theDelta > 0 ? -1 : 0);
 	for (int i = 0; i < mSeedBank->mNumPackets; ++i)
 	{
 		if (theDelta > 0)

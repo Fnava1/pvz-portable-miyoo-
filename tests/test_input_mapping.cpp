@@ -337,6 +337,21 @@ static void test_seed_packet_cycling_and_actions() {
     input.OnButtonUp(HandheldButton::L);
     assert(input.GetSelectedSeedIndex() == 4);
 
+    // Test single-seed cycling (Level 1-1 / early level bug regression)
+    input.SetNumSeeds(1);
+    input.SetSelectedSeedIndex(0);
+    assert(input.GetSelectedSeedIndex() == 0);
+    input.OnButtonDown(HandheldButton::R);
+    input.OnButtonUp(HandheldButton::R);
+    assert(input.GetSelectedSeedIndex() == 0);
+    input.OnButtonDown(HandheldButton::L);
+    input.OnButtonUp(HandheldButton::L);
+    assert(input.GetSelectedSeedIndex() == 0);
+
+    // Reset for subsequent action tests
+    input.SetNumSeeds(6);
+    input.SetSelectedSeedIndex(4);
+
     // Test Action Buttons
     bool planted = false;
     int plantCol = -1, plantRow = -1, plantSeed = -1;
